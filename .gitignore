@@ -1,0 +1,11 @@
+coverage.xml
+.coverage
+dist/
+.eggs/
+*.egg-info/
+*.pyc
+__pycache__/
+.pytest_cache/
+.tox/
+
+acquire/version.py
