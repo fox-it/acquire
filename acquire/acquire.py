@@ -1,6 +1,7 @@
 import enum
 import functools
 import io
+import itertools
 import logging
 import shutil
 import subprocess
@@ -537,12 +538,18 @@ class Exchange(Module):
                                 "file",
                                 f"{install_path}\\TransportRoles\\Agents\\agents.config",
                             ),
-                            ("dir", f"{install_path}\\Logging\\Ews"),
+                            (
+                                "dir",
+                                f"{install_path}\\Logging\\Ews",
+                            ),
                             (
                                 "dir",
                                 f"{install_path}\\Logging\\CmdletInfra\\Powershell-Proxy\\Cmdlet",
                             ),
-                            ("dir", f"{install_path}\\TransportRoles\\Logs"),
+                            (
+                                "dir",
+                                f"{install_path}\\TransportRoles\\Logs",
+                            ),
                         ]
                     )
                 except Exception:
@@ -940,6 +947,31 @@ class RemoteAccess(Module):
         # Remote desktop cache files
         ("dir", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
     ]
+
+
+@register_module("--wer")
+class WER(Module):
+    DESC = "WER (Windows Error Reporting) related files"
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        spec = set()
+
+        for wer_dir in itertools.chain(
+            ["sysvol/ProgramData/Microsoft/Windows/WER"],
+            from_user_home(target, "AppData/Local/Microsoft/Windows/WER"),
+        ):
+            for path in target.fs.path(wer_dir).rglob("*"):
+                if not path.is_file():
+                    continue
+
+                if path.stat().st_size >= (1024 * 1024 * 1024):  # 1GB
+                    log.debug("Skipping WER file because it exceeds 1GB: %s", path)
+                    continue
+
+                spec.add(("file", path))
+
+        return spec
 
 
 @register_module("--etc")
