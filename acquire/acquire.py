@@ -360,6 +360,19 @@ class WinProcesses(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
+@register_module("--win-arp-cache")
+@local_module
+class WinArpCache(Module):
+    DESC = "ARP Cache"
+    SPEC = [
+        # < Windows 10
+        ("command", (["arp", "-av"], "win7-arp-cache")),
+        # Windows 10+ (PowerShell)
+        ("command", (["PowerShell", "Get-NetNeighbor"], "win10-arp-cache")),
+    ]
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+
 @register_module("--winpmem")
 @local_module
 class WinMemDump(Module):
