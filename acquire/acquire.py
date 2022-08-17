@@ -3,7 +3,6 @@ import functools
 import io
 import itertools
 import logging
-import platform
 import shutil
 import subprocess
 import sys
