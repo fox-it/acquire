@@ -3,6 +3,7 @@ import functools
 import io
 import itertools
 import logging
+import platform
 import shutil
 import subprocess
 import sys
@@ -358,6 +359,26 @@ class WinProcesses(Module):
         ("command", (["tasklist", "/V", "/fo", "csv"], "win-processes")),
     ]
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+
+@register_module("--win-arp-cache")
+@local_module
+class WinArpCache(Module):
+    DESC = "ARP Cache"
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        if int(platform.win32_ver()[0]) < 10:
+            commands = [
+                # < Windows 10
+                ("command", (["arp", "-av"], "win7-arp-cache")),
+            ]
+        else:
+            commands = [
+                # Windows 10+ (PowerShell)
+                ("command", (["PowerShell", "Get-NetNeighbor"], "win10-arp-cache")),
+            ]
+        return commands
 
 
 @register_module("--winpmem")
