@@ -368,7 +368,7 @@ class WinArpCache(Module):
 
     @classmethod
     def get_spec_additions(cls, target):
-        if int(platform.win32_ver()[0]) < 10:
+        if target.ntversion < 6.2:
             commands = [
                 # < Windows 10
                 ("command", (["arp", "-av"], "win7-arp-cache")),
