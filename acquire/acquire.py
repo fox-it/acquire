@@ -364,6 +364,7 @@ class WinProcesses(Module):
 @local_module
 class WinArpCache(Module):
     DESC = "ARP Cache"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def get_spec_additions(cls, target):
@@ -378,6 +379,16 @@ class WinArpCache(Module):
                 ("command", (["PowerShell", "Get-NetNeighbor"], "win10-arp-cache")),
             ]
         return commands
+
+
+@register_module("--win-rd-sessions")
+@local_module
+class WinRDPSessions(Module):
+    DESC = "Windows Remote Desktop session information"
+    SPEC = [
+        ("command", (["qwinsta", "/VM"], "win-rd-sessions")),
+    ]
+    EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
 @register_module("--winpmem")
