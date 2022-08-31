@@ -734,6 +734,14 @@ class PowerShell(Module):
     ]
 
 
+@register_module("--thumbnail-cache")
+class ThumbnailCache(Module):
+    DESC = "Windows thumbnail db artifacts"
+    SPEC = [
+        ("glob", "AppData/Local/Microsoft/Windows/Explorer/thumbcache_*", from_user_home),
+    ]
+
+
 @register_module("--misc")
 class Misc(Module):
     DESC = "miscellaneous Windows artefacts"
