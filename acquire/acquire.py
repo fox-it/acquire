@@ -360,6 +360,22 @@ class WinProcesses(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
+@register_module("--win-proc-env")
+@local_module
+class WinProcEnv(Module):
+    DESC = "Process environment variables"
+    SPEC = [
+        (
+            "command",
+            (
+                ["PowerShell", "-command", "Get-Process | ForEach-Object {$_.StartInfo.EnvironmentVariables}"],
+                "win-process-env-vars",
+            ),
+        ),
+    ]
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+
 @register_module("--win-arp-cache")
 @local_module
 class WinArpCache(Module):
