@@ -20,6 +20,14 @@ However, there are some options available to use the operating system as a fallb
 
 For more information, please see [the documentation](https://dissect.readthedocs.io/en/latest/projects/acquire).
 
+## Installation
+
+`acquire` is available on [PyPI](https://pypi.org/project/acquire/).
+
+```bash
+pip install acquire
+```
+
 ## Build and test instructions
 
 This project uses `tox` to build source and wheel distributions. Run the following command from the root folder to build
