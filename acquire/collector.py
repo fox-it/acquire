@@ -9,7 +9,12 @@ from itertools import groupby
 from pathlib import Path
 from typing import Iterable, List, Union, Optional, Set, Type, Sequence, Any
 
-from dissect.target.exceptions import FileNotFoundError
+from dissect.target.exceptions import (
+    FileNotFoundError,
+    NotADirectoryError,
+    NotASymlinkError,
+    SymlinkRecursionError,
+)
 from dissect.target.helpers import fsutil
 
 from acquire.utils import get_formatted_exception, StrEnum
@@ -341,6 +346,9 @@ class Collector:
             path = self.target.fs.path(path)
 
         try:
+            # If a path does not exist, is_dir(), is_file() and is_symlink() will return False (and not raise an
+            # exception), so we need to explicitly trigger an exception for this using path.get().
+            path.get()
             is_dir = path.is_dir()
             is_file = path.is_file()
             is_symlink = path.is_symlink()
@@ -355,9 +363,13 @@ class Collector:
                 self.report.add_path_failed(module_name, path)
                 log.error("- OSError while collecting path %s", path)
             return
+        except (FileNotFoundError, NotADirectoryError, NotASymlinkError, SymlinkRecursionError, ValueError):
+            self.report.add_path_missing(module_name, path)
+            log.error("- Path %s is not found", path)
+            return
         except Exception:
-            log.error("- Failed to collect path %s", path, exc_info=True)
             self.report.add_path_failed(module_name, path)
+            log.error("- Failed to collect path %s", path, exc_info=True)
             return
 
         if is_dir:
@@ -365,6 +377,7 @@ class Collector:
         elif is_file:
             self.collect_file(path, module_name=module_name)
         elif is_symlink:
+            self.report.add_path_failed(module_name, path)
             log.error(
                 "- Can't collect %s (symlink to %s) in module %s",
                 path,
@@ -372,6 +385,7 @@ class Collector:
                 module_name,
             )
         else:
+            self.report.add_path_failed(module_name, path)
             log.error("- Don't know how to collect %s in module %s", path, module_name)
 
     def collect_command_output(
