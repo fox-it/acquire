@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from argparse import Namespace
 from collections import defaultdict
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
+from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
     HashFunc,
     collect_hashes,
@@ -1731,15 +1733,33 @@ def main():
         log.exception("Failed to load target")
         raise
 
+    if target.os == "esxi":
+        # Loader found that we are running on an esxi host
+        # Perform operations to "enhance" memory
+        with esxi_memory_context_manager():
+            acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+    else:
+        acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+
+
+def load_child(target: Target, child_path: Path) -> None:
+    log.info("")
+    log.info("Loading child target %s", child_path)
+    try:
+        child = target.open_child(child_path)
+        log.info(target)
+    except Exception:
+        log.exception("Failed to load child target")
+        raise
+
+    return child
+
+
+def acquire_children_and_targets(
+    target: Target, args: Namespace, output_path: Path, log_path: Path, output_ts: str, plugin_registry: PluginRegistry
+):
     if args.child:
-        log.info("")
-        log.info("Loading child target %s", args.child)
-        try:
-            target = target.open_child(args.child)
-            log.info(target)
-        except Exception:
-            log.exception("Failed to load child target")
-            raise
+        load_child(target, args.child)
 
     log.info("")
     try:
@@ -1750,13 +1770,9 @@ def main():
 
     if args.children:
         for child in target.list_children():
-            log.info("")
-            log.info("Loading child target %s", child)
             try:
-                child_target = target.open_child(child.path)
-                log.info(child_target)
+                child_target = load_child(target, child.path)
             except Exception:
-                log.exception("Failed to load child target")
                 continue
 
             log.info("")
