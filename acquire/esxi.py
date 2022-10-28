@@ -28,7 +28,7 @@ class EsxiMemoryManager:
         self._set_memory_limits(max="unlimited", min_limit="unlimited")
 
     def reset(self):
-        """Put memory limits back"""
+        """Put memory limits back to their original values."""
         if self.mem_scheme:
             self._set_memory_limits(max=self.mem_scheme.get("max"), min_limit=self.mem_scheme.get("minLimit"))
 
@@ -42,7 +42,7 @@ class EsxiMemoryManager:
         return output.decode("utf-8")
 
     def _get_group_id(self):
-        """Get the processnumber of the current session."""
+        """Get the group ID of the current session."""
         group_id = self._execute_vsish_command(
             [
                 "set",
@@ -71,7 +71,7 @@ class EsxiMemoryManager:
         )
 
     def _get_memory_scheme(self):
-        """Retrieve and parse the current memory scheme from an ESXI host."""
+        """Retrieve and parse the current memory scheme from an ESXi host."""
         mem_sched_allocation = self._execute_vsish_command(
             [
                 "get",
