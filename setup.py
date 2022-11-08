@@ -1,15 +1,9 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="acquire",
-    packages=[
-        "acquire",
-        "acquire.outputs",
-        "acquire.tools",
-        "acquire.uploaders",
-    ],
-    use_scm_version=True,
-    setup_requires=["setuptools_scm"],
+    # Acquire gets added seperately to include version.py
+    packages=list(map(lambda v: "acquire." + v, find_packages("acquire"))) + ["acquire"],
     install_requires=[
         "dissect.cstruct",
         "dissect.target",
