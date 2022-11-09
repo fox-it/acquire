@@ -14,6 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from dissect.target import Target, exceptions
+from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.plugins.os.windows import iis
@@ -1695,6 +1696,8 @@ def main():
     log.info("Default Arguments: %s", " ".join(CONFIG.get("arguments", [])))
 
     log.info("")
+
+    RemoteStreamConnection.configure(CONFIG.get("cagent_key"), CONFIG.get("cagent_certificate"))
 
     if args.upload:
         try:
