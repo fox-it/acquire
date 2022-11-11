@@ -1735,7 +1735,7 @@ def main():
     except Exception:
         if not is_user_admin():
             log.error("Failed to load target, try re-running as administrator/root.")
-            exit(1)
+            parser.exit(1)
         log.exception("Failed to load target")
         raise
 
