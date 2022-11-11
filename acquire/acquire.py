@@ -1734,7 +1734,7 @@ def main():
         log.info(target)
     except Exception:
         if not is_user_admin():
-            log.error("Hint: you might try to re-run as administrator/root.")
+            log.error("Failed to load target, try re-running as administrator/root.")
             exit(1)
         log.exception("Failed to load target")
         raise
