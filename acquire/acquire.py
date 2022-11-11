@@ -1733,6 +1733,9 @@ def main():
         target = Target.open(target_path)
         log.info(target)
     except Exception:
+        if not is_user_admin():
+            log.error("Hint: you might try to re-run as administrator/root.")
+            exit(1)
         log.exception("Failed to load target")
         raise
 
