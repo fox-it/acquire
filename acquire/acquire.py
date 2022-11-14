@@ -1733,6 +1733,9 @@ def main():
         target = Target.open(target_path)
         log.info(target)
     except Exception:
+        if not is_user_admin():
+            log.error("Failed to load target, try re-running as administrator/root.")
+            parser.exit(1)
         log.exception("Failed to load target")
         raise
 
