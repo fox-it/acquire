@@ -826,6 +826,7 @@ class AV(Module):
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
+        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         ("glob", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Symantec
         (
