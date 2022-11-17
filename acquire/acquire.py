@@ -802,6 +802,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
         ("dir", "sysvol/ProgramData/HitmanPro.Alert/Logs"),
         ("file", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
+        ("glob", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
@@ -825,6 +826,8 @@ class AV(Module):
         # Sophos
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
+        ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
+        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         # Symantec
         (
             "dir",
