@@ -1091,6 +1091,8 @@ class Var(Module):
         ("dir", "/var/run"),
         # some OS-X specific files
         ("dir", "/private/var/at"),
+        ("dir", "/private/var/db/diagnostics"),
+        ("dir", "/private/var/db/uuidtext"),
         ("file", "/private/var/vm/sleepimage"),
         ("glob", "/private/var/vm/swapfile*"),
         ("glob", "/private/var/folders/*/*/0/com.apple.notificationcenter/*/*"),
