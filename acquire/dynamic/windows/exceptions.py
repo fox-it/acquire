@@ -8,3 +8,7 @@ class NoMoreEntriesError(Exception):
 
 class HandleNotClosedSuccessfullyError(Exception):
     pass
+
+
+class OpenProcessError(Exception):
+    pass

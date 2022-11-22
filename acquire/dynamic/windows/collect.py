@@ -1,6 +1,7 @@
-from typing import List
+from typing import Iterable, List, Optional
 
 from acquire.dynamic.windows.exceptions import AccessDeniedError
+from acquire.dynamic.windows.handles import Handle, get_handles
 from acquire.dynamic.windows.named_objects import NamedObject, NamedObjectType
 from acquire.dynamic.windows.ntdll import (
     close_handle,
@@ -33,3 +34,16 @@ def collect_named_objects(path: str = "\\") -> List[NamedObject]:
     close_handle(dir_handle)
 
     return named_objects
+
+
+def collect_open_handles(handle_types: Optional[List[str]] = None) -> Iterable[Handle]:
+    """Collect open handles
+
+    Collect open handles and optionally provide a list to explicitly collect specific types of handles.
+
+    Parameters:
+        handle_types: list containing the handle types to collect as strings
+    """
+    for handle in get_handles():
+        if not handle_types or handle.handle_type in handle_types:
+            yield handle
