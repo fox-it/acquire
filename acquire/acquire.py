@@ -878,7 +878,7 @@ class QuarantinedFiles(Module):
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         # HitmanPRO
-        ("glob", "sysvol/ProgramData/HitmanPro/Quarantine"),
+        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
     ]
 
 
