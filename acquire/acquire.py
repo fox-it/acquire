@@ -1639,6 +1639,7 @@ PROFILES = {
             EventLogs,
             Registry,
             Tasks,
+            PowerShell,
             Prefetch,
             Appcompat,
             Misc,
