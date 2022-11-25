@@ -826,8 +826,6 @@ class AV(Module):
         # Sophos
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
-        ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
-        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         # Symantec
         (
             "dir",
@@ -876,6 +874,11 @@ class QuarantinedFiles(Module):
         # McAfee
         ("dir", "sysvol/Quarantine"),
         ("dir", "sysvol/ProgramData/McAfee/VirusScan/Quarantine"),
+        # Sophos
+        ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
+        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
+        # HitmanPRO
+        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
     ]
 
 
