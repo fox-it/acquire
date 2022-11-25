@@ -14,9 +14,9 @@ from collections import defaultdict
 from pathlib import Path
 
 from dissect.target import Target, exceptions
-from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
+from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
@@ -404,10 +404,14 @@ class WinArpCache(Module):
 @local_module
 class WinRDPSessions(Module):
     DESC = "Windows Remote Desktop session information"
-    SPEC = [
-        ("command", (["qwinsta", "/VM"], "win-rd-sessions")),
-    ]
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        qwinsta = subprocess.run(["where", "qwinsta.exe"], capture_output=True, text=True).stdout.rstrip("\n")
+        return [
+            ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
+        ]
 
 
 @register_module("--winpmem")
