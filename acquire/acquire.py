@@ -14,15 +14,16 @@ from collections import defaultdict
 from pathlib import Path
 
 from dissect.target import Target, exceptions
-from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
+from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.collect import collect_open_handles
 from acquire.dynamic.windows.handles import serialize_handles_into_csv
+from acquire.dynamic.windows.types import HandleType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
     HashFunc,
@@ -1295,7 +1296,14 @@ class FileHashes(Module):
 
 
 @register_module("--handles")
-@module_arg("--file-handle-type", action="append", help="Only collect file handles")
+@module_arg(
+    "--handle-types",
+    action="extend",
+    help="Collect only specified handle types",
+    type=HandleType,
+    choices=[h.value for h in HandleType],
+    nargs="*",
+)
 @local_module
 class OpenHandles(Module):
     DESC = "Open handles"
@@ -1304,17 +1312,18 @@ class OpenHandles(Module):
     def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
         log.info("*** Acquiring open handles")
 
-        file_only = cli_args.file
+        handle_types = cli_args.handle_types
 
         collector.bind(cls)
         try:
-            handles = collect_open_handles(["file-handle-type"] if file_only else None)
+            handles = collect_open_handles(handle_types)
             csv_compressed_handles = serialize_handles_into_csv(handles)
 
             collector.write_bytes(
                 f"{collector.base}/{collector.METADATA_BASE}/open_handles.csv.gz",
                 csv_compressed_handles,
             )
+            log.info("Collecting open handles is done.")
         finally:
             collector.unbind()
 

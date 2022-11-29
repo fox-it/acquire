@@ -14,6 +14,8 @@ from acquire.dynamic.windows.types import (
     BOOL,
     DWORD,
     HANDLE,
+    IO_STATUS_BLOCK,
+    LPVOID,
     NTSTATUS,
     NULL,
     OBJECT_DIRECTORY_INFORMATION,
@@ -29,6 +31,17 @@ from acquire.dynamic.windows.types import (
 
 
 ntdll = ctypes.windll.ntdll
+ntdll.NtQueryInformationFile.argtypes = (
+    HANDLE,
+    ctypes.POINTER(IO_STATUS_BLOCK),
+    LPVOID,
+    ULONG,
+    DWORD,
+)
+ntdll.NtQueryInformationFile.restype = NTSTATUS
+ntdll.NtQuerySystemInformation.restype = NTSTATUS
+ntdll.NtQueryObject.restype = NTSTATUS
+
 STANDARD_RIGHTS_ALL = 0x001F0000
 BUFFER_SIZE = 1024
 

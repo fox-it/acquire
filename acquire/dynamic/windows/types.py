@@ -14,7 +14,7 @@ from ctypes.wintypes import (
     USHORT,
     WCHAR,
 )
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 PVOID = ctypes.c_void_p
 NTSTATUS = ULONG
@@ -51,6 +51,27 @@ class ErrorCode(IntEnum):
     ERROR_INVALID_PARAMETER = 0x57
     ERROR_PARTIAL_COPY = 0x12B
     ERROR_NOT_ALL_ASSIGNED = 0x514
+
+
+class HandleType(str, Enum):
+    alpc_port = "ALPC Port"
+    desktop = "Desktop"
+    directory = "Directory"
+    etw_registration = "EtwRegistration"
+    event = "Event"
+    file = "File"
+    ir_timer = "IRTimer"
+    io_completion = "IoCompletion"
+    key = "Key"
+    mutant = "Mutant"
+    process = "Process"
+    section = "Section"
+    semaphore = "Semaphore"
+    thread = "Thread"
+    token = "Token"
+    tp_worker_factory = "TpWorkerFactory"
+    wait_completion_packet = "WaitCompletionPacket"
+    window_station = "WindowStation"
 
 
 class SYSTEM_INFORMATION_CLASS(IntEnum):
