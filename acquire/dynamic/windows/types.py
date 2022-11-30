@@ -208,7 +208,7 @@ class UNICODE_STRING(ctypes.Structure):
         return self.Buffer
 
     @classmethod
-    def from_str(cls, value: str) -> None:
+    def from_str(cls, value: str) -> UNICODE_STRING:
         """Initializes a UNICODE_STRING structure."""
         destination = cls()
         value_buffer = ctypes.create_unicode_buffer(value)

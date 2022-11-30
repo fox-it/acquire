@@ -40,6 +40,7 @@ kernel32.DuplicateHandle.argtypes = (HANDLE, HANDLE, HANDLE, ctypes.POINTER(HAND
 
 class DuplicateFilter(Filter):
     def __init__(self) -> None:
+        super().__init__()
         self.msgs = set()
 
     def filter(self, record: LogRecord) -> bool:
@@ -49,10 +50,10 @@ class DuplicateFilter(Filter):
 
 
 def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
-    """Return type of a handle.
+    """Return type of handle.
 
     Parameters:
-        hanlde: handle for which to return the type information.
+        handle: handle for which to return the type information.
 
     Raises:
         RuntimeError: Raised when the result of the object query is unknown (other than SUCCESS, LENGTH MISMATCH or
@@ -128,7 +129,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     if not thread.is_alive():
         try:
             result = q.get_nowait()
-        except Exception:
+        except Exception: # noqa
             pass
 
     return result
@@ -224,7 +225,7 @@ def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) 
 
 
 def serialize_handles_into_csv(rows: Iterable[Handle], compress: bool = True) -> bytes:
-    """Searilize handle data into a csv.
+    """Serialize handle data into a csv.
 
     Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
     containing the result bytes.

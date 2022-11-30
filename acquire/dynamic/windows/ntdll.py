@@ -144,7 +144,7 @@ def initialize_object_attributes(
     destination_attributes.SecurityQualityOfService = None
 
 
-def close_handle(handle: HANDLE) -> None:
+def close_handle(handle: int) -> None:
     """Closes an opened handle."""
     if not CloseHandle(handle):
         raise HandleNotClosedSuccessfullyError()
