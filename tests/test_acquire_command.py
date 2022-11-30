@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-patch('ctypes.windll', create=True).start() # noqa
-from acquire.acquire import ( # noqa
+patch("ctypes.windll", create=True).start()
+from acquire.acquire import (  # noqa: E402
     CONFIG,
     MODULES,
     PROFILES,
