@@ -21,8 +21,6 @@ from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
-from acquire.dynamic.windows.collect import collect_open_handles
-from acquire.dynamic.windows.handles import serialize_handles_into_csv
 from acquire.dynamic.windows.types import HandleType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
@@ -1310,6 +1308,13 @@ class OpenHandles(Module):
 
     @classmethod
     def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
+        if not sys.platform == "win32":
+            log.error("Open Handles plugin can only run on Windows systems! Skipping...")
+            return
+
+        from acquire.dynamic.windows.collect import collect_open_handles
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+
         log.info("*** Acquiring open handles")
 
         handle_types = cli_args.handle_types
