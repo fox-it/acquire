@@ -3,6 +3,7 @@ import functools
 import io
 import itertools
 import logging
+import platform
 import shutil
 import subprocess
 import sys
@@ -408,6 +409,10 @@ class WinRDPSessions(Module):
 
     @classmethod
     def get_spec_additions(cls, target):
+
+        if platform.architecture()[0] == "32bit":
+            log.error("--win-rdp-sessions requires a 64-bit of acquire")
+            return []
         qwinsta = subprocess.run(["where.exe", "qwinsta.exe"], capture_output=True, text=True).stdout.split("\n")[0]
         return [
             ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
