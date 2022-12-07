@@ -408,7 +408,7 @@ class WinRDPSessions(Module):
 
     @classmethod
     def get_spec_additions(cls, target):
-        qwinsta = subprocess.run(["where", "qwinsta.exe"], capture_output=True, text=True).stdout.split("\n")[0]
+        qwinsta = subprocess.run(["where.exe", "qwinsta.exe"], capture_output=True, text=True).stdout.split("\n")[0]
         return [
             ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
         ]
