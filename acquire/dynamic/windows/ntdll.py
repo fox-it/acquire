@@ -39,7 +39,20 @@ ntdll.NtQueryInformationFile.argtypes = (
     DWORD,
 )
 ntdll.NtQueryInformationFile.restype = NTSTATUS
+ntdll.NtQuerySystemInformation.argtypes = (
+    ULONG,
+    LPVOID,
+    DWORD,
+    ctypes.POINTER(DWORD),
+)
 ntdll.NtQuerySystemInformation.restype = NTSTATUS
+ntdll.NtQueryObject.argtypes = (
+    HANDLE,
+    ULONG,
+    LPVOID,
+    DWORD,
+    PULONG,
+)
 ntdll.NtQueryObject.restype = NTSTATUS
 
 STANDARD_RIGHTS_ALL = 0x001F0000

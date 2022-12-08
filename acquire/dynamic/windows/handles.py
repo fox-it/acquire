@@ -12,7 +12,6 @@ from acquire.dynamic.windows.exceptions import OpenProcessError
 from acquire.dynamic.windows.ntdll import NtStatusCode, close_handle, ntdll
 from acquire.dynamic.windows.types import (
     BOOL,
-    DUPLICATE_SAME_ACCESS,
     DWORD,
     FILE_INFORMATION_CLASS,
     HANDLE,
@@ -81,7 +80,7 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
             raise RuntimeError(hex(result))
 
 
-def _get_file_name_thread(h_file: int, q: Queue):
+def _get_file_name_thread(h_file: HANDLE, q: Queue):
     iob = IO_STATUS_BLOCK()
     file_name_information = ctypes.create_string_buffer(0x1000)
 
@@ -105,7 +104,6 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     """Return handle name."""
 
     remote = pid != kernel32.GetCurrentProcessId()
-    h_remote = None
 
     if remote:
         try:
@@ -129,7 +127,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     if not thread.is_alive():
         try:
             result = q.get_nowait()
-        except Exception: # noqa
+        except Exception:  # noqa
             pass
 
     return result
@@ -216,7 +214,13 @@ def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) 
     h_dup = HANDLE()
     kernel32.SetLastError(0)
     result = kernel32.DuplicateHandle(
-        h_process, handle, kernel32.GetCurrentProcess(), ctypes.byref(h_dup), 0, False, DUPLICATE_SAME_ACCESS
+        h_process,
+        handle,
+        kernel32.GetCurrentProcess(),
+        ctypes.byref(h_dup),
+        0,
+        False,
+        ProcessAccess.DUPLICATE_SAME_ACCESS,
     )
     if result == 0:
         raise RuntimeError()

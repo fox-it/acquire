@@ -1,19 +1,7 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes.wintypes import (
-    BOOL,
-    DWORD,
-    HANDLE,
-    LPDWORD,
-    LPVOID,
-    LPWSTR,
-    PHANDLE,
-    PULONG,
-    ULONG,
-    USHORT,
-    WCHAR,
-)
+from ctypes.wintypes import BOOL, DWORD, HANDLE, LPDWORD, LPVOID, LPWSTR, PHANDLE, PULONG, ULONG, USHORT, WCHAR
 from enum import Enum, IntEnum
 
 PVOID = ctypes.c_void_p
@@ -21,8 +9,6 @@ NTSTATUS = ULONG
 NULL = None
 
 ULONG_PTR = ctypes.c_size_t
-
-DUPLICATE_SAME_ACCESS = 0x00000002
 
 
 class ProcessToken(IntEnum):
@@ -43,6 +29,7 @@ class ProcessAccess(IntEnum):
     PROCESS_QUERY_INFORMATION = 0x0400
     SYNCHRONIZE = 0x00100000
     PROCESS_ALL_ACCESS = 0x1F0FFF
+    DUPLICATE_SAME_ACCESS = 0x00000002
 
 
 class ErrorCode(IntEnum):
