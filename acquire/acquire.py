@@ -3,6 +3,7 @@ import functools
 import io
 import itertools
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -408,7 +409,13 @@ class WinRDPSessions(Module):
 
     @classmethod
     def get_spec_additions(cls, target):
-        qwinsta = subprocess.run(["where", "qwinsta.exe"], capture_output=True, text=True).stdout.split("\n")[0]
+        # where.exe instead of where, just in case the client runs in PS instead of CMD
+        # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
+        # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
+        # on systems capable of doing that.
+        qwinsta = subprocess.run(
+            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"], capture_output=True, text=True
+        ).stdout.split("\n")[0]
         return [
             ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
         ]
