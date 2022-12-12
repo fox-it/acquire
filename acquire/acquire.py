@@ -22,6 +22,7 @@ from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
+from acquire.dynamic.windows.types import HandleType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
     HashFunc,
@@ -1306,6 +1307,46 @@ class FileHashes(Module):
             hash_funcs = cls.DEFAULT_HASH_FUNCS
 
         return [(path_selector, hash_funcs) for path_selector in path_selectors]
+
+
+@register_module("--handles")
+@module_arg(
+    "--handle-types",
+    action="extend",
+    help="Collect only specified handle types",
+    type=HandleType,
+    choices=[h.value for h in HandleType],
+    nargs="*",
+)
+@local_module
+class OpenHandles(Module):
+    DESC = "Open handles"
+
+    @classmethod
+    def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
+        if not sys.platform == "win32":
+            log.error("Open Handles plugin can only run on Windows systems! Skipping...")
+            return
+
+        from acquire.dynamic.windows.collect import collect_open_handles
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+
+        log.info("*** Acquiring open handles")
+
+        handle_types = cli_args.handle_types
+
+        collector.bind(cls)
+        try:
+            handles = collect_open_handles(handle_types)
+            csv_compressed_handles = serialize_handles_into_csv(handles)
+
+            collector.write_bytes(
+                f"{collector.base}/{collector.METADATA_BASE}/open_handles.csv.gz",
+                csv_compressed_handles,
+            )
+            log.info("Collecting open handles is done.")
+        finally:
+            collector.unbind()
 
 
 def print_disks_overview(target):

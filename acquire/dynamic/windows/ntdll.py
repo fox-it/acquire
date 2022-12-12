@@ -14,6 +14,8 @@ from acquire.dynamic.windows.types import (
     BOOL,
     DWORD,
     HANDLE,
+    IO_STATUS_BLOCK,
+    LPVOID,
     NTSTATUS,
     NULL,
     OBJECT_DIRECTORY_INFORMATION,
@@ -29,6 +31,30 @@ from acquire.dynamic.windows.types import (
 
 
 ntdll = ctypes.windll.ntdll
+ntdll.NtQueryInformationFile.argtypes = (
+    HANDLE,
+    ctypes.POINTER(IO_STATUS_BLOCK),
+    LPVOID,
+    ULONG,
+    DWORD,
+)
+ntdll.NtQueryInformationFile.restype = NTSTATUS
+ntdll.NtQuerySystemInformation.argtypes = (
+    ULONG,
+    LPVOID,
+    DWORD,
+    ctypes.POINTER(DWORD),
+)
+ntdll.NtQuerySystemInformation.restype = NTSTATUS
+ntdll.NtQueryObject.argtypes = (
+    HANDLE,
+    ULONG,
+    LPVOID,
+    DWORD,
+    PULONG,
+)
+ntdll.NtQueryObject.restype = NTSTATUS
+
 STANDARD_RIGHTS_ALL = 0x001F0000
 BUFFER_SIZE = 1024
 
@@ -131,7 +157,7 @@ def initialize_object_attributes(
     destination_attributes.SecurityQualityOfService = None
 
 
-def close_handle(handle: HANDLE) -> None:
+def close_handle(handle: int) -> None:
     """Closes an opened handle."""
     if not CloseHandle(handle):
         raise HandleNotClosedSuccessfullyError()
