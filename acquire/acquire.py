@@ -895,7 +895,7 @@ class QuarantinedFiles(Module):
 
 @register_module("--history")
 class History(Module):
-    DESC = "browser history from IE, Firefox and Chrome"
+    DESC = "browser history from IE, Edge, Firefox, and Chrome"
 
     SPEC = [
         # IE
@@ -985,6 +985,49 @@ class History(Module):
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        # Edge
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Current Session", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Current Tabs", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Archived History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Last Session", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Last Tabs", from_user_home),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Current Session",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Current Tabs",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Archived History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Last Session",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Last Tabs",
+            from_user_home,
+        ),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Current Session"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Current Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Archived History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Last Session"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Last Tabs"),
         # Firefox
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
