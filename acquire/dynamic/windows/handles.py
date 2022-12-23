@@ -137,7 +137,8 @@ def get_handles() -> Iterable[Handle]:
     """Returns all handles of a target."""
     system_handle_information = SYSTEM_HANDLE_INFORMATION_EX()
     size = DWORD(ctypes.sizeof(system_handle_information))
-    log.addFilter(DuplicateFilter())
+    duplicate_filter = DuplicateFilter()
+    log.addFilter(duplicate_filter)
 
     while True:
         result = ntdll.NtQuerySystemInformation(
@@ -167,7 +168,7 @@ def get_handles() -> Iterable[Handle]:
             continue
 
         yield Handle(handle, handle_type, handle_name)
-    log.removeFilter(DuplicateFilter())
+    log.removeFilter(duplicate_filter)
 
 
 def open_process(pid: int) -> int:

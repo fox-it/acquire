@@ -21,7 +21,7 @@ from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
-from acquire.dynamic.windows.types import HandleType
+from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
     HashFunc,
@@ -1298,8 +1298,8 @@ class FileHashes(Module):
     "--handle-types",
     action="extend",
     help="Collect only specified handle types",
-    type=HandleType,
-    choices=[h.value for h in HandleType],
+    type=NamedObjectType,
+    choices=[h.value for h in NamedObjectType],
     nargs="*",
 )
 @local_module

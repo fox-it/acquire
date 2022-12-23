@@ -1,17 +1,12 @@
-from typing import Iterable, List, Optional
+from typing import Iterable, Optional
 
 from acquire.dynamic.windows.exceptions import AccessDeniedError
 from acquire.dynamic.windows.handles import Handle, get_handles
 from acquire.dynamic.windows.named_objects import NamedObject, NamedObjectType
-from acquire.dynamic.windows.ntdll import (
-    close_handle,
-    open_directory_object,
-    query_directory_object,
-)
-from acquire.dynamic.windows.types import HandleType
+from acquire.dynamic.windows.ntdll import close_handle, open_directory_object, query_directory_object
 
 
-def collect_named_objects(path: str = "\\") -> List[NamedObject]:
+def collect_named_objects(path: str = "\\") -> list[NamedObject]:
     """Collects all named objects in the directory.
 
     Parameters:
@@ -37,7 +32,7 @@ def collect_named_objects(path: str = "\\") -> List[NamedObject]:
     return named_objects
 
 
-def collect_open_handles(handle_types: Optional[List[HandleType]] = None) -> Iterable[Handle]:
+def collect_open_handles(handle_types: Optional[list[NamedObject]] = None) -> Iterable[Handle]:
     """Collect open handles
 
     Collect open handles and optionally provide a list to explicitly collect specific types of handles.
@@ -47,8 +42,8 @@ def collect_open_handles(handle_types: Optional[List[HandleType]] = None) -> Ite
     """
     for handle in get_handles():
         try:
-            if not handle_types or HandleType(handle.handle_type) in handle_types:
+            if not handle_types or NamedObjectType(handle.handle_type) in handle_types:
                 yield handle
-        # Continue if an invalid HandleType is observed
+        # Continue if an invalid NamedObjectType is observed
         except ValueError:
             continue
