@@ -945,6 +945,12 @@ class History(Module):
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
+        ## Chrome - Legacy
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Session", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Tabs", from_user_home),
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Bookmarks",
@@ -985,6 +991,32 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
             from_user_home,
         ),
+        ## Chrome - Legacy
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Tabs",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Archived History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Session",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
+            from_user_home,
+        ),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Bookmarks"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Favicons"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
@@ -1001,6 +1033,17 @@ class History(Module):
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
+        ## Chrome - Legacy
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Session"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Session"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
         # Edge
         ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
         ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
