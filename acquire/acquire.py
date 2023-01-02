@@ -895,7 +895,7 @@ class QuarantinedFiles(Module):
 
 @register_module("--history")
 class History(Module):
-    DESC = "browser history from IE, Firefox and Chrome"
+    DESC = "browser history from IE, Edge, Firefox, and Chrome"
 
     SPEC = [
         # IE
@@ -937,12 +937,61 @@ class History(Module):
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
         # Chrome
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Bookmarks", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Favicons", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data For Account", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
+        # Chrome - Legacy
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Session", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Tabs", from_user_home),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Bookmarks",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Favicons",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data For Account",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Shortcuts",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Top Sites",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
+            from_user_home,
+        ),
+        # Chrome - Legacy
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
@@ -951,11 +1000,6 @@ class History(Module):
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Tabs",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
             from_user_home,
         ),
         (
@@ -973,18 +1017,97 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
             from_user_home,
         ),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data For Account"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Web Data"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data For Account"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
+        # Chrome - Legacy
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Session"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Tabs"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Session"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/History"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        # Edge
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Favicons", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Login Data", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Media History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Shortcuts", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Top Sites", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Web Data", from_user_home),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Bookmarks",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Extension Cookies",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Favicons",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Login Data",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Media History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Shortcuts",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Top Sites",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
+            from_user_home,
+        ),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Extension Cookies"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Media History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Web Data"),
         # Firefox
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
