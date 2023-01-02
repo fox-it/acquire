@@ -945,7 +945,7 @@ class History(Module):
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
-        ## Chrome - Legacy
+        # Chrome - Legacy
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
@@ -991,7 +991,7 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
             from_user_home,
         ),
-        ## Chrome - Legacy
+        # Chrome - Legacy
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
@@ -1033,7 +1033,7 @@ class History(Module):
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
-        ## Chrome - Legacy
+        # Chrome - Legacy
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
         ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
