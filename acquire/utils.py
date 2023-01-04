@@ -1,6 +1,7 @@
 import argparse
 import ctypes
 import datetime
+import fcntl
 import getpass
 import json
 import os
@@ -9,9 +10,91 @@ import textwrap
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from stat import S_IRGRP, S_IROTH, S_IRUSR
+from typing import Dict, List, Optional, Union
 
-from acquire.outputs import OUTPUTS
+import acquire.outputs
+from dissect.target.helpers.fsutil import TargetPath
+from dissect.util.stream import AlignedStream
+
+
+class VolatileAlignedStream(AlignedStream):
+    """A volatile streaming class to handle files that live in volatile filesystem. Such as procfs or sysfs.
+    Handeling various edge-cases and OSErrors encountered within these filesystems.
+
+    Set max_filesize to 0 or `None` to remove the maximum filesize limitation.
+
+    Args:
+        path: The path to the file to acquire a VolatileStream of
+        string_flags: String flags, such as 'r' or 'rb' to open the file with.
+        flags: Integer flags. such as `O_RDONLY` or `O_NONBLOCK` to open the file with.
+        max_filesize: Set the maximum file size for streaming. Set to 0 or `None` to remove the maximum.
+    """
+
+    def __init__(
+        self,
+        path: Union[str, TargetPath],
+        string_flags: str = "rb",
+        flags: int = os.O_RDONLY | os.O_NONBLOCK | os.O_NOATIME,
+        max_filesize=5242880,  # 5mb
+    ):
+
+        self.max_filesize = max_filesize
+        self.fh = open(path, string_flags)
+        self.fd = self.fh.fileno()
+
+        fcntl.fcntl(self.fd, fcntl.F_SETFL, flags)
+
+        self.pos = 0
+        self.buf = b""
+
+        super().__init__()
+
+    def tell(self) -> int:
+        return self.pos
+
+    def _read(self, offset: int, length: int) -> bytes:
+        prev_pos = None
+
+        while True:
+            if self.is_writeonly:
+                break
+
+            prev_pos = self.tell()
+            self.buf += os.read(self.fd, 4096)
+
+            self.pos = len(self.buf)
+
+            if not self.max_filesize:
+                if prev_pos == self.tell() or self.tell() >= self.max_filesize:
+                    break
+            else:
+                if prev_pos == self.tell() or self.tell():
+                    break
+
+        return self.buf
+
+    @property
+    def seekable(self) -> bool:
+        """Returns wether this stream is seekable."""
+        return False
+
+    def close(self) -> None:
+        """Close the opened file-descriptor and sets the acquired buffer to `None`."""
+        self.buf = None
+        os.close(self.fd)
+
+    @property
+    def is_writeonly(self) -> bool:
+        """Check wether the file-descriptor assiciated with this stream is write-only.
+
+        Returns:
+            A boolean indicating wether the file-descriptor is write-only
+        """
+        st_mode = os.fstat(self.fd).st_mode
+        # files in proc can produce input/output errors because they are "write-only"
+        # for example /proc/sysrq-trigger and /proc/sys/net/ipv6/conf/all/stable_secret
+        return not st_mode & (S_IRUSR | S_IRGRP | S_IROTH)
 
 
 class StrEnum(str, Enum):
@@ -60,7 +143,7 @@ def create_argument_parser(profiles: Dict, modules: Dict) -> argparse.ArgumentPa
     parser.add_argument(
         "-ot",
         "--output-type",
-        choices=OUTPUTS.keys(),
+        choices=acquire.outputs.OUTPUTS.keys(),
         default="tar",
         help="output type (default: tar)",
     )
@@ -139,11 +222,22 @@ def parse_acquire_args(parser: argparse.ArgumentParser, config_defaults: Optiona
     return command_line_args
 
 
-def get_pid():
+def get_pid() -> int:
+    """Get the current process ID (pid) of the acquire process.
+
+    Returns:
+        A int representing the process ID of the acquire process.
+
+    """
     return os.getpid()
 
 
-def get_ppid():
+def get_ppid() -> int:
+    """Get the current parent process ID (pid) of the acquire process.
+
+    Returns:
+        A int representing the parent process ID of the acquire process.
+    """
     return os.getppid()
 
 
