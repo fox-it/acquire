@@ -139,6 +139,14 @@ def parse_acquire_args(parser: argparse.ArgumentParser, config_defaults: Optiona
     return command_line_args
 
 
+def get_pid():
+    return os.getpid()
+
+
+def get_ppid():
+    return os.getppid()
+
+
 def get_user_name() -> str:
     try:
         return getpass.getuser()
