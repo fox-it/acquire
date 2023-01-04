@@ -248,6 +248,42 @@ class Module:
         pass
 
 
+@register_module("--sys")
+@local_module
+class Sys(Module):
+    DESC = "Procfs files (live systems only)"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, collector: Collector):
+        spec = [("dir", "/sys")]
+
+        sysfs = DirectoryFilesystem(Path("/sys"))
+
+        target.filesystems.add(sysfs)
+        target.fs.mount("/sys", sysfs)
+
+        collector.collect(spec, follow=False, volatile=True)
+
+
+@register_module("--proc")
+@local_module
+class Proc(Module):
+    DESC = "Procfs files (live systems only)"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, collector: Collector):
+        spec = [("dir", "/proc")]
+
+        procfs = DirectoryFilesystem(Path("/proc"))
+
+        target.filesystems.add(procfs)
+        target.fs.mount("/proc", procfs)
+
+        collector.collect(spec, follow=False, volatile=True)
+
+
 @register_module("-n", "--ntfs")
 class NTFS(Module):
     DESC = "NTFS filesystem metadata"
@@ -420,6 +456,19 @@ class WinRDPSessions(Module):
             ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
         ]
 
+    @classmethod
+    def get_spec_additions(cls, target):
+        # where.exe instead of where, just in case the client runs in PS instead of CMD
+        # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
+        # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
+        # on systems capable of doing that.
+        qwinsta = subprocess.run(
+            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"], capture_output=True, text=True
+        ).stdout.split("\n")[0]
+        return [
+            ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
+        ]
+
 
 @register_module("--winpmem")
 @local_module
@@ -483,8 +532,8 @@ class WinMemDump(Module):
                         )
                         return
 
-            collector.output.write_entry(mem_dump_output_path, mem_dump_path)
-            collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
+            collector.output.write_entry(mem_dump_output_path, entry=mem_dump_path)
+            collector.output.write_entry(mem_dump_errors_output_path, entry=mem_dump_errors_path)
             collector.report.add_command_collected(cls.__name__, command_parts)
             mem_dump_path.unlink()
             mem_dump_errors_path.unlink()
