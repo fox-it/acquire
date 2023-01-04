@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from dissect.target import Target, exceptions
-from dissect.target.filesystems import ntfs
+from dissect.target.filesystems import ntfs, dir
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.plugins.os.windows import iis
@@ -258,7 +258,7 @@ class Sys(Module):
     def _run(cls, target: Target, collector: Collector):
         spec = [("dir", "/sys")]
 
-        sysfs = DirectoryFilesystem(Path("/sys"))
+        sysfs = dir.DirectoryFilesystem(Path("/sys"))
 
         target.filesystems.add(sysfs)
         target.fs.mount("/sys", sysfs)
@@ -276,7 +276,7 @@ class Proc(Module):
     def _run(cls, target: Target, collector: Collector):
         spec = [("dir", "/proc")]
 
-        procfs = DirectoryFilesystem(Path("/proc"))
+        procfs = dir.DirectoryFilesystem(Path("/proc"))
 
         target.filesystems.add(procfs)
         target.fs.mount("/proc", procfs)
@@ -442,19 +442,6 @@ class WinArpCache(Module):
 class WinRDPSessions(Module):
     DESC = "Windows Remote Desktop session information"
     EXEC_ORDER = ExecutionOrder.BOTTOM
-
-    @classmethod
-    def get_spec_additions(cls, target):
-        # where.exe instead of where, just in case the client runs in PS instead of CMD
-        # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
-        # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
-        # on systems capable of doing that.
-        qwinsta = subprocess.run(
-            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"], capture_output=True, text=True
-        ).stdout.split("\n")[0]
-        return [
-            ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
-        ]
 
     @classmethod
     def get_spec_additions(cls, target):
