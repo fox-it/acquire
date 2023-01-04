@@ -1,3 +1,4 @@
+import argparse
 import enum
 import functools
 import io
@@ -10,9 +11,9 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from argparse import Namespace
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystems import ntfs
@@ -34,8 +35,11 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin_registry import PluginRegistry, UploaderRegistry
+from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
+    check_and_set_log_args,
+    check_and_set_acquire_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,
@@ -1456,13 +1460,13 @@ def print_volumes_overview(target):
     log.info("")
 
 
-def acquire_target(target, args, output_path, log_path, output_ts=None):
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
     output_ts = output_ts or get_utc_now_str()
-    if log_path and log_path.is_dir():
-        log_file = log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
+    if args.log_to_dir:
+        log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
         reconfigure_log_file(log, log_file, delay=True)
     else:
-        log_file = log_path
+        log_file = args.log_path
 
     files = []
     if log_file:
@@ -1541,25 +1545,22 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
 
     log_file_handler = get_file_handler(log)
     # Prepare log file and output file names
-    if log_file_handler and log_path and log_path.is_dir():
+    if log_file_handler and args.log_to_dir:
         log_file = format_output_name(target.name, output_ts, "log")
         log_file_handler.set_filename(log_file)
         log.info("Logging to file %s", Path(log_file_handler.baseFilename).resolve())
         files = [log_file_handler.baseFilename]
 
+    output_path = args.output
     if output_path.is_dir():
-        log_dir = format_output_name(target.name, output_ts)
-        output_path = output_path.joinpath(log_dir).resolve()
-
-    public_key = CONFIG.get("public_key")
-    if not public_key and args.public_key and Path(args.public_key).is_file():
-        public_key = Path(args.public_key).read_text()
+        output_dir = format_output_name(target.name, output_ts)
+        output_path = output_path.joinpath(output_dir).resolve()
 
     output = OUTPUTS[args.output_type](
         output_path,
         compress=args.compress,
         encrypt=args.encrypt,
-        public_key=public_key,
+        public_key=args.public_key,
     )
     files.append(output.path)
 
@@ -1642,27 +1643,16 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
 
 
 def upload_files(
-    paths,
-    plugin_registry: PluginRegistry = None,
-    no_proxy=False,
+    paths: list[Path],
+    upload_plugin: UploaderPlugin,
+    no_proxy: bool = False,
 ):
 
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
-    upload = CONFIG.get("upload", {})
-    upload_mode = upload.get("mode")
-
-    if not upload or not upload_mode:
-        raise ValueError("Uploading is not configured")
-
     try:
-        if upload_mode in plugin_registry.plugins.keys():
-            endpoint = plugin_registry.get(upload_mode)(**CONFIG)
-            endpoint.upload_files(paths, proxies)
-        else:
-            raise ValueError("Invalid upload mode")
-
+        upload_plugin.upload_files(paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
@@ -1811,53 +1801,47 @@ PROFILES = {
 
 def main():
     parser = create_argument_parser(PROFILES, MODULES)
-    args = parse_acquire_args(parser, config_defaults=CONFIG.get("arguments"))
+    args = parse_acquire_args(parser, config=CONFIG)
 
-    output_ts = get_utc_now_str()
+    try:
+        check_and_set_log_args(args)
+    except ValueError as err:
+        parser.exit(err)
 
-    log_path = None
-    log_file = None
-    if not args.no_log:
-        log_path = Path(args.log or args.output)
+    if args.log_to_dir:
+        # When args.upload files are specified, only these files are uploaded
+        # and no other action is done. Thus a log file specifically named
+        # Upload_<date>.log is created
+        file_prefix = "Upload" if args.upload else "Unknown"
+        log_file = args.log_path.joinpath(format_output_name(file_prefix, args.start_time, "log"))
+    else:
+        log_file = args.log_path
 
-        if log_path.is_dir():
-            log_prefix = "Upload" if args.upload else "Unknown"
-            log_file = log_path.joinpath(format_output_name(log_prefix, output_ts, "log"))
-        elif log_path.is_file() or (not log_path.exists() and log_path.parent.is_dir()):
-            if args.children:
-                parser.exit("Log path must be a directory when using --children")
-            log_file = log_path
-        else:
-            parser.exit(f"Log path doesn't exist: {log_path}")
-
-    setup_logging(log, log_file, args.verbose, delay=log_path and log_path.is_dir())
-
-    plugins_to_load = [("cloud", MinIO)]
-    plugin_registry = UploaderRegistry("acquire.plugins", plugins_to_load)
+    setup_logging(log, log_file, args.verbose, delay=args.log_delay)
 
     log.info(ACQUIRE_BANNER)
     log.info("User: %s | Admin: %s", get_user_name(), is_user_admin())
     log.info("Arguments: %s", " ".join(sys.argv[1:]))
-    log.info("Default Arguments: %s", " ".join(CONFIG.get("arguments", [])))
-
+    log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
     log.info("")
 
-    RemoteStreamConnection.configure(CONFIG.get("cagent_key"), CONFIG.get("cagent_certificate"))
+    plugins_to_load = [("cloud", MinIO)]
+    upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
+
+    try:
+        check_and_set_acquire_args(args, upload_plugins)
+    except ValueError as err:
+        log.exception(err)
+        parser.exit(1)
 
     if args.upload:
         try:
-            upload_files(args.upload, plugin_registry, args.no_proxy)
+            upload_files(args.upload, args.upload_plugin, args.no_proxy)
         except Exception:
             log.exception("Failed to upload files")
         return
 
-    output_path = Path(args.output)
-    if args.children and not output_path.is_dir():
-        log.error("Output path must be a directory when using --children")
-        parser.exit(1)
-    elif not output_path.exists() and not output_path.parent.is_dir():
-        log.error("Output path doesn't exist: %s", output_path)
-        parser.exit(1)
+    RemoteStreamConnection.configure(args.cagent_key, args.cagent_certificate)
 
     target_path = args.target
 
@@ -1888,9 +1872,9 @@ def main():
         # Loader found that we are running on an esxi host
         # Perform operations to "enhance" memory
         with esxi_memory_context_manager():
-            acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+            acquire_children_and_targets(target, args)
     else:
-        acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+        acquire_children_and_targets(target, args)
 
 
 def load_child(target: Target, child_path: Path) -> None:
@@ -1906,15 +1890,13 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(
-    target: Target, args: Namespace, output_path: Path, log_path: Path, output_ts: str, plugin_registry: PluginRegistry
-):
+def acquire_children_and_targets(target: Target, args: argparse.Namespace):
     if args.child:
-        load_child(target, args.child)
+        target = load_child(target, args.child)
 
     log.info("")
     try:
-        files = acquire_target(target, args, output_path, log_path, output_ts)
+        files = acquire_target(target, args, args.start_time)
     except Exception:
         log.exception("Failed to acquire target")
         raise
@@ -1929,7 +1911,7 @@ def acquire_children_and_targets(
             log.info("")
 
             try:
-                child_files = acquire_target(child_target, args, output_path, log_path)
+                child_files = acquire_target(child_target, args)
                 files.extend(child_files)
             except Exception:
                 log.exception("Failed to acquire child target")
@@ -1942,7 +1924,7 @@ def acquire_children_and_targets(
 
         log.info("")
         try:
-            upload_files(paths=files, plugin_registry=plugin_registry)
+            upload_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
 
