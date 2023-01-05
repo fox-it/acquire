@@ -82,26 +82,6 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
             raise RuntimeError(hex(result))
 
 
-def _get_file_name_thread(h_file: HANDLE, q: Queue):
-    iob = IO_STATUS_BLOCK()
-    file_name_information = ctypes.create_string_buffer(0x1000)
-
-    result = ntdll.NtQueryInformationFile(
-        h_file,
-        ctypes.byref(iob),
-        file_name_information,
-        len(file_name_information),
-        FILE_INFORMATION_CLASS.FileNameInformation,
-    )
-
-    file_name = None
-    if result == NtStatusCode.STATUS_SUCCESS:
-        file_name_length = struct.unpack("<I", file_name_information[:4])[0]
-        file_name = file_name_information[4 : 4 + file_name_length].decode("utf-16-le")
-
-    q.put(file_name)
-
-
 def open_process(pid: int) -> int:
     """Obtain a handle for the given PID.
 
@@ -136,6 +116,26 @@ def open_process(pid: int) -> int:
     return h_process
 
 
+def _get_file_name_thread(h_file: HANDLE, q: Queue):
+    iob = IO_STATUS_BLOCK()
+    file_name_information = ctypes.create_string_buffer(0x1000)
+
+    result = ntdll.NtQueryInformationFile(
+        h_file,
+        ctypes.byref(iob),
+        file_name_information,
+        len(file_name_information),
+        FILE_INFORMATION_CLASS.FileNameInformation,
+    )
+
+    file_name = None
+    if result == NtStatusCode.STATUS_SUCCESS:
+        file_name_length = struct.unpack("<I", file_name_information[:4])[0]
+        file_name = file_name_information[4 : 4 + file_name_length].decode("utf-16-le")
+
+    q.put(file_name)
+
+
 def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
     """Return handle name."""
 
@@ -153,6 +153,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
             close_handle(h_remote)
             return None
 
+    # Use threading to try (max a second) to get the handle name, since it might hang
     q = Queue()
     thread = threading.Thread(target=_get_file_name_thread, args=(handle, q))
     thread.daemon = True
