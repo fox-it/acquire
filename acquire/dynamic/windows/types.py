@@ -29,7 +29,6 @@ class ProcessAccess(IntEnum):
     PROCESS_QUERY_INFORMATION = 0x0400
     SYNCHRONIZE = 0x00100000
     PROCESS_ALL_ACCESS = 0x1F0FFF
-    DUPLICATE_SAME_ACCESS = 0x00000002
 
 
 class ErrorCode(IntEnum):
@@ -38,6 +37,12 @@ class ErrorCode(IntEnum):
     ERROR_INVALID_PARAMETER = 0x57
     ERROR_PARTIAL_COPY = 0x12B
     ERROR_NOT_ALL_ASSIGNED = 0x514
+
+
+class DuplicateHandleFlags(IntEnum):
+    DUPLICATE_CLOSE_SOURCE = 0x00000001
+    DUPLICATE_SAME_ACCESS = 0x00000002
+    DUPLICATE_SAME_ATTRIBUTES = 0x00000004
 
 
 class SYSTEM_INFORMATION_CLASS(IntEnum):
@@ -230,6 +235,7 @@ __all__ = [
     "ProcessToken",
     "ProcessAccess",
     "ErrorCode",
+    "DuplicateHandleFlags",
     "SYSTEM_INFORMATION_CLASS",
     "OBJECT_INFORMATION_CLASS",
     "FILE_INFORMATION_CLASS",

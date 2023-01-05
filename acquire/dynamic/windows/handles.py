@@ -25,6 +25,7 @@ from acquire.dynamic.windows.types import (
     ErrorCode,
     Handle,
     ProcessAccess,
+    DuplicateHandleFlags,
 )
 
 log = getLogger(__name__)
@@ -224,7 +225,7 @@ def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) 
         ctypes.byref(h_dup),
         0,
         False,
-        ProcessAccess.DUPLICATE_SAME_ACCESS,
+        DuplicateHandleFlags.DUPLICATE_SAME_ACCESS,
     )
     if result == 0:
         raise RuntimeError()
