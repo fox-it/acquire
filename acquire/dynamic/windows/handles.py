@@ -5,7 +5,7 @@ import io
 import struct
 import threading
 from logging import Filter, LogRecord, getLogger
-from queue import Queue
+from queue import Queue, Empty
 from typing import Iterable, Optional
 
 from acquire.dynamic.windows.exceptions import OpenProcessError
@@ -43,9 +43,11 @@ class DuplicateFilter(Filter):
         self.msgs = set()
 
     def filter(self, record: LogRecord) -> bool:
-        seen = (msg := record.getMessage()) not in self.msgs
-        self.msgs.add(msg)
-        return seen
+        msg = record.getMessage()
+        if show := msg not in self.msgs:
+            self.msgs.add(msg)
+
+        return show
 
 
 def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
@@ -100,6 +102,40 @@ def _get_file_name_thread(h_file: HANDLE, q: Queue):
     q.put(file_name)
 
 
+def open_process(pid: int) -> int:
+    """Obtain a handle for the given PID.
+
+    More info: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
+
+    Parameters:
+        pid: integer that represents the process ID.
+
+    Raises:
+        OpenProcessError: Raies when the System Idle Process, the System Process or one of the CSRSS processes are tried
+        to be opened.
+    """
+    kernel32.SetLastError(0)
+
+    h_process = kernel32.OpenProcess(
+        ProcessAccess.PROCESS_DUP_HANDLE,
+        False,
+        pid,
+    )
+
+    error = kernel32.GetLastError()
+    if error in [ErrorCode.ERROR_INVALID_PARAMETER, ErrorCode.ERROR_ACCESS_DENIED]:
+        raise OpenProcessError(
+            f"Likely tried opening the System Idle Process, the System Process or one of the Client Server Run-Time"
+            f"Subsystem (CSRSS) processes [pid: {pid}]"
+        )
+
+    # No valid handle could be obtained, display the error code
+    if h_process == 0:
+        raise OpenProcessError(f"OpenProcess Error: 0x{error:x} [pid: {pid}]")
+
+    return h_process
+
+
 def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
     """Return handle name."""
 
@@ -127,7 +163,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     if not thread.is_alive():
         try:
             result = q.get_nowait()
-        except Exception:  # noqa
+        except Empty:
             pass
 
     return result
@@ -169,40 +205,6 @@ def get_handles() -> Iterable[Handle]:
 
         yield Handle(handle, handle_type, handle_name)
     log.removeFilter(duplicate_filter)
-
-
-def open_process(pid: int) -> int:
-    """Obtain a handle for the given PID.
-
-    More info: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
-
-    Parameters:
-        pid: integer that represents the process ID.
-
-    Raises:
-        OpenProcessError: Raies when the System Idle Process, the System Process or one of the CSRSS processes are tried
-        to be opened.
-    """
-    kernel32.SetLastError(0)
-
-    h_process = kernel32.OpenProcess(
-        ProcessAccess.PROCESS_DUP_HANDLE,
-        False,
-        pid,
-    )
-
-    error = kernel32.GetLastError()
-    if error in [ErrorCode.ERROR_INVALID_PARAMETER, ErrorCode.ERROR_ACCESS_DENIED]:
-        raise OpenProcessError(
-            f"Likely tried opening the System Idle Process, the System Process or one of the Client Server Run-Time"
-            f"Subsystem (CSRSS) processes [pid: {pid}]"
-        )
-
-    # No valid handle could be obtained, display the error code
-    if h_process == 0:
-        raise OpenProcessError(f"OpenProcess Error: 0x{error:x} [pid: {pid}]")
-
-    return h_process
 
 
 def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> HANDLE:
