@@ -1594,8 +1594,8 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
             log.info("")
 
         # Run modules (sort first based on execution order)
-        modules_selected = dict(sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER))
-        for name, mod in modules_selected.items():
+        modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
+        for name, mod in modules_selected:
             try:
                 mod.run(target, args, collector)
 
@@ -1661,29 +1661,29 @@ def upload_files(
 PROFILES = {
     "full": {
         "windows": [
+            NTFS,
+            EventLogs,
+            Registry,
+            Tasks,
+            ETL,
+            Recents,
+            RecycleBin,
+            Drivers,
+            PowerShell,
+            Prefetch,
+            Appcompat,
+            Syscache,
+            WBEM,
             AV,
             ActivitiesCache,
-            Appcompat,
             BITS,
             DHCP,
             DNS,
-            Drivers,
-            ETL,
-            EventLogs,
             History,
             Misc,
             NTDS,
-            NTFS,
-            PowerShell,
-            Prefetch,
             QuarantinedFiles,
-            Recents,
-            RecycleBin,
-            Registry,
             RemoteAccess,
-            Syscache,
-            Tasks,
-            WBEM,
             WindowsNotifications,
         ],
         "linux": [
