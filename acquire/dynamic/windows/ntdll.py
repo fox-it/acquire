@@ -31,7 +31,8 @@ from acquire.dynamic.windows.types import (
 
 
 ntdll = ctypes.windll.ntdll
-ntdll.NtQueryInformationFile.argtypes = (
+NtQueryInformationFile = ntdll.NtQueryInformationFile
+NtQueryInformationFile.argtypes = (
     HANDLE,
     ctypes.POINTER(IO_STATUS_BLOCK),
     LPVOID,
@@ -39,21 +40,25 @@ ntdll.NtQueryInformationFile.argtypes = (
     DWORD,
 )
 ntdll.NtQueryInformationFile.restype = NTSTATUS
-ntdll.NtQuerySystemInformation.argtypes = (
+
+NtQuerySystemInformation = ntdll.NtQuerySystemInformation
+NtQuerySystemInformation.argtypes = (
     ULONG,
     LPVOID,
     DWORD,
     ctypes.POINTER(DWORD),
 )
 ntdll.NtQuerySystemInformation.restype = NTSTATUS
-ntdll.NtQueryObject.argtypes = (
+
+NtQueryObject = ntdll.NtQueryObject
+NtQueryObject.argtypes = (
     HANDLE,
     ULONG,
     LPVOID,
     DWORD,
     PULONG,
 )
-ntdll.NtQueryObject.restype = NTSTATUS
+NtQueryObject.restype = NTSTATUS
 
 STANDARD_RIGHTS_ALL = 0x001F0000
 BUFFER_SIZE = 1024
@@ -77,6 +82,7 @@ class NtStatusCode(IntEnum):
     STATUS_INFO_LENGTH_MISMATCH = 0xC0000004
     STATUS_INVALID_HANDLE = 0xC0000008
     STATUS_NO_MORE_ENTRIES = 0x8000001A
+    STATUS_BUFFER_OVERFLOW = 0x80000005
 
 
 class ACCESS_MASK(IntFlag):
@@ -157,7 +163,7 @@ def initialize_object_attributes(
     destination_attributes.SecurityQualityOfService = None
 
 
-def close_handle(handle: int) -> None:
+def close_handle(handle: HANDLE) -> None:
     """Closes an opened handle."""
     if not CloseHandle(handle):
         raise HandleNotClosedSuccessfullyError()

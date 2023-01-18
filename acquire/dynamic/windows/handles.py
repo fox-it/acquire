@@ -2,14 +2,19 @@ import csv
 import ctypes
 import gzip
 import io
-import struct
 import threading
 from logging import Filter, LogRecord, getLogger
-from queue import Queue, Empty
+from queue import Empty, Queue
 from typing import Iterable, Optional
 
 from acquire.dynamic.windows.exceptions import OpenProcessError
-from acquire.dynamic.windows.ntdll import NtStatusCode, close_handle, ntdll
+from acquire.dynamic.windows.ntdll import (
+    NtQueryInformationFile,
+    NtQueryObject,
+    NtQuerySystemInformation,
+    NtStatusCode,
+    close_handle,
+)
 from acquire.dynamic.windows.types import (
     BOOL,
     DWORD,
@@ -22,20 +27,29 @@ from acquire.dynamic.windows.types import (
     SYSTEM_HANDLE_INFORMATION_EX,
     SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX,
     SYSTEM_INFORMATION_CLASS,
+    ULONG,
+    DuplicateHandleFlags,
     ErrorCode,
+    FileNameInformationFactory,
     Handle,
     ProcessAccess,
-    DuplicateHandleFlags,
 )
 
 log = getLogger(__name__)
 
-advapi32 = ctypes.windll.advapi32
-advapi32.OpenProcessToken.argtypes = [HANDLE, DWORD, PHANDLE]
+OpenProcessToken = ctypes.windll.advapi32.OpenProcessToken
+OpenProcessToken.argtypes = [HANDLE, DWORD, PHANDLE]
 
 kernel32 = ctypes.windll.kernel32
-kernel32.OpenProcess.restype = HANDLE
-kernel32.DuplicateHandle.argtypes = (HANDLE, HANDLE, HANDLE, ctypes.POINTER(HANDLE), DWORD, BOOL, DWORD)
+OpenProcess = kernel32.OpenProcess
+OpenProcess.restype = HANDLE
+
+DuplicateHandle = kernel32.DuplicateHandle
+DuplicateHandle.argtypes = [HANDLE, HANDLE, HANDLE, ctypes.POINTER(HANDLE), DWORD, BOOL, DWORD]
+
+GetLastError = kernel32.GetLastError
+SetLastError = kernel32.SetLastError
+GetCurrentProcessId = kernel32.GetCurrentProcessId
 
 
 class DuplicateFilter(Filter):
@@ -54,7 +68,7 @@ class DuplicateFilter(Filter):
 def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
     """Return type of handle.
 
-    Parameters:
+    Args:
         handle: handle for which to return the type information.
 
     Raises:
@@ -64,7 +78,7 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
     public_object_type_information = PUBLIC_OBJECT_TYPE_INFORMATION()
     size = DWORD(ctypes.sizeof(public_object_type_information))
     while True:
-        result = ntdll.NtQueryObject(
+        result = NtQueryObject(
             handle,
             OBJECT_INFORMATION_CLASS.ObjectTypeInformation,
             ctypes.byref(public_object_type_information),
@@ -73,7 +87,7 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
         )
 
         if result == NtStatusCode.STATUS_SUCCESS:
-            return str(public_object_type_information.Name)
+            return public_object_type_information.Name
         elif result == NtStatusCode.STATUS_INFO_LENGTH_MISMATCH:
             size = DWORD(size.value * 4)
             ctypes.resize(public_object_type_information, size.value)
@@ -88,22 +102,22 @@ def open_process(pid: int) -> int:
 
     More info: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
 
-    Parameters:
+    Args:
         pid: integer that represents the process ID.
 
     Raises:
         OpenProcessError: Raies when the System Idle Process, the System Process or one of the CSRSS processes are tried
         to be opened.
     """
-    kernel32.SetLastError(0)
+    SetLastError(0)
 
-    h_process = kernel32.OpenProcess(
+    h_process = OpenProcess(
         ProcessAccess.PROCESS_DUP_HANDLE,
         False,
         pid,
     )
 
-    error = kernel32.GetLastError()
+    error = GetLastError()
     if error in [ErrorCode.ERROR_INVALID_PARAMETER, ErrorCode.ERROR_ACCESS_DENIED]:
         raise OpenProcessError(
             f"Likely tried opening the System Idle Process, the System Process or one of the Client Server Run-Time"
@@ -119,20 +133,26 @@ def open_process(pid: int) -> int:
 
 def _get_file_name_thread(h_file: HANDLE, q: Queue):
     iob = IO_STATUS_BLOCK()
-    file_name_information = ctypes.create_string_buffer(0x1000)
-
-    result = ntdll.NtQueryInformationFile(
-        h_file,
-        ctypes.byref(iob),
-        file_name_information,
-        len(file_name_information),
-        FILE_INFORMATION_CLASS.FileNameInformation,
-    )
-
+    file_name_information = FileNameInformationFactory()
     file_name = None
-    if result == NtStatusCode.STATUS_SUCCESS:
-        file_name_length = struct.unpack("<I", file_name_information[:4])[0]
-        file_name = file_name_information[4 : 4 + file_name_length].decode("utf-16-le")
+
+    while True:
+        result = NtQueryInformationFile(
+            h_file,
+            ctypes.byref(iob),
+            ctypes.byref(file_name_information),
+            ULONG(ctypes.sizeof(file_name_information)),
+            FILE_INFORMATION_CLASS.FileNameInformation,
+        )
+
+        if result in [NtStatusCode.STATUS_BUFFER_OVERFLOW]:
+            file_name_information = FileNameInformationFactory(file_name_information.FileNameLength)
+        elif result == NtStatusCode.STATUS_SUCCESS:
+            file_name = file_name_information.FileName
+            break
+        else:
+            # Multiple StatusCodes can be observed. In almost all cases FileNameLength is 0. Breaking for now
+            break
 
     q.put(file_name)
 
@@ -140,7 +160,7 @@ def _get_file_name_thread(h_file: HANDLE, q: Queue):
 def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
     """Return handle name."""
 
-    remote = pid != kernel32.GetCurrentProcessId()
+    remote = pid != GetCurrentProcessId()
 
     if remote:
         try:
@@ -179,7 +199,7 @@ def get_handles() -> Iterable[Handle]:
     log.addFilter(duplicate_filter)
 
     while True:
-        result = ntdll.NtQuerySystemInformation(
+        result = NtQuerySystemInformation(
             SYSTEM_INFORMATION_CLASS.SystemExtendedHandleInformation,
             ctypes.byref(system_handle_information),
             size,
@@ -217,8 +237,8 @@ def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) 
     the other program.
     """
     h_dup = HANDLE()
-    kernel32.SetLastError(0)
-    result = kernel32.DuplicateHandle(
+    SetLastError(0)
+    result = DuplicateHandle(
         h_process,
         handle,
         kernel32.GetCurrentProcess(),

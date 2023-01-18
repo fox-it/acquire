@@ -1,7 +1,19 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes.wintypes import BOOL, DWORD, HANDLE, LPDWORD, LPVOID, LPWSTR, PHANDLE, PULONG, ULONG, USHORT, WCHAR
+from ctypes.wintypes import (
+    BOOL,
+    DWORD,
+    HANDLE,
+    LPDWORD,
+    LPVOID,
+    LPWSTR,
+    PHANDLE,
+    PULONG,
+    ULONG,
+    USHORT,
+    WCHAR,
+)
 from enum import IntEnum
 
 PVOID = ctypes.c_void_p
@@ -113,8 +125,11 @@ class SYSTEM_HANDLE_INFORMATION_EX(ctypes.Structure):
     ]
 
 
-class FILE_NAME_INFORMATION(ctypes.Structure):
-    _fields_ = [("FileNameLength", ULONG), ("FileName", WCHAR * 1)]
+def FileNameInformationFactory(file_name_size: int = 1):
+    class FILE_NAME_INFORMATION(ctypes.Structure):
+        _fields_ = [("FileNameLength", ULONG), ("FileName", WCHAR * file_name_size)]
+
+    return FILE_NAME_INFORMATION()
 
 
 class IO_STATUS_BLOCK_DUMMYUNIONNAME(ctypes.Union):
@@ -198,6 +213,10 @@ class PUBLIC_OBJECT_TYPE_INFORMATION(ctypes.Structure):
         ("Reserved", ULONG * 22),
     ]
 
+    @property
+    def name(self) -> str:
+        return str(self.name)
+
 
 PUNICODE_STRING = ctypes.POINTER(UNICODE_STRING)
 
@@ -241,7 +260,6 @@ __all__ = [
     "FILE_INFORMATION_CLASS",
     "SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX",
     "SYSTEM_HANDLE_INFORMATION_EX",
-    "FILE_NAME_INFORMATION",
     "PUBLIC_OBJECT_TYPE_INFORMATION",
     "IO_STATUS_BLOCK_DUMMYUNIONNAME",
     "IO_STATUS_BLOCK",
