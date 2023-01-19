@@ -87,7 +87,7 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
         )
 
         if result == NtStatusCode.STATUS_SUCCESS:
-            return public_object_type_information.Name
+            return public_object_type_information.name
         elif result == NtStatusCode.STATUS_INFO_LENGTH_MISMATCH:
             size = DWORD(size.value * 4)
             ctypes.resize(public_object_type_information, size.value)
@@ -131,7 +131,7 @@ def open_process(pid: int) -> int:
     return h_process
 
 
-def _get_file_name_thread(h_file: HANDLE, q: Queue):
+def _get_file_name_thread(h_file: HANDLE, queue: Queue):
     iob = IO_STATUS_BLOCK()
     file_name_information = FileNameInformationFactory()
     file_name = None
@@ -145,7 +145,7 @@ def _get_file_name_thread(h_file: HANDLE, q: Queue):
             FILE_INFORMATION_CLASS.FileNameInformation,
         )
 
-        if result in [NtStatusCode.STATUS_BUFFER_OVERFLOW]:
+        if result in NtStatusCode.STATUS_BUFFER_OVERFLOW:
             file_name_information = FileNameInformationFactory(file_name_information.FileNameLength)
         elif result == NtStatusCode.STATUS_SUCCESS:
             file_name = file_name_information.FileName
@@ -154,7 +154,7 @@ def _get_file_name_thread(h_file: HANDLE, q: Queue):
             # Multiple StatusCodes can be observed. In almost all cases FileNameLength is 0. Breaking for now
             break
 
-    q.put(file_name)
+    queue.put(file_name)
 
 
 def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
@@ -175,8 +175,8 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
             return None
 
     # Use threading to try (max a second) to get the handle name, since it might hang
-    q = Queue()
-    thread = threading.Thread(target=_get_file_name_thread, args=(handle, q))
+    queue = Queue()
+    thread = threading.Thread(target=_get_file_name_thread, args=(handle, queue))
     thread.daemon = True
     thread.start()
     thread.join(1.0)
@@ -184,7 +184,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     result = None
     if not thread.is_alive():
         try:
-            result = q.get_nowait()
+            result = queue.get_nowait()
         except Empty:
             pass
 

@@ -32,32 +32,32 @@ from acquire.dynamic.windows.types import (
 
 ntdll = ctypes.windll.ntdll
 NtQueryInformationFile = ntdll.NtQueryInformationFile
-NtQueryInformationFile.argtypes = (
+NtQueryInformationFile.argtypes = [
     HANDLE,
     ctypes.POINTER(IO_STATUS_BLOCK),
     LPVOID,
     ULONG,
     DWORD,
-)
+]
 ntdll.NtQueryInformationFile.restype = NTSTATUS
 
 NtQuerySystemInformation = ntdll.NtQuerySystemInformation
-NtQuerySystemInformation.argtypes = (
+NtQuerySystemInformation.argtypes = [
     ULONG,
     LPVOID,
     DWORD,
     ctypes.POINTER(DWORD),
-)
+]
 ntdll.NtQuerySystemInformation.restype = NTSTATUS
 
 NtQueryObject = ntdll.NtQueryObject
-NtQueryObject.argtypes = (
+NtQueryObject.argtypes = [
     HANDLE,
     ULONG,
     LPVOID,
     DWORD,
     PULONG,
-)
+]
 NtQueryObject.restype = NTSTATUS
 
 STANDARD_RIGHTS_ALL = 0x001F0000

@@ -215,7 +215,7 @@ class PUBLIC_OBJECT_TYPE_INFORMATION(ctypes.Structure):
 
     @property
     def name(self) -> str:
-        return str(self.name)
+        return str(self.Name)
 
 
 PUNICODE_STRING = ctypes.POINTER(UNICODE_STRING)
