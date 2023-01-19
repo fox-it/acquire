@@ -9,7 +9,6 @@ from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence, Set, Type, Union
 
-from acquire.utils import StrEnum, get_formatted_exception
 from dissect.target.exceptions import (
     FileNotFoundError,
     NotADirectoryError,
@@ -17,6 +16,8 @@ from dissect.target.exceptions import (
     SymlinkRecursionError,
 )
 from dissect.target.helpers import fsutil
+
+from acquire.utils import StrEnum, get_formatted_exception
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class Outcome(StrEnum):
 
 class ArtifactType(StrEnum):
     FILE = "file"
-    SYMLINK = "SYMLINK"
+    SYMLINK = "symlink"
     GLOB = "glob"
     DIR = "dir"
     COMMAND = "command"
@@ -200,8 +201,8 @@ class Collector:
 
     def create_outpath(
         self,
-        path: Union[Path, fsutil.TargetPath],
-        base: str = None,
+        path: Path,
+        base: Optional[str] = None,
     ) -> str:
 
         base = base or self.base
@@ -273,12 +274,11 @@ class Collector:
         try:
             if volatile:
                 self.output.write_volatile(outpath, entry=path, size=size)
-                self.report.add_file_collected(module_name, path)
-                result = "OK"
             else:
                 self.output.write_entry(outpath, entry=path, size=size)
-                self.report.add_file_collected(module_name, path)
-                result = "OK"
+
+            self.report.add_file_collected(module_name, path)
+            result = "OK"
         except FileNotFoundError:
             self.report.add_file_missing(module_name, path)
             result = "File not found"
@@ -355,17 +355,21 @@ class Collector:
             else:
                 self.report.add_glob_collected(module_name, pattern)
 
-    def _collect_symlink(self, path, collect_func, **kwargs) -> None:
-        if kwargs.get("follow"):
-            collect_func(path, **kwargs)
-        else:
+    def collect_symlink(
+        self,
+        path: Path,
+        module_name: Optional[str] = None,
+        follow: Optional[bool] = None,
+        volatile: Optional[bool] = None,
+    ) -> None:
 
-            outpath = self.create_outpath(str(path))
+        outpath = self.create_outpath(str(path))
 
-            self.output.write_bytes(outpath, b"", entry=path, size=0)
-            self.report.add_symlink_collected(kwargs.get("module_name"), path)
-            result = "OK"
-            log.info("- Collecting symlink entry %s: %s", path, result)
+        self.output.write_bytes(outpath, b"", entry=path, size=0)
+        self.report.add_symlink_collected(module_name, path)
+
+        result = "OK"
+        log.info("- Collecting symlink entry %s: %s", path, result)
 
     def collect_path(
         self,
@@ -391,10 +395,6 @@ class Collector:
             is_file = path.is_file()
             is_symlink = path.is_symlink()
         except OSError as error:
-            if error.errno == errno.EINVAL:
-                # Some files can produce an invalid argument error when stat-ed.
-                # If this is the case. We still want to attemd to collect the file.
-                self.collect_file(path, module_name=module_name, follow=follow, volatile=volatile)
             if error.errno == errno.ENOENT:
                 self.report.add_path_missing(module_name, path)
                 log.error("- Path %s is not found", path)
@@ -414,9 +414,8 @@ class Collector:
             log.error("- Failed to collect path %s", path, exc_info=True)
             return
 
-        if is_symlink:
-            collect_func = self.collect_dir if is_dir else self.collect_file
-            self._collect_symlink(path, collect_func, follow=follow, volatile=volatile, module_name=module_name)
+        if is_symlink and not follow:
+            self.collect_symlink(path, module_name=module_name, follow=follow, volatile=volatile)
         elif is_dir:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:

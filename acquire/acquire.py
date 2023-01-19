@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from dissect.target import Target, exceptions
-from dissect.target.filesystems import ntfs, dir
+from dissect.target.filesystems import dir, ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.plugins.os.windows import iis
@@ -251,7 +251,7 @@ class Module:
 @register_module("--sys")
 @local_module
 class Sys(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = "Sysfs files (live systems only)"
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod

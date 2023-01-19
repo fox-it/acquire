@@ -1,13 +1,13 @@
 import io
 import tarfile
 from pathlib import Path
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO, Optional
 
-import dissect.target.exceptions
+from dissect.target.exceptions import FileNotFoundError as TargeFileNotFoundError
+from dissect.target.filesystem import FilesystemEntry
+
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
-from dissect.target.filesystem import FilesystemEntry
-from dissect.target.helpers.fsutil import TargetPath
 
 
 class TarOutput(Output):
@@ -15,8 +15,8 @@ class TarOutput(Output):
 
     Args:
         path: The path to write the tar archive to.
-        compress: Wether to compress the tar archive.
-        encrypt:  Wether to encrypt the tar archive.
+        compress: Whether to compress the tar archive.
+        encrypt:  Whether to encrypt the tar archive.
         public_key: The RSA public key to encrypt the header with.
     """
 
@@ -44,22 +44,20 @@ class TarOutput(Output):
 
     def write(
         self,
-        path: Union[Path, TargetPath],
+        path: Path,
         fh: BinaryIO,
         size: Optional[int] = None,
         entry: Optional[FilesystemEntry] = None,
     ) -> None:
-        """
-        Write a filesystem entry or file-like object to a tar file.
+        """Write a filesystem entry or file-like object to a tar file.
 
         Args:
-            path: The path of the entry to write
-            fh: The file-like object of the entry to write
-            size: The optional filesize in bytes of the entry to write
-            entry: the optional filesystem entry of the entry to write
+            path: The path of the entry to write.
+            fh: The file-like object of the entry to write.
+            size: The optional file size in bytes of the entry to write.
+            entry: the optional filesystem entry of the entry to write.
         """
         stat = None
-
         size = size or getattr(fh, "size", None)
 
         if size is None and fh.seekable():
@@ -72,21 +70,24 @@ class TarOutput(Output):
         info.name = str(path)
         info.uname = "root"
         info.gname = "root"
-        info.size = size
+        info.size = size or 0
 
         if entry.is_symlink():
             try:
                 info.type = tarfile.SYMTYPE
                 info.linkname = str(entry.readlink())
-            except (FileNotFoundError, dissect.target.exceptions.FileNotFoundError):
+            except (FileNotFoundError, TargeFileNotFoundError):
                 pass
 
-        try:
-            stat = entry.stat()
-        except (FileNotFoundError, dissect.target.exceptions.FileNotFoundError):
             try:
                 stat = entry.lstat()
-            except (FileNotFoundError, dissect.target.exceptions.FileNotFoundError):
+            except (FileNotFoundError, TargeFileNotFoundError):
+                pass
+
+        else:
+            try:
+                stat = entry.stat()
+            except (FileNotFoundError, TargeFileNotFoundError):
                 pass
 
         if stat:
@@ -95,9 +96,7 @@ class TarOutput(Output):
         self.tar.addfile(info, fh)
 
     def close(self):
-        """
-        Closes the opened tar file and opened file-like objects.
-        """
+        """Closes the opened tar file and opened file-like objects."""
         self.tar.close()
         if self._fh:
             self._fh.close()
