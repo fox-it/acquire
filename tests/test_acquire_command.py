@@ -17,7 +17,7 @@ from acquire.acquire import (
 def acquire_parser_args(config: List, argument_list: List) -> Namespace:
     CONFIG["arguments"] = config
     with patch("argparse._sys.argv", [""] + argument_list):
-        return parse_acquire_args(create_argument_parser(PROFILES, MODULES), config_defaults=CONFIG["arguments"])
+        return parse_acquire_args(create_argument_parser(PROFILES, MODULES), config=CONFIG)
 
 
 @pytest.mark.parametrize("config, argument_list", [([], [])])

@@ -1,17 +1,19 @@
+import argparse
 import enum
 import functools
 import io
 import itertools
 import logging
+import os
 import shutil
 import subprocess
 import sys
 import time
 import urllib.parse
 import urllib.request
-from argparse import Namespace
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystems import ntfs
@@ -34,8 +36,11 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin_registry import PluginRegistry, UploaderRegistry
+from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
+    check_and_set_log_args,
+    check_and_set_acquire_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,
@@ -388,7 +393,7 @@ class WinArpCache(Module):
 
     @classmethod
     def get_spec_additions(cls, target):
-        if target.ntversion < 6.2:
+        if float(target.ntversion) < 6.2:
             commands = [
                 # < Windows 10
                 ("command", (["arp", "-av"], "win7-arp-cache")),
@@ -401,14 +406,24 @@ class WinArpCache(Module):
         return commands
 
 
-@register_module("--win-rd-sessions")
+@register_module("--win-rdp-sessions")
 @local_module
 class WinRDPSessions(Module):
     DESC = "Windows Remote Desktop session information"
-    SPEC = [
-        ("command", (["qwinsta", "/VM"], "win-rd-sessions")),
-    ]
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        # where.exe instead of where, just in case the client runs in PS instead of CMD
+        # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
+        # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
+        # on systems capable of doing that.
+        qwinsta = subprocess.run(
+            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"], capture_output=True, text=True
+        ).stdout.split("\n")[0]
+        return [
+            ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
+        ]
 
 
 @register_module("--winpmem")
@@ -827,8 +842,6 @@ class AV(Module):
         # Sophos
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
-        ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
-        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         # Symantec
         (
             "dir",
@@ -877,12 +890,17 @@ class QuarantinedFiles(Module):
         # McAfee
         ("dir", "sysvol/Quarantine"),
         ("dir", "sysvol/ProgramData/McAfee/VirusScan/Quarantine"),
+        # Sophos
+        ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
+        ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
+        # HitmanPRO
+        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
     ]
 
 
 @register_module("--history")
 class History(Module):
-    DESC = "browser history from IE, Firefox and Chrome"
+    DESC = "browser history from IE, Edge, Firefox, and Chrome"
 
     SPEC = [
         # IE
@@ -924,12 +942,61 @@ class History(Module):
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
         # Chrome
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Bookmarks", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Favicons", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data For Account", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
+        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
+        # Chrome - Legacy
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Session", from_user_home),
         ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Tabs", from_user_home),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Bookmarks",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Favicons",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data For Account",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Shortcuts",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Top Sites",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
+            from_user_home,
+        ),
+        # Chrome - Legacy
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
@@ -938,11 +1005,6 @@ class History(Module):
         (
             "glob",
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Tabs",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
             from_user_home,
         ),
         (
@@ -960,23 +1022,102 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
             from_user_home,
         ),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/Current Session"),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/History"),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/Archived History"),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/Last Session"),
-        ("glob", "/Users/*/Library/Applications Support/Google/Chrome/*/Last Tabs"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/Current Session"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/History"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/Archived History"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/Last Session"),
-        ("glob", "/Users/*/Library/Applications Support/Chromium/*/Last Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data For Account"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Web Data"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data For Account"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
+        # Chrome - Legacy
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Session"),
+        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Session"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Tabs"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
+        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        # Edge
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Favicons", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Login Data", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Media History", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Shortcuts", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Top Sites", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Web Data", from_user_home),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Bookmarks",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Extension Cookies",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Favicons",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Login Data",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Media History",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Shortcuts",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Top Sites",
+            from_user_home,
+        ),
+        (
+            "glob",
+            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
+            from_user_home,
+        ),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Bookmarks"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Extension Cookies"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Favicons"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Login Data"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Media History"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Shortcuts"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Top Sites"),
+        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Web Data"),
         # Firefox
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "Application Data/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
-        ("glob", "/Users/*/Library/Applications Support/Firefox/Profiles/*/*.sqlite*"),
+        ("glob", "/Users/*/Library/Application Support/Firefox/Profiles/*/*.sqlite*"),
         # Safari
         ("glob", "/Users/*/Library/Safari/Bookmarks.plist"),
         ("glob", "/Users/*/Library/Safari/Downloads.plist"),
@@ -1092,6 +1233,8 @@ class Var(Module):
         ("dir", "/var/run"),
         # some OS-X specific files
         ("dir", "/private/var/at"),
+        ("dir", "/private/var/db/diagnostics"),
+        ("dir", "/private/var/db/uuidtext"),
         ("file", "/private/var/vm/sleepimage"),
         ("glob", "/private/var/vm/swapfile*"),
         ("glob", "/private/var/folders/*/*/0/com.apple.notificationcenter/*/*"),
@@ -1358,13 +1501,13 @@ def print_volumes_overview(target):
     log.info("")
 
 
-def acquire_target(target, args, output_path, log_path, output_ts=None):
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
     output_ts = output_ts or get_utc_now_str()
-    if log_path and log_path.is_dir():
-        log_file = log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
+    if args.log_to_dir:
+        log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
         reconfigure_log_file(log, log_file, delay=True)
     else:
-        log_file = log_path
+        log_file = args.log_path
 
     files = []
     if log_file:
@@ -1443,25 +1586,22 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
 
     log_file_handler = get_file_handler(log)
     # Prepare log file and output file names
-    if log_file_handler and log_path and log_path.is_dir():
+    if log_file_handler and args.log_to_dir:
         log_file = format_output_name(target.name, output_ts, "log")
         log_file_handler.set_filename(log_file)
         log.info("Logging to file %s", Path(log_file_handler.baseFilename).resolve())
         files = [log_file_handler.baseFilename]
 
+    output_path = args.output
     if output_path.is_dir():
-        log_dir = format_output_name(target.name, output_ts)
-        output_path = output_path.joinpath(log_dir).resolve()
-
-    public_key = CONFIG.get("public_key")
-    if not public_key and args.public_key and Path(args.public_key).is_file():
-        public_key = Path(args.public_key).read_text()
+        output_dir = format_output_name(target.name, output_ts)
+        output_path = output_path.joinpath(output_dir).resolve()
 
     output = OUTPUTS[args.output_type](
         output_path,
         compress=args.compress,
         encrypt=args.encrypt,
-        public_key=public_key,
+        public_key=args.public_key,
     )
     files.append(output.path)
 
@@ -1495,8 +1635,8 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
             log.info("")
 
         # Run modules (sort first based on execution order)
-        modules_selected = dict(sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER))
-        for name, mod in modules_selected.items():
+        modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
+        for name, mod in modules_selected:
             try:
                 mod.run(target, args, collector)
 
@@ -1544,27 +1684,16 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
 
 
 def upload_files(
-    paths,
-    plugin_registry: PluginRegistry = None,
-    no_proxy=False,
+    paths: list[Path],
+    upload_plugin: UploaderPlugin,
+    no_proxy: bool = False,
 ):
 
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
-    upload = CONFIG.get("upload", {})
-    upload_mode = upload.get("mode")
-
-    if not upload or not upload_mode:
-        raise ValueError("Uploading is not configured")
-
     try:
-        if upload_mode in plugin_registry.plugins.keys():
-            endpoint = plugin_registry.get(upload_mode)(**CONFIG)
-            endpoint.upload_files(paths, proxies)
-        else:
-            raise ValueError("Invalid upload mode")
-
+        upload_plugin.upload_files(paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
@@ -1573,28 +1702,29 @@ def upload_files(
 PROFILES = {
     "full": {
         "windows": [
+            NTFS,
+            EventLogs,
+            Registry,
+            Tasks,
+            ETL,
+            Recents,
+            RecycleBin,
+            Drivers,
+            PowerShell,
+            Prefetch,
+            Appcompat,
+            Syscache,
+            WBEM,
             AV,
             ActivitiesCache,
-            Appcompat,
             BITS,
             DHCP,
             DNS,
-            Drivers,
-            ETL,
-            EventLogs,
             History,
             Misc,
             NTDS,
-            NTFS,
-            Prefetch,
             QuarantinedFiles,
-            Recents,
-            RecycleBin,
-            Registry,
             RemoteAccess,
-            Syscache,
-            Tasks,
-            WBEM,
             WindowsNotifications,
         ],
         "linux": [
@@ -1633,6 +1763,7 @@ PROFILES = {
             Recents,
             RecycleBin,
             Drivers,
+            PowerShell,
             Prefetch,
             Appcompat,
             Syscache,
@@ -1676,6 +1807,7 @@ PROFILES = {
             EventLogs,
             Registry,
             Tasks,
+            PowerShell,
             Prefetch,
             Appcompat,
             Misc,
@@ -1710,53 +1842,47 @@ PROFILES = {
 
 def main():
     parser = create_argument_parser(PROFILES, MODULES)
-    args = parse_acquire_args(parser, config_defaults=CONFIG.get("arguments"))
+    args = parse_acquire_args(parser, config=CONFIG)
 
-    output_ts = get_utc_now_str()
+    try:
+        check_and_set_log_args(args)
+    except ValueError as err:
+        parser.exit(err)
 
-    log_path = None
-    log_file = None
-    if not args.no_log:
-        log_path = Path(args.log or args.output)
+    if args.log_to_dir:
+        # When args.upload files are specified, only these files are uploaded
+        # and no other action is done. Thus a log file specifically named
+        # Upload_<date>.log is created
+        file_prefix = "Upload" if args.upload else "Unknown"
+        log_file = args.log_path.joinpath(format_output_name(file_prefix, args.start_time, "log"))
+    else:
+        log_file = args.log_path
 
-        if log_path.is_dir():
-            log_prefix = "Upload" if args.upload else "Unknown"
-            log_file = log_path.joinpath(format_output_name(log_prefix, output_ts, "log"))
-        elif log_path.is_file() or (not log_path.exists() and log_path.parent.is_dir()):
-            if args.children:
-                parser.exit("Log path must be a directory when using --children")
-            log_file = log_path
-        else:
-            parser.exit(f"Log path doesn't exist: {log_path}")
-
-    setup_logging(log, log_file, args.verbose, delay=log_path and log_path.is_dir())
-
-    plugins_to_load = [("cloud", MinIO)]
-    plugin_registry = UploaderRegistry("acquire.plugins", plugins_to_load)
+    setup_logging(log, log_file, args.verbose, delay=args.log_delay)
 
     log.info(ACQUIRE_BANNER)
     log.info("User: %s | Admin: %s", get_user_name(), is_user_admin())
     log.info("Arguments: %s", " ".join(sys.argv[1:]))
-    log.info("Default Arguments: %s", " ".join(CONFIG.get("arguments", [])))
-
+    log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
     log.info("")
 
-    RemoteStreamConnection.configure(CONFIG.get("cagent_key"), CONFIG.get("cagent_certificate"))
+    plugins_to_load = [("cloud", MinIO)]
+    upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
+
+    try:
+        check_and_set_acquire_args(args, upload_plugins)
+    except ValueError as err:
+        log.exception(err)
+        parser.exit(1)
 
     if args.upload:
         try:
-            upload_files(args.upload, plugin_registry, args.no_proxy)
+            upload_files(args.upload, args.upload_plugin, args.no_proxy)
         except Exception:
             log.exception("Failed to upload files")
         return
 
-    output_path = Path(args.output)
-    if args.children and not output_path.is_dir():
-        log.error("Output path must be a directory when using --children")
-        parser.exit(1)
-    elif not output_path.exists() and not output_path.parent.is_dir():
-        log.error("Output path doesn't exist: %s", output_path)
-        parser.exit(1)
+    RemoteStreamConnection.configure(args.cagent_key, args.cagent_certificate)
 
     target_path = args.target
 
@@ -1787,9 +1913,9 @@ def main():
         # Loader found that we are running on an esxi host
         # Perform operations to "enhance" memory
         with esxi_memory_context_manager():
-            acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+            acquire_children_and_targets(target, args)
     else:
-        acquire_children_and_targets(target, args, output_path, log_path, output_ts, plugin_registry)
+        acquire_children_and_targets(target, args)
 
 
 def load_child(target: Target, child_path: Path) -> None:
@@ -1805,15 +1931,13 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(
-    target: Target, args: Namespace, output_path: Path, log_path: Path, output_ts: str, plugin_registry: PluginRegistry
-):
+def acquire_children_and_targets(target: Target, args: argparse.Namespace):
     if args.child:
-        load_child(target, args.child)
+        target = load_child(target, args.child)
 
     log.info("")
     try:
-        files = acquire_target(target, args, output_path, log_path, output_ts)
+        files = acquire_target(target, args, args.start_time)
     except Exception:
         log.exception("Failed to acquire target")
         raise
@@ -1828,7 +1952,7 @@ def acquire_children_and_targets(
             log.info("")
 
             try:
-                child_files = acquire_target(child_target, args, output_path, log_path)
+                child_files = acquire_target(child_target, args)
                 files.extend(child_files)
             except Exception:
                 log.exception("Failed to acquire child target")
@@ -1841,7 +1965,7 @@ def acquire_children_and_targets(
 
         log.info("")
         try:
-            upload_files(paths=files, plugin_registry=plugin_registry)
+            upload_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
 
