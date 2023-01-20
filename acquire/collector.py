@@ -420,6 +420,10 @@ class Collector:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:
             self.collect_file(path, module_name=module_name, follow=follow, volatile=volatile)
+        else:
+            self.report.add_path_failed(module_name, path)
+            log.error("- Don't know how to collect %s in module %s", path, module_name)
+            return
 
     def collect_command_output(
         self,

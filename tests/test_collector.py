@@ -102,16 +102,13 @@ def test_collector_collect_path_file(mock_collector):
 
 
 def test_collector_collect_path_symlink(mock_collector):
-    with patch("acquire.collector.log") as mock_log:
-        with patch.object(mock_collector, "report", autospec=True) as mock_report:
-            mock_collector.collect_path(
-                "/foo/bar/some-symlink",
-                seen_paths=MOCK_SEEN_PATHS,
-                module_name=MOCK_MODULE_NAME,
-            )
-            mock_report.add_path_failed.assert_called()
-            mock_log.error.assert_called()
-            assert mock_log.error.call_args.args[0] == "- Can't collect %s (symlink to %s) in module %s"
+    with patch.object(mock_collector, "collect_symlink", autospec=True):
+        mock_collector.collect_path(
+            "/foo/bar/some-symlink",
+            seen_paths=MOCK_SEEN_PATHS,
+            module_name=MOCK_MODULE_NAME,
+        )
+        mock_collector.collect_symlink.assert_called()
 
 
 def test_collector_collect_path_non_existing_file(mock_collector):
