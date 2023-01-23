@@ -14,6 +14,8 @@ from acquire.dynamic.windows.types import (
     BOOL,
     DWORD,
     HANDLE,
+    IO_STATUS_BLOCK,
+    LPVOID,
     NTSTATUS,
     NULL,
     OBJECT_DIRECTORY_INFORMATION,
@@ -29,6 +31,35 @@ from acquire.dynamic.windows.types import (
 
 
 ntdll = ctypes.windll.ntdll
+NtQueryInformationFile = ntdll.NtQueryInformationFile
+NtQueryInformationFile.argtypes = [
+    HANDLE,
+    ctypes.POINTER(IO_STATUS_BLOCK),
+    LPVOID,
+    ULONG,
+    DWORD,
+]
+ntdll.NtQueryInformationFile.restype = NTSTATUS
+
+NtQuerySystemInformation = ntdll.NtQuerySystemInformation
+NtQuerySystemInformation.argtypes = [
+    ULONG,
+    LPVOID,
+    DWORD,
+    ctypes.POINTER(DWORD),
+]
+ntdll.NtQuerySystemInformation.restype = NTSTATUS
+
+NtQueryObject = ntdll.NtQueryObject
+NtQueryObject.argtypes = [
+    HANDLE,
+    ULONG,
+    LPVOID,
+    DWORD,
+    PULONG,
+]
+NtQueryObject.restype = NTSTATUS
+
 STANDARD_RIGHTS_ALL = 0x001F0000
 BUFFER_SIZE = 1024
 
@@ -51,6 +82,7 @@ class NtStatusCode(IntEnum):
     STATUS_INFO_LENGTH_MISMATCH = 0xC0000004
     STATUS_INVALID_HANDLE = 0xC0000008
     STATUS_NO_MORE_ENTRIES = 0x8000001A
+    STATUS_BUFFER_OVERFLOW = 0x80000005
 
 
 class ACCESS_MASK(IntFlag):
