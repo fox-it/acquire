@@ -145,7 +145,7 @@ def _get_file_name_thread(h_file: HANDLE, queue: Queue):
             FILE_INFORMATION_CLASS.FileNameInformation,
         )
 
-        if result in NtStatusCode.STATUS_BUFFER_OVERFLOW:
+        if result == NtStatusCode.STATUS_BUFFER_OVERFLOW:
             file_name_information = FileNameInformationFactory(file_name_information.FileNameLength)
         elif result == NtStatusCode.STATUS_SUCCESS:
             file_name = file_name_information.FileName
