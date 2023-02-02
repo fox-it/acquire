@@ -1508,15 +1508,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         log_file = args.log_path
 
     files = []
-    if log_file:
-        files.append(log_file)
 
     print_disks_overview(target)
     print_volumes_overview(target)
 
     if not target._os_plugin:
         log.error("Error: Unable to detect OS")
-        return files
+        return files, log_file
 
     hostname = ""
     try:
@@ -1588,7 +1586,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         log_file = format_output_name(target.name, output_ts, "log")
         log_file_handler.set_filename(log_file)
         log.info("Logging to file %s", Path(log_file_handler.baseFilename).resolve())
-        files = [log_file_handler.baseFilename]
 
     output_path = args.output
     if output_path.is_dir():
@@ -1677,7 +1674,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         log.info("Acquisition report for %s is written to %s", target, report_file_path)
 
     log.info("Output: %s", output.path)
-    return files
+    return files, log_file
 
 
 def upload_files(
@@ -1928,12 +1925,16 @@ def load_child(target: Target, child_path: Path) -> None:
 
 
 def acquire_children_and_targets(target: Target, args: argparse.Namespace):
+    log_files = []
+
     if args.child:
         target = load_child(target, args.child)
 
     log.info("")
+
     try:
-        files = acquire_target(target, args, args.start_time)
+        files, log_file = acquire_target(target, args, args.start_time)
+        log_files.append(log_file)
     except Exception:
         log.exception("Failed to acquire target")
         raise
@@ -1948,12 +1949,17 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
             log.info("")
 
             try:
-                child_files = acquire_target(child_target, args)
+                child_files, child_log_file = acquire_target(child_target, args)
                 files.extend(child_files)
+                log_files.extend(child_log_file)
             except Exception:
                 log.exception("Failed to acquire child target")
                 continue
 
+    # The main log file is always first, so we reverse the list to put that one at the end.
+    log_files = [log_file for log_file in log_files if log_file]
+    log_files.reverse()
+    
     if args.auto_upload:
         log_file_handler = get_file_handler(log)
         if log_file_handler:
@@ -1961,7 +1967,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
 
         log.info("")
         try:
-            upload_files(files, args.upload_plugin)
+            upload_files(files + log_files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
 
