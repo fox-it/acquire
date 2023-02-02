@@ -105,10 +105,22 @@ def test_collector_collect_path_symlink(mock_collector):
     with patch.object(mock_collector, "collect_symlink", autospec=True):
         mock_collector.collect_path(
             "/foo/bar/some-symlink",
+            follow=False,
             seen_paths=MOCK_SEEN_PATHS,
             module_name=MOCK_MODULE_NAME,
         )
         mock_collector.collect_symlink.assert_called()
+
+
+def test_collector_collect_path_symlink_follow(mock_collector):
+    with patch.object(mock_collector, "collect_symlink", autospec=True):
+        mock_collector.collect_path(
+            "/foo/bar/some-symlink",
+            follow=True,
+            seen_paths=MOCK_SEEN_PATHS,
+            module_name=MOCK_MODULE_NAME,
+        )
+        mock_collector.collect_symlink.assert_not_called()
 
 
 def test_collector_collect_path_non_existing_file(mock_collector):

@@ -14,7 +14,7 @@ class Output:
     New output formats must sub-class this class.
 
     Args:
-        target: The Optional target that we're using acquire on.
+        target: The target that we're using acquire on.
     """
 
     def init(self, target: Target):
@@ -43,7 +43,7 @@ class Output:
         size: Optional[int] = None,
         entry: Optional[FilesystemEntry] = None,
     ) -> None:
-        """Write a filesystem entry to the implemented output format.
+        """Write a filesystem entry to the output format.
 
         Args:
             path: The path of the entry to write in the output format.
@@ -78,7 +78,7 @@ class Output:
         size: Optional[int] = None,
         entry: Optional[FilesystemEntry] = None,
     ) -> None:
-        """Write specified path to the implementd output format.
+        """Write specified path to the output format.
         Handles files that live in volatile filesystems. Such as procfs and sysfs.
 
         Args:
@@ -96,8 +96,8 @@ class Output:
             buf = b""
             size = 0
 
-        self.write_bytes(path, buf, size=size, entry=entry)
+        self.write_bytes(path, buf, size, entry)
 
     def close(self) -> None:
-        """Closes all handles of the file-like objects passed to the write function."""
+        """Closes the output."""
         raise NotImplementedError()

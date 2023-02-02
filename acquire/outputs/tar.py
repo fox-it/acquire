@@ -3,7 +3,7 @@ import tarfile
 from pathlib import Path
 from typing import BinaryIO, Optional
 
-from dissect.target.exceptions import FileNotFoundError as TargeFileNotFoundError
+from dissect.target.exceptions import FileNotFoundError
 from dissect.target.filesystem import FilesystemEntry
 
 from acquire.crypt import EncryptedStream
@@ -75,19 +75,19 @@ class TarOutput(Output):
         if entry.is_symlink():
             try:
                 info.type = tarfile.SYMTYPE
-                info.linkname = str(entry.readlink())
-            except (FileNotFoundError, TargeFileNotFoundError):
+                info.linkname = entry.readlink().as_posix()
+            except FileNotFoundError:
                 pass
 
             try:
                 stat = entry.lstat()
-            except (FileNotFoundError, TargeFileNotFoundError):
+            except FileNotFoundError:
                 pass
 
         else:
             try:
                 stat = entry.stat()
-            except (FileNotFoundError, TargeFileNotFoundError):
+            except FileNotFoundError:
                 pass
 
         if stat:

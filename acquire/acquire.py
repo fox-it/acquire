@@ -263,6 +263,10 @@ class Sys(Module):
         target.filesystems.add(sysfs)
         target.fs.mount("/sys", sysfs)
 
+        if not target.fs.exists("/sys") or sys.platform == "win32":
+            log.error("/sys is unavailable or acquire is not running on a Unix-like system! Skipping...")
+            return
+
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -280,6 +284,10 @@ class Proc(Module):
 
         target.filesystems.add(procfs)
         target.fs.mount("/proc", procfs)
+
+        if not target.fs.exists("/proc") or sys.platform == "win32":
+            log.error("/proc is unavailable or acquire is not running on a Unix-like system! Skipping...")
+            return
 
         collector.collect(spec, follow=False, volatile=True)
 
@@ -1389,7 +1397,6 @@ class ActivitiesCache(Module):
 @module_arg("--ext-to-hash", action="append", help="Hash only files with the extensions provided")
 @module_arg("--glob-to-hash", action="append", help="Hash only files that match provided glob")
 class FileHashes(Module):
-
     DESC = "file hashes"
 
     DEFAULT_HASH_FUNCS = (HashFunc.MD5, HashFunc.SHA1, HashFunc.SHA256)
@@ -1449,7 +1456,6 @@ class FileHashes(Module):
             extensions = cls.DEFAULT_EXTENSIONS
 
         if cli_args.dir_to_hash or cli_args.glob_to_hash:
-
             if cli_args.glob_to_hash:
                 path_selectors.extend([("glob", glob) for glob in cli_args.glob_to_hash])
 
@@ -1651,7 +1657,6 @@ def acquire_target(target, args, output_path, log_path, output_ts=None):
     log.info(get_report_summary(collection_report))
 
     if not args.disable_report:
-
         collection_report_serialized = collection_report.get_records_per_module_per_outcome(serialize_records=True)
 
         execution_report = {
@@ -1682,7 +1687,6 @@ def upload_files(
     plugin_registry: PluginRegistry = None,
     no_proxy=False,
 ):
-
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 

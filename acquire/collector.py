@@ -64,7 +64,6 @@ def serialize_path(path: Any) -> str:
 
 @dataclass
 class CollectionReport:
-
     registry: Set[Record] = dataclasses.field(default_factory=set)
 
     seen_paths: Set[str] = dataclasses.field(default_factory=set)
@@ -77,7 +76,6 @@ class CollectionReport:
         artifact_value: Union[str, Path],
         details: Optional[str] = None,
     ) -> None:
-
         if isinstance(artifact_value, Path):
             artifact_value = serialize_path(artifact_value)
 
@@ -99,6 +97,9 @@ class CollectionReport:
 
     def add_symlink_collected(self, module: str, path: Path):
         self._register(module, Outcome.SUCCESS, ArtifactType.SYMLINK, path)
+
+    def add_symlink_failed(self, module: str, path: Path):
+        self._register(module, Outcome.FAILURE, ArtifactType.SYMLINK, path)
 
     def add_file_failed(self, module: str, failed_path: Path):
         exc = get_formatted_exception()
@@ -142,7 +143,6 @@ class CollectionReport:
         self._register(module, Outcome.FAILURE, ArtifactType.COMMAND, tuple(command_parts), exc)
 
     def get_records_per_module_per_outcome(self, serialize_records=False):
-
         grouped_records = defaultdict(lambda: defaultdict(list))
 
         # sort records by module name and outcome to prepare for grouping
@@ -170,7 +170,6 @@ class CollectionReport:
 
 
 class Collector:
-
     METADATA_BASE = "$metadata$"
     COMMAND_OUTPUT_BASE = f"{METADATA_BASE}/command-output"
 
@@ -204,7 +203,6 @@ class Collector:
         path: Path,
         base: Optional[str] = None,
     ) -> str:
-
         base = base or self.base
         outpath = str(path)
 
@@ -220,7 +218,6 @@ class Collector:
     def collect(
         self, spec: Iterable, module_name: Optional[str] = None, follow: bool = True, volatile: bool = False
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -250,7 +247,7 @@ class Collector:
 
     def collect_file(
         self,
-        path: Union[str, fsutil.TargetPath],
+        path: Union[str, Path],
         size: Optional[int] = None,
         outpath: Optional[str] = None,
         module_name: Optional[str] = None,
@@ -273,9 +270,9 @@ class Collector:
 
         try:
             if volatile:
-                self.output.write_volatile(outpath, entry=path, size=size)
+                self.output.write_volatile(outpath, size, path)
             else:
-                self.output.write_entry(outpath, entry=path, size=size)
+                self.output.write_entry(outpath, size, path)
 
             self.report.add_file_collected(module_name, path)
             result = "OK"
@@ -291,13 +288,12 @@ class Collector:
 
     def collect_dir(
         self,
-        path: Union[str, fsutil.TargetPath],
+        path: Union[str, Path],
         seen_paths: Optional[Set] = None,
         module_name: Optional[str] = None,
         follow: bool = True,
         volatile: bool = False,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -335,7 +331,6 @@ class Collector:
             log.error("- Failed to collect directory %s", path, exc_info=True)
 
     def collect_glob(self, pattern: str, module_name: Optional[str] = None) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -359,27 +354,35 @@ class Collector:
         self,
         path: Path,
         module_name: Optional[str] = None,
-        follow: Optional[bool] = None,
-        volatile: Optional[bool] = None,
+        follow: Optional[bool] = True,
+        volatile: Optional[bool] = False,
     ) -> None:
+        try:
+            outpath = self.create_outpath(str(path))
 
-        outpath = self.create_outpath(str(path))
+            self.output.write_bytes(outpath, b"", entry=path, size=0)
+            self.report.add_symlink_collected(module_name, path)
 
-        self.output.write_bytes(outpath, b"", entry=path, size=0)
-        self.report.add_symlink_collected(module_name, path)
-
-        result = "OK"
-        log.info("- Collecting symlink entry %s: %s", path, result)
+            result = "OK"
+            log.info("- Collecting symlink entry %s: %s", path, result)
+        except Exception:
+            self.report.add_symlink_failed(module_name, path)
+            log.error(
+                "- Failed to collect symlink %s (symlink to %s) in module %s",
+                path,
+                path.get().readlink(),
+                module_name,
+                exc_info=True,
+            )
 
     def collect_path(
         self,
-        path: Union[str, fsutil.TargetPath],
+        path: Union[str, Path],
         seen_paths: Optional[Set] = None,
         module_name: Optional[str] = None,
-        follow: Optional[bool] = None,
-        volatile: Optional[bool] = None,
+        follow: Optional[bool] = True,
+        volatile: Optional[bool] = False,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -420,10 +423,17 @@ class Collector:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:
             self.collect_file(path, module_name=module_name, follow=follow, volatile=volatile)
+        # elif is_symlink:
+        #     self.report.add_path_failed(module_name, path)
+        #     log.error(
+        #         "- Can't collect %s (symlink to %s) in module %s",
+        #         path,
+        #         path.get().readlink(),
+        #         module_name,
+        #     )
         else:
             self.report.add_path_failed(module_name, path)
             log.error("- Don't know how to collect %s in module %s", path, module_name)
-            return
 
     def collect_command_output(
         self,
@@ -431,7 +441,6 @@ class Collector:
         output_filename: str,
         module_name: Optional[str] = None,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -533,7 +542,6 @@ def get_full_formatted_report(report: CollectionReport, record_indent: int = 4) 
     for module_name, records_per_module in report.get_records_per_module_per_outcome().items():
         blocks.append(module_name)
         for _, records_per_module_per_outcome in records_per_module.items():
-
             record_lines = []
             for record in records_per_module_per_outcome:
                 record_lines.append(record_line_template.format(record=record))
