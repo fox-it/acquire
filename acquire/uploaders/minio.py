@@ -24,7 +24,7 @@ class MinIO(UploaderPlugin):
         if not all((self.endpoint, self.access_id, self.access_key, self.bucket_name)):
             raise ValueError("Invalid cloud upload configuration")
 
-    def _prepare_client(self, paths: list[Path], proxies: Optional[dict[str, str]] = None) -> Any:
+    def prepare_client(self, paths: list[Path], proxies: Optional[dict[str, str]] = None) -> Any:
         """Prepares a Minio client used to upload files.
 
         Args:
@@ -44,8 +44,8 @@ class MinIO(UploaderPlugin):
 
         return Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
 
-    def _upload_file(self, client: Any, path: Path) -> None:
+    def upload_file(self, client: Any, path: Path) -> None:
         client.fput_object(self.bucket_name, os.path.basename(path), path)
 
-    def _finish(self, client: Any) -> None:
+    def finish(self, client: Any) -> None:
         pass

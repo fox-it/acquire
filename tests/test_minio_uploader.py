@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from acquire.uploaders.plugin import upload_files
 from acquire.uploaders.minio import MinIO
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
@@ -59,4 +60,4 @@ def test_minio_valueerror(minio_plugin):
 
 def test_upload_files(minio_instance):
     # Generates an internal error, which is caught
-    minio_instance.upload_files([Path("hello")])
+    upload_files(minio_instance, [Path("hello")])

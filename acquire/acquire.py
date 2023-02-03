@@ -36,11 +36,11 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin import UploaderPlugin, upload_files
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
-    check_and_set_log_args,
     check_and_set_acquire_args,
+    check_and_set_log_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,
@@ -1680,7 +1680,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     return files
 
 
-def upload_files(
+def upload_acquire_files(
     paths: list[Path],
     upload_plugin: UploaderPlugin,
     no_proxy: bool = False,
@@ -1689,7 +1689,7 @@ def upload_files(
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
     try:
-        upload_plugin.upload_files(paths, proxies)
+        upload_files(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
@@ -1873,7 +1873,7 @@ def main():
 
     if args.upload:
         try:
-            upload_files(args.upload, args.upload_plugin, args.no_proxy)
+            upload_acquire_files(args.upload, args.upload_plugin, args.no_proxy)
         except Exception:
             log.exception("Failed to upload files")
         return
@@ -1961,7 +1961,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
 
         log.info("")
         try:
-            upload_files(files, args.upload_plugin)
+            upload_acquire_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
 
