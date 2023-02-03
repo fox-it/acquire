@@ -1,11 +1,8 @@
-import logging
 import os
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Optional
 
-from acquire.uploaders.plugin import UploaderPlugin, upload_file
-
-log = logging.getLogger(__name__)
+from acquire.uploaders.plugin import UploaderPlugin
 
 
 class MinIO(UploaderPlugin):
@@ -27,8 +24,8 @@ class MinIO(UploaderPlugin):
         if not all((self.endpoint, self.access_id, self.access_key, self.bucket_name)):
             raise ValueError("Invalid cloud upload configuration")
 
-    def upload_files(self, paths: List[Path], proxies: Optional[dict[str, str]] = None) -> None:
-        """Uploads files using MinIO
+    def _prepare_client(self, paths: list[Path], proxies: Optional[dict[str, str]] = None) -> Any:
+        """Prepares a Minio client used to upload files.
 
         Args:
             paths: The files to upload.
@@ -45,13 +42,10 @@ class MinIO(UploaderPlugin):
 
         http_client = urllib3.proxy_from_url(proxies["http"]) if proxies else None
 
-        client = Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
-        for path in paths:
-            try:
-                upload_file(path=path, plugin=self, client=client)
-            except ValueError:
-                pass
+        return Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
 
-    def upload_file(self, path: Path, **kwargs):
-        client = kwargs.get("client")
+    def _upload_file(self, client: Any, path: Path) -> None:
         client.fput_object(self.bucket_name, os.path.basename(path), path)
+
+    def _finish(self, client: Any) -> None:
+        pass
