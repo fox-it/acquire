@@ -1,5 +1,8 @@
+import logging
 from pathlib import Path
 from typing import List, Optional, Protocol, runtime_checkable
+
+log = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -14,3 +17,20 @@ class UploaderPlugin(Protocol):
             proxies: Proxies used as an intermediate during an upload.
         """
         ...
+
+    def upload_file(self, path: Path, **kwargs):
+        ...
+
+
+def upload_file(path: Path, plugin: UploaderPlugin, attempts: int = 0, **kwargs):
+    if attempts > 3:
+        raise ValueError("Too many attempts for %s. Stopping.", path)
+
+    try:
+        log.info("Uploading %s", path)
+        plugin.upload_file(path=path, **kwargs)
+        log.info("Uploaded %s", path)
+    except Exception:
+        log.error("Upload %s FAILED. See log file for details. Retrying", path)
+        log.exception("")
+        upload_file(path=path, plugin=plugin, attempts=attempts + 1, **kwargs)

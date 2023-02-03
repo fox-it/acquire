@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Any, List, Optional
 
-from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin import UploaderPlugin, upload_file
 
 log = logging.getLogger(__name__)
 
@@ -48,9 +48,10 @@ class MinIO(UploaderPlugin):
         client = Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
         for path in paths:
             try:
-                log.info("Uploading %s", path)
-                client.fput_object(self.bucket_name, os.path.basename(path), path)
-                log.info("Uploaded %s", path)
-            except Exception:
-                log.error("Upload %s FAILED. See log file for details.", path)
-                log.exception("")
+                upload_file(path=path, plugin=self, client=client)
+            except ValueError:
+                pass
+
+    def upload_file(self, path: Path, **kwargs):
+        client = kwargs.get("client")
+        client.fput_object(self.bucket_name, os.path.basename(path), path)
