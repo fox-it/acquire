@@ -1959,7 +1959,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
     # The main log file is always first, so we reverse the list to put that one at the end.
     log_files = [log_file for log_file in log_files if log_file]
     log_files.reverse()
-    
+
     if args.auto_upload:
         log_file_handler = get_file_handler(log)
         if log_file_handler:
