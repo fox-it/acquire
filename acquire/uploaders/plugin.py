@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def upload_files(uploader: UploaderPlugin, paths: list[Path], proxies: Optional[
         try:
             _upload_file(uploader=uploader, client=client, path=path)
         except ValueError:
-            pass
+            log.error("Too many attempts for %s. Stopping.", path)
 
     uploader.finish(client)
 
@@ -57,7 +57,7 @@ def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: in
         ValueError: If the maximum number of attempts was reached.
     """
     if attempts > 3:
-        raise ValueError("Too many attempts for %s. Stopping.", path)
+        raise ValueError()
 
     try:
         log.info("Uploading %s", path)

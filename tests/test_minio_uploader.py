@@ -1,9 +1,10 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from acquire.uploaders.plugin import upload_files
 from acquire.uploaders.minio import MinIO
+from acquire.uploaders.plugin import _upload_file, upload_files
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -61,3 +62,22 @@ def test_minio_valueerror(minio_plugin):
 def test_upload_files(minio_instance):
     # Generates an internal error, which is caught
     upload_files(minio_instance, [Path("hello")])
+
+
+def test_upload_file_max_attempts(minio_instance: MinIO):
+    with pytest.raises(ValueError):
+        _upload_file(minio_instance, Mock(), Path("hello"), attempts=4)
+
+
+def test_upload_file_multiple_failures(minio_instance: MinIO):
+    mocked_upload = Mock()
+    mocked_upload.side_effect = [Exception, Exception, Exception, "Hello"]
+    minio_instance.upload_file = mocked_upload
+
+    # Only three retry attempts get made
+    _upload_file(minio_instance, Mock(), Path("hello"))
+
+    # One extra gives a value error.
+    mocked_upload.side_effect = [Exception, Exception, Exception, Exception]
+    with pytest.raises(ValueError):
+        _upload_file(minio_instance, Mock(), Path("hello"))
