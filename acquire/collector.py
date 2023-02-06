@@ -354,13 +354,14 @@ class Collector:
         self,
         path: Path,
         module_name: Optional[str] = None,
-        follow: Optional[bool] = True,
-        volatile: Optional[bool] = False,
+        follow: bool = True,
+        volatile: bool = False,
     ) -> None:
         try:
             outpath = self.create_outpath(str(path))
+            entry = path.get()
 
-            self.output.write_bytes(outpath, b"", entry=path, size=0)
+            self.output.write_bytes(outpath, b"", entry=entry, size=0)
             self.report.add_symlink_collected(module_name, path)
 
             result = "OK"
@@ -370,7 +371,7 @@ class Collector:
             log.error(
                 "- Failed to collect symlink %s (symlink to %s) in module %s",
                 path,
-                path.get().readlink(),
+                path.readlink(),
                 module_name,
                 exc_info=True,
             )
@@ -380,8 +381,8 @@ class Collector:
         path: Union[str, Path],
         seen_paths: Optional[Set] = None,
         module_name: Optional[str] = None,
-        follow: Optional[bool] = True,
-        volatile: Optional[bool] = False,
+        follow: bool = True,
+        volatile: bool = False,
     ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
@@ -423,14 +424,6 @@ class Collector:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:
             self.collect_file(path, module_name=module_name, follow=follow, volatile=volatile)
-        # elif is_symlink:
-        #     self.report.add_path_failed(module_name, path)
-        #     log.error(
-        #         "- Can't collect %s (symlink to %s) in module %s",
-        #         path,
-        #         path.get().readlink(),
-        #         module_name,
-        #     )
         else:
             self.report.add_path_failed(module_name, path)
             log.error("- Don't know how to collect %s in module %s", path, module_name)

@@ -256,16 +256,16 @@ class Sys(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
+        if not Path("/sys").exists() or sys.platform == "win32":
+            log.error("/sys is unavailable or acquire is not running on a Unix-like system! Skipping...")
+            return
+
         spec = [("dir", "/sys")]
 
         sysfs = dir.DirectoryFilesystem(Path("/sys"))
 
         target.filesystems.add(sysfs)
         target.fs.mount("/sys", sysfs)
-
-        if not target.fs.exists("/sys") or sys.platform == "win32":
-            log.error("/sys is unavailable or acquire is not running on a Unix-like system! Skipping...")
-            return
 
         collector.collect(spec, follow=False, volatile=True)
 
@@ -278,16 +278,15 @@ class Proc(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
-        spec = [("dir", "/proc")]
+        if not Path("/proc").exists() or sys.platform == "win32":
+            log.error("/proc is unavailable or acquire is not running on a Unix-like system! Skipping...")
+            return
 
+        spec = [("dir", "/proc")]
         procfs = dir.DirectoryFilesystem(Path("/proc"))
 
         target.filesystems.add(procfs)
         target.fs.mount("/proc", procfs)
-
-        if not target.fs.exists("/proc") or sys.platform == "win32":
-            log.error("/proc is unavailable or acquire is not running on a Unix-like system! Skipping...")
-            return
 
         collector.collect(spec, follow=False, volatile=True)
 

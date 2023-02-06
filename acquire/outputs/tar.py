@@ -73,22 +73,12 @@ class TarOutput(Output):
         info.size = size or 0
 
         if entry.is_symlink():
-            try:
-                info.type = tarfile.SYMTYPE
-                info.linkname = entry.readlink().as_posix()
-            except FileNotFoundError:
-                pass
-
-            try:
-                stat = entry.lstat()
-            except FileNotFoundError:
-                pass
+            info.type = tarfile.SYMTYPE
+            info.linkname = entry.readlink()
+            stat = entry.lstat()
 
         else:
-            try:
-                stat = entry.stat()
-            except FileNotFoundError:
-                pass
+            stat = entry.stat()
 
         if stat:
             info.mtime = stat.st_mtime
@@ -96,7 +86,7 @@ class TarOutput(Output):
         self.tar.addfile(info, fh)
 
     def close(self):
-        """Closes the opened tar file and opened file-like objects."""
+        """Closes the tar file."""
         self.tar.close()
         if self._fh:
             self._fh.close()
