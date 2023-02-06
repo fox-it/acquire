@@ -39,8 +39,8 @@ from acquire.uploaders.minio import MinIO
 from acquire.uploaders.plugin import UploaderPlugin
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
-    check_and_set_log_args,
     check_and_set_acquire_args,
+    check_and_set_log_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,

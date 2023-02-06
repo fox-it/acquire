@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from acquire.acquire import MODULES, PROFILES
-from acquire.utils import check_and_set_acquire_args, check_and_set_log_args, create_argument_parser
+from acquire.utils import (
+    check_and_set_acquire_args,
+    check_and_set_log_args,
+    create_argument_parser,
+)
 
 
 def get_args(**kwargs):

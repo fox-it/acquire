@@ -12,17 +12,24 @@ from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from queue import Empty as QueueEmptyError
 from urllib import request
 from urllib.error import HTTPError
 from urllib.parse import urljoin
-from queue import Empty as QueueEmptyError
 
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from dissect.util.stream import AlignedStream
 
 try:
-    from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+    from rich.progress import (
+        BarColumn,
+        DownloadColumn,
+        Progress,
+        TextColumn,
+        TimeRemainingColumn,
+        TransferSpeedColumn,
+    )
 
     progress = Progress(
         TextColumn("[bold blue]{task.fields[filename]}", justify="right"),
@@ -39,8 +46,14 @@ try:
 except ImportError:
     progress = None
 
-from acquire.crypt import FILE_MAGIC, FILE_VERSION, FOOTER_MAGIC, HEADER_MAGIC, c_acquire, key_fingerprint
-
+from acquire.crypt import (
+    FILE_MAGIC,
+    FILE_VERSION,
+    FOOTER_MAGIC,
+    HEADER_MAGIC,
+    c_acquire,
+    key_fingerprint,
+)
 
 log = logging.getLogger(__name__)
 
