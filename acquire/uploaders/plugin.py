@@ -44,7 +44,7 @@ def upload_files_using_uploader(
     for path in paths:
         try:
             _upload_file(uploader, client, path)
-        except ValueError:
+        except StopIteration:
             log.error("Too many attempts for %s. Stopping.", path)
 
     uploader.finish(client)
@@ -60,10 +60,10 @@ def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: in
         attempts: The number of attempts it was to upload this file.
 
     Raises:
-        ValueError: If the maximum number of attempts was reached.
+        StopIteration: If the maximum number of attempts was reached.
     """
     if attempts >= MAX_RETRIES:
-        raise ValueError()
+        raise StopIteration()
 
     try:
         log.info("Uploading %s", path)

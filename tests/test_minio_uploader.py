@@ -65,7 +65,7 @@ def test_upload_files(minio_instance):
 
 
 def test_upload_file_max_attempts(minio_instance: MinIO):
-    with pytest.raises(ValueError):
+    with pytest.raises(StopIteration):
         _upload_file(minio_instance, Mock(), Path("hello"), attempts=4)
 
 
@@ -79,5 +79,5 @@ def test_upload_file_multiple_failures(minio_instance: MinIO):
 
     # One extra gives a value error.
     mocked_upload.side_effect = [Exception, Exception, Exception, Exception]
-    with pytest.raises(ValueError):
+    with pytest.raises(StopIteration):
         _upload_file(minio_instance, Mock(), Path("hello"))
