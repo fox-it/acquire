@@ -6,8 +6,10 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     "UploaderPlugin",
-    "upload_files",
+    "upload_files_using_uploader",
 ]
+
+MAX_RETRIES = 4
 
 
 class UploaderPlugin:
@@ -26,10 +28,13 @@ class UploaderPlugin:
         raise NotImplementedError()
 
 
-def upload_files(uploader: UploaderPlugin, paths: list[Path], proxies: Optional[dict[str, str]] = None) -> None:
+def upload_files_using_uploader(
+    uploader: UploaderPlugin, paths: list[Path], proxies: Optional[dict[str, str]] = None
+) -> None:
     """Uploads the files in ``paths`` to a destination.
 
     Args:
+        uploader: The plugin used to upload files.
         paths: A list of files to upload.
         proxies: Proxies used as an intermediate during an upload.
     """
@@ -49,6 +54,7 @@ def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: in
     """Upload a file, pointed to by ``path`` using a ``client``.
 
     Args:
+        uploader: The plugin used to upload files.
         client: The method we use to upload.
         path: The path to the file to upload.
         attempts: The number of attempts it was to upload this file.
@@ -56,7 +62,7 @@ def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: in
     Raises:
         ValueError: If the maximum number of attempts was reached.
     """
-    if attempts > 3:
+    if attempts >= MAX_RETRIES:
         raise ValueError()
 
     try:

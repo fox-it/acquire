@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import _upload_file, upload_files
+from acquire.uploaders.plugin import _upload_file, upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -61,7 +61,7 @@ def test_minio_valueerror(minio_plugin):
 
 def test_upload_files(minio_instance):
     # Generates an internal error, which is caught
-    upload_files(minio_instance, [Path("hello")])
+    upload_files_using_uploader(minio_instance, [Path("hello")])
 
 
 def test_upload_file_max_attempts(minio_instance: MinIO):
