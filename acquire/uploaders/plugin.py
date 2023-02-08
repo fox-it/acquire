@@ -42,34 +42,19 @@ def upload_files_using_uploader(
     client = uploader.prepare_client(paths, proxies)
 
     for path in paths:
-        try:
-            _upload_file(uploader, client, path)
-        except StopIteration:
-            log.error("Too many attempts for %s. Stopping.", path)
+        for retry in range(MAX_RETRIES):
+            if retry == MAX_RETRIES - 1:
+                error_log = ("Upload %s FAILED after too many attempts. Stopping.", path)
+            else:
+                error_log = ("Upload %s FAILED. See log file for details. Retrying", path)
+
+            try:
+                log.info("Uploading %s", path)
+                uploader.upload_file(client, path)
+                log.info("Uploaded %s", path)
+                break
+            except Exception:
+                log.error(*error_log)
+                log.exception("")
 
     uploader.finish(client)
-
-
-def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: int = 0) -> None:
-    """Upload a file, pointed to by ``path`` using a ``client``.
-
-    Args:
-        uploader: The plugin used to upload files.
-        client: The method we use to upload.
-        path: The path to the file to upload.
-        attempts: The number of attempts it was to upload this file.
-
-    Raises:
-        StopIteration: If the maximum number of attempts was reached.
-    """
-    if attempts >= MAX_RETRIES:
-        raise StopIteration()
-
-    try:
-        log.info("Uploading %s", path)
-        uploader.upload_file(client=client, path=path)
-        log.info("Uploaded %s", path)
-    except Exception:
-        log.error("Upload %s FAILED. See log file for details. Retrying", path)
-        log.exception("")
-        _upload_file(uploader, path, client, attempts=attempts + 1)

@@ -1,10 +1,10 @@
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import _upload_file, upload_files_using_uploader
+from acquire.uploaders.plugin import upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -64,20 +64,18 @@ def test_upload_files(minio_instance):
     upload_files_using_uploader(minio_instance, [Path("hello")])
 
 
-def test_upload_file_max_attempts(minio_instance: MinIO):
-    with pytest.raises(StopIteration):
-        _upload_file(minio_instance, Mock(), Path("hello"), attempts=4)
-
-
 def test_upload_file_multiple_failures(minio_instance: MinIO):
     mocked_upload = Mock()
     mocked_upload.side_effect = [Exception, Exception, Exception, "Hello"]
     minio_instance.upload_file = mocked_upload
 
-    # Only three retry attempts get made
-    _upload_file(minio_instance, Mock(), Path("hello"))
+    with patch("acquire.uploaders.plugin.log") as mocked_logger:
+        # Only three retry attempts get made
+        upload_files_using_uploader(minio_instance, [Path("hello")])
+        mocked_logger.error.assert_called_with("Upload %s FAILED. See log file for details. Retrying", Path("hello"))
 
     # One extra gives a value error.
     mocked_upload.side_effect = [Exception, Exception, Exception, Exception]
-    with pytest.raises(StopIteration):
-        _upload_file(minio_instance, Mock(), Path("hello"))
+    with patch("acquire.uploaders.plugin.log") as mocked_logger:
+        upload_files_using_uploader(minio_instance, [Path("hello")])
+        mocked_logger.error.assert_called_with("Upload %s FAILED after too many attempts. Stopping.", Path("hello"))
