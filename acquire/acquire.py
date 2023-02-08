@@ -36,7 +36,7 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
     check_and_set_acquire_args,
@@ -1689,7 +1689,7 @@ def upload_files(
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
     try:
-        upload_plugin.upload_files(paths, proxies)
+        upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
