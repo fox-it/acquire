@@ -257,7 +257,7 @@ class Sys(Module):
     @classmethod
     def _run(cls, target: Target, collector: Collector):
         if not Path("/sys").exists() or sys.platform == "win32":
-            log.error("/sys is unavailable or acquire is not running on a Unix-like system! Skipping...")
+            log.error("/sys is unavailable! Skipping...")
             return
 
         spec = [("dir", "/sys")]
@@ -278,8 +278,8 @@ class Proc(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
-        if not Path("/proc").exists() or sys.platform == "win32":
-            log.error("/proc is unavailable or acquire is not running on a Unix-like system! Skipping...")
+        if not Path("/proc").exists():
+            log.error("/proc is unavailable! Skipping...")
             return
 
         spec = [("dir", "/proc")]

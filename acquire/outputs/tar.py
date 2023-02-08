@@ -3,7 +3,6 @@ import tarfile
 from pathlib import Path
 from typing import BinaryIO, Optional
 
-from dissect.target.exceptions import FileNotFoundError
 from dissect.target.filesystem import FilesystemEntry
 
 from acquire.crypt import EncryptedStream
@@ -16,7 +15,7 @@ class TarOutput(Output):
     Args:
         path: The path to write the tar archive to.
         compress: Whether to compress the tar archive.
-        encrypt:  Whether to encrypt the tar archive.
+        encrypt: Whether to encrypt the tar archive.
         public_key: The RSA public key to encrypt the header with.
     """
 
@@ -44,7 +43,7 @@ class TarOutput(Output):
 
     def write(
         self,
-        path: Path,
+        outpath: Path,
         fh: BinaryIO,
         size: Optional[int] = None,
         entry: Optional[FilesystemEntry] = None,
@@ -52,10 +51,10 @@ class TarOutput(Output):
         """Write a filesystem entry or file-like object to a tar file.
 
         Args:
-            path: The path of the entry to write.
+            outpath: The path of the entry in the output format.
             fh: The file-like object of the entry to write.
             size: The optional file size in bytes of the entry to write.
-            entry: the optional filesystem entry of the entry to write.
+            entry: The optional filesystem entry of the entry to write.
         """
         stat = None
         size = size or getattr(fh, "size", None)
@@ -67,7 +66,7 @@ class TarOutput(Output):
             fh.seek(offset)
 
         info = self.tar.tarinfo()
-        info.name = str(path)
+        info.name = str(outpath)
         info.uname = "root"
         info.gname = "root"
         info.size = size or 0

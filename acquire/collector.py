@@ -267,12 +267,13 @@ class Collector:
             return
 
         outpath = self.create_outpath(outpath or str(path))
+        entry = path.get()
 
         try:
             if volatile:
-                self.output.write_volatile(outpath, size, path)
+                self.output.write_volatile(outpath, size, entry)
             else:
-                self.output.write_entry(outpath, size, path)
+                self.output.write_entry(outpath, size, entry)
 
             self.report.add_file_collected(module_name, path)
             result = "OK"
@@ -361,7 +362,7 @@ class Collector:
             outpath = self.create_outpath(str(path))
             entry = path.get()
 
-            self.output.write_bytes(outpath, b"", entry=entry, size=0)
+            self.output.write_bytes(outpath, b"", 0, entry)
             self.report.add_symlink_collected(module_name, path)
 
             result = "OK"

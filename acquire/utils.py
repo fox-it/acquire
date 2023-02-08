@@ -20,13 +20,26 @@ from acquire.outputs import OUTPUTS
 
 
 class VolatileStream(AlignedStream):
+    """Streaming class to handle various procfs and sysfs edge-cases.  Backed by `AlignedStream`.
+
+    Args:
+        path: Path of the file to obtain a file-handle from.
+        mode: Mode string to open the file-handle with. Such as "rt" and "rb".
+        flags: Flags to open the file-descriptor with.
+        size: The maximum size of the stream. None if unknown.
+    """
+
     def __init__(
         self,
         path: Path,
         mode: str = "rb",
-        flags: int = os.O_RDONLY | os.O_NONBLOCK | os.O_NOATIME,
+        flags: int = os.O_RDONLY | os.O_NONBLOCK,
         size: int = 1024 * 1024 * 5,
     ):
+        if sys.platform != "darwin":
+            # O_NOATIME is not available on darwin systems. We still want to add it whenever possible.
+            flags = flags | os.O_NOATIME
+
         self.fh = path.open(mode)
         self.fd = self.fh.fileno()
         fcntl.fcntl(self.fd, fcntl.F_SETFL, flags)
