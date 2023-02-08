@@ -1,6 +1,6 @@
 import os
-import shutil
 import platform
+import shutil
 
 from acquire.outputs.base import Output
 

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystems import ntfs
@@ -1932,6 +1932,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
         target = load_child(target, args.child)
 
     log.info("")
+
     try:
         files = acquire_target(target, args, args.start_time)
     except Exception:
@@ -1954,6 +1955,8 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
                 log.exception("Failed to acquire child target")
                 continue
 
+    files = sort_files(files)
+
     if args.auto_upload:
         log_file_handler = get_file_handler(log)
         if log_file_handler:
@@ -1964,6 +1967,25 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
             upload_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
+
+
+def sort_files(files: list[Union[str, Path]]) -> list[Path]:
+    log_files: list[Path] = []
+    tar_paths: list[Path] = []
+    report_paths: list[Path] = []
+
+    suffix_map = {".log": log_files, ".json": report_paths}
+
+    for file in files:
+        if isinstance(file, str):
+            file = Path(file)
+
+        suffix_map.get(file.suffix, tar_paths).append(file)
+
+    # Reverse log paths, as the first one in ``files`` is the main one.
+    log_files.reverse()
+
+    return tar_paths + report_paths + log_files
 
 
 if __name__ == "__main__":

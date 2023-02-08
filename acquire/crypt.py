@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from dissect import cstruct
 
 try:
-    from Crypto.PublicKey import RSA
     from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
     from Crypto.Random import get_random_bytes
 
     HAS_PYCRYPTODOME = True

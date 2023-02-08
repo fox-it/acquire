@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import Iterable, List, Union, Optional, Set, Type, Sequence, Any
+from typing import Any, Iterable, List, Optional, Sequence, Set, Type, Union
 
 from dissect.target.exceptions import (
     FileNotFoundError,
@@ -17,8 +17,7 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.utils import get_formatted_exception, StrEnum
-
+from acquire.utils import StrEnum, get_formatted_exception
 
 log = logging.getLogger(__name__)
 

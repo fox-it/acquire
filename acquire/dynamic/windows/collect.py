@@ -4,7 +4,11 @@ from typing import Iterable, Optional
 from acquire.dynamic.windows.exceptions import AccessDeniedError
 from acquire.dynamic.windows.handles import Handle, get_handles
 from acquire.dynamic.windows.named_objects import NamedObject, NamedObjectType
-from acquire.dynamic.windows.ntdll import close_handle, open_directory_object, query_directory_object
+from acquire.dynamic.windows.ntdll import (
+    close_handle,
+    open_directory_object,
+    query_directory_object,
+)
 
 log = getLogger(__name__)
 
