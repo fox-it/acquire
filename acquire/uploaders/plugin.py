@@ -38,7 +38,7 @@ def upload_files(uploader: UploaderPlugin, paths: list[Path], proxies: Optional[
 
     for path in paths:
         try:
-            _upload_file(uploader=uploader, client=client, path=path)
+            _upload_file(uploader, client, path)
         except ValueError:
             log.error("Too many attempts for %s. Stopping.", path)
 
@@ -66,4 +66,4 @@ def _upload_file(uploader: UploaderPlugin, client: Any, path: Path, attempts: in
     except Exception:
         log.error("Upload %s FAILED. See log file for details. Retrying", path)
         log.exception("")
-        _upload_file(uploader=uploader, path=path, client=client, attempts=attempts + 1)
+        _upload_file(uploader, path, client, attempts=attempts + 1)
