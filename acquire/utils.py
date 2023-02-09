@@ -36,8 +36,8 @@ class VolatileStream(AlignedStream):
         flags: int = os.O_RDONLY | os.O_NONBLOCK,
         size: int = 1024 * 1024 * 5,
     ):
-        if sys.platform != "darwin":
-            # O_NOATIME is not available on darwin systems. We still want to add it whenever possible.
+        if hasattr(os, "O_NOATIME"):
+            # O_NOATIME is not available on darwin systems. We still want to add it whenever possible when available.
             flags = flags | os.O_NOATIME
 
         self.fh = path.open(mode)

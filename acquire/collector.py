@@ -266,7 +266,7 @@ class Collector:
             log.info("- Collecting file %s: Skipped (DEDUP)", path)
             return
 
-        outpath = self.create_outpath(outpath or str(path))
+        outpath = self.create_outpath(outpath or path)
         entry = path.get()
 
         try:
@@ -359,7 +359,7 @@ class Collector:
         volatile: bool = False,
     ) -> None:
         try:
-            outpath = self.create_outpath(str(path))
+            outpath = self.create_outpath(path)
             entry = path.get()
 
             self.output.write_bytes(outpath, b"", 0, entry)

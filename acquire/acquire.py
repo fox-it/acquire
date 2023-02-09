@@ -256,7 +256,7 @@ class Sys(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
-        if not Path("/sys").exists() or sys.platform == "win32":
+        if not Path("/sys").exists():
             log.error("/sys is unavailable! Skipping...")
             return
 
