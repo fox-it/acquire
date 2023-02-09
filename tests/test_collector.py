@@ -17,20 +17,23 @@ from acquire.collector import Collector
 def test_collector():
     target = Target("local")
 
-    fs_1 = VirtualFilesystem()
-    fs_1.map_file("$MFT", None)
-    target.fs.mount("C:", fs_1)
-    target.filesystems.add(fs_1)
+    with patch("acquire.collector.log", autospec=True) as mock_log:
+        fs_1 = VirtualFilesystem()
+        fs_1.map_file("$MFT", None)
+        target.fs.mount("C:", fs_1)
+        target.filesystems.add(fs_1)
 
-    fs_2 = VirtualFilesystem()
-    fs_2.map_file("$MFT", None)
-    target.fs.mount("D:", fs_2)
-    target.filesystems.add(fs_2)
+        fs_2 = VirtualFilesystem()
+        fs_2.map_file("$MFT", None)
+        target.fs.mount("D:", fs_2)
+        target.filesystems.add(fs_2)
 
-    collector = Collector(target, Mock())
-    collector.collect_file("$MFT", module_name="test")
+        collector = Collector(target, Mock())
 
-    assert not collector.report.was_path_seen(fs_2.get("$MFT"))
+        collector.collect_dir("C:", module_name="test")
+        collector.collect_dir("D:", module_name="test")
+
+        assert not mock_log.info.call_args.args[0] == "- Collecting file %s: Skipped (DEDUP)"
 
 
 @pytest.fixture
