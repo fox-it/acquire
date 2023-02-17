@@ -20,7 +20,11 @@ class TarOutput(Output):
     """
 
     def __init__(
-        self, path: Path, compress: bool = False, encrypt: bool = False, public_key: Optional[bytes] = None, **kwargs
+        self,
+        path: Path,
+        compress: bool = False,
+        encrypt: bool = False,
+        public_key: Optional[bytes] = None,
     ) -> None:
         ext = ".tar" if ".tar" not in path.suffixes else ""
         mode = "w|" if encrypt else "w:"
@@ -43,18 +47,18 @@ class TarOutput(Output):
 
     def write(
         self,
-        outpath: Path,
+        output_path: str,
         fh: BinaryIO,
+        entry: FilesystemEntry,
         size: Optional[int] = None,
-        entry: Optional[FilesystemEntry] = None,
     ) -> None:
         """Write a filesystem entry or file-like object to a tar file.
 
         Args:
-            outpath: The path of the entry in the output format.
+            output_path: The path of the entry in the output format.
             fh: The file-like object of the entry to write.
-            size: The optional file size in bytes of the entry to write.
             entry: The optional filesystem entry of the entry to write.
+            size: The optional file size in bytes of the entry to write.
         """
         stat = None
         size = size or getattr(fh, "size", None)
@@ -66,7 +70,7 @@ class TarOutput(Output):
             fh.seek(offset)
 
         info = self.tar.tarinfo()
-        info.name = str(outpath)
+        info.name = output_path
         info.uname = "root"
         info.gname = "root"
         info.size = size or 0
@@ -74,17 +78,15 @@ class TarOutput(Output):
         if entry.is_symlink():
             info.type = tarfile.SYMTYPE
             info.linkname = entry.readlink()
-            stat = entry.lstat()
 
-        else:
-            stat = entry.stat()
+        stat = entry.lstat()
 
         if stat:
             info.mtime = stat.st_mtime
 
         self.tar.addfile(info, fh)
 
-    def close(self):
+    def close(self) -> None:
         """Closes the tar file."""
         self.tar.close()
         if self._fh:
