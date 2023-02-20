@@ -357,7 +357,6 @@ class Collector:
     def collect_symlink(
         self,
         path: Path,
-        size: Optional[int] = None,
         module_name: Optional[str] = None,
         follow: bool = True,
         volatile: bool = False,
@@ -369,7 +368,7 @@ class Collector:
             if follow:
                 resolved_path = path.resolve()
                 if resolved_path.is_file():
-                    self.collect_file(resolved_path, size, module_name=module_name, volatile=volatile)
+                    self.collect_file(resolved_path, module_name=module_name, volatile=volatile)
                     self.collect_symlink(path, module_name=module_name, follow=False, volatile=volatile)
                 elif resolved_path.is_dir():
                     self.collect_dir(resolved_path, module_name=module_name, volatile=volatile)
