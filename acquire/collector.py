@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import errno
 import logging
@@ -7,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Sequence, Set, Type, Union
+from typing import Any, Iterable, Optional, Sequence, Type, Union
 
 from dissect.target.exceptions import (
     FileNotFoundError,
@@ -64,9 +66,9 @@ def serialize_path(path: Any) -> str:
 
 @dataclass
 class CollectionReport:
-    registry: Set[Record] = dataclasses.field(default_factory=set)
+    registry: set[Record] = dataclasses.field(default_factory=set)
 
-    seen_paths: Set[str] = dataclasses.field(default_factory=set)
+    seen_paths: set[str] = dataclasses.field(default_factory=set)
 
     def _register(
         self,
@@ -142,7 +144,7 @@ class CollectionReport:
         exc = get_formatted_exception()
         self._register(module, Outcome.FAILURE, ArtifactType.COMMAND, tuple(command_parts), exc)
 
-    def get_records_per_module_per_outcome(self, serialize_records=False):
+    def get_records_per_module_per_outcome(self, serialize_records=False) -> dict[str, dict[str, list[Record]]]:
         grouped_records = defaultdict(lambda: defaultdict(list))
 
         # sort records by module name and outcome to prepare for grouping
@@ -158,7 +160,7 @@ class CollectionReport:
 
         return grouped_records
 
-    def get_counts_per_module_per_outcome(self):
+    def get_counts_per_module_per_outcome(self) -> dict[str, dict[str, int]]:
         records_map = self.get_records_per_module_per_outcome()
         for module, records_per_module in records_map.items():
             for outcome, records_per_module_outcome in records_per_module.items():
@@ -183,7 +185,7 @@ class Collector:
 
         self.output.init(self.target)
 
-    def __enter__(self):
+    def __enter__(self) -> Collector:
         return self
 
     def __exit__(self, *args, **kwargs) -> None:
@@ -198,11 +200,7 @@ class Collector:
     def close(self) -> None:
         self.output.close()
 
-    def create_outpath(
-        self,
-        path: Path,
-        base: Optional[str] = None,
-    ) -> str:
+    def _create_output_path(self, path: Path, base: Optional[str] = None) -> str:
         base = base or self.base
         outpath = str(path)
 
@@ -216,11 +214,7 @@ class Collector:
         return outpath
 
     def collect(
-        self,
-        spec: Iterable,
-        module_name: Optional[str] = None,
-        follow: bool = True,
-        volatile: bool = False,
+        self, spec: Iterable, module_name: Optional[str] = None, follow: bool = True, volatile: bool = False
     ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
@@ -241,6 +235,8 @@ class Collector:
             for value in values:
                 if artifact_type in (ArtifactType.FILE, ArtifactType.DIR):
                     self.collect_path(value, module_name=module_name, follow=follow, volatile=volatile)
+                elif artifact_type == ArtifactType.SYMLINK:
+                    self.collect_symlink(value, module_name=module_name)
                 elif artifact_type == ArtifactType.GLOB:
                     self.collect_glob(value, module_name=module_name)
                 elif artifact_type == ArtifactType.COMMAND:
@@ -269,7 +265,7 @@ class Collector:
             log.info("- Collecting file %s: Skipped (DEDUP)", path)
             return
 
-        outpath = self.create_outpath(outpath or path)
+        outpath = self._create_output_path(outpath or path, base)
         entry = path.get()
 
         try:
@@ -290,10 +286,24 @@ class Collector:
 
         log.info("- Collecting file %s: %s", path, result)
 
+    def collect_symlink(self, path: Path, module_name: Optional[str] = None) -> None:
+        try:
+            outpath = self._create_output_path(path)
+            self.output.write_bytes(outpath, b"", path.get(), 0)
+
+            self.report.add_symlink_collected(module_name, path)
+            result = "OK"
+        except Exception as exc:
+            self.report.add_symlink_failed(module_name, path)
+            log.error("Failed to collect symlink %s (-> %s)", path, path.readlink(), exc_info=True)
+            result = repr(exc)
+
+        log.info("- Collecting symlink %s: %s", path, result)
+
     def collect_dir(
         self,
         path: Union[str, Path],
-        seen_paths: Optional[Set] = None,
+        seen_paths: Optional[set] = None,
         module_name: Optional[str] = None,
         follow: bool = True,
         volatile: bool = False,
@@ -354,44 +364,10 @@ class Collector:
             else:
                 self.report.add_glob_collected(module_name, pattern)
 
-    def collect_symlink(
-        self,
-        path: Path,
-        module_name: Optional[str] = None,
-        follow: bool = True,
-        volatile: bool = False,
-    ) -> None:
-        try:
-            outpath = self.create_outpath(path)
-            entry = path.get()
-
-            if follow:
-                resolved_path = path.resolve()
-                if resolved_path.is_file():
-                    self.collect_file(resolved_path, module_name=module_name, volatile=volatile)
-                    self.collect_symlink(path, module_name=module_name, follow=False, volatile=volatile)
-                elif resolved_path.is_dir():
-                    self.collect_dir(resolved_path, module_name=module_name, volatile=volatile)
-            else:
-                self.output.write_bytes(outpath, b"", entry, 0)
-
-            self.report.add_symlink_collected(module_name, path)
-            result = "OK"
-            log.info("- Collecting symlink entry %s: %s", path, result)
-        except Exception:
-            self.report.add_symlink_failed(module_name, path)
-            log.error(
-                "- Failed to collect symlink %s (symlink to %s) in module %s",
-                path,
-                path.readlink(),
-                module_name,
-                exc_info=True,
-            )
-
     def collect_path(
         self,
         path: Union[str, Path],
-        seen_paths: Optional[Set] = None,
+        seen_paths: Optional[set] = None,
         module_name: Optional[str] = None,
         follow: bool = True,
         volatile: bool = False,
@@ -431,7 +407,13 @@ class Collector:
             return
 
         if is_symlink:
-            self.collect_symlink(path, module_name=module_name, follow=follow, volatile=volatile)
+            self.collect_symlink(path, module_name=module_name)
+
+            if follow:
+                # Follow the symlink, call ourself again with the resolved path
+                self.collect_path(
+                    path.resolve(), seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
+                )
         elif is_dir:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:
@@ -442,7 +424,7 @@ class Collector:
 
     def collect_command_output(
         self,
-        command_parts: List[str],
+        command_parts: list[str],
         output_filename: str,
         module_name: Optional[str] = None,
     ) -> None:
