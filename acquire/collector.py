@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import Iterable, List, Union, Optional, Set, Type, Sequence, Any
+from typing import Any, Iterable, List, Optional, Sequence, Set, Type, Union
 
 from dissect.target.exceptions import (
     FileNotFoundError,
@@ -17,8 +17,7 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.utils import get_formatted_exception, StrEnum
-
+from acquire.utils import StrEnum, get_formatted_exception
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +63,6 @@ def serialize_path(path: Any) -> str:
 
 @dataclass
 class CollectionReport:
-
     registry: Set[Record] = dataclasses.field(default_factory=set)
 
     seen_paths: Set[str] = dataclasses.field(default_factory=set)
@@ -77,7 +75,6 @@ class CollectionReport:
         artifact_value: Union[str, Path],
         details: Optional[str] = None,
     ) -> None:
-
         if isinstance(artifact_value, Path):
             artifact_value = serialize_path(artifact_value)
 
@@ -139,7 +136,6 @@ class CollectionReport:
         self._register(module, Outcome.FAILURE, ArtifactType.COMMAND, tuple(command_parts), exc)
 
     def get_records_per_module_per_outcome(self, serialize_records=False):
-
         grouped_records = defaultdict(lambda: defaultdict(list))
 
         # sort records by module name and outcome to prepare for grouping
@@ -167,7 +163,6 @@ class CollectionReport:
 
 
 class Collector:
-
     METADATA_BASE = "$metadata$"
     COMMAND_OUTPUT_BASE = f"{METADATA_BASE}/command-output"
 
@@ -197,7 +192,6 @@ class Collector:
         self.output.close()
 
     def collect(self, spec: Iterable, module_name: Optional[str] = None) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -275,7 +269,6 @@ class Collector:
         seen_paths: Optional[Set] = None,
         module_name: Optional[str] = None,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -311,7 +304,6 @@ class Collector:
             log.error("- Failed to collect directory %s", path, exc_info=True)
 
     def collect_glob(self, pattern: str, module_name: Optional[str] = None) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -337,7 +329,6 @@ class Collector:
         seen_paths: Optional[Set] = None,
         module_name: Optional[str] = None,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -394,7 +385,6 @@ class Collector:
         output_filename: str,
         module_name: Optional[str] = None,
     ) -> None:
-
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -496,7 +486,6 @@ def get_full_formatted_report(report: CollectionReport, record_indent: int = 4) 
     for module_name, records_per_module in report.get_records_per_module_per_outcome().items():
         blocks.append(module_name)
         for _, records_per_module_per_outcome in records_per_module.items():
-
             record_lines = []
             for record in records_per_module_per_outcome:
                 record_lines.append(record_line_template.format(record=record))

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystems import ntfs
@@ -36,11 +36,11 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
-    check_and_set_log_args,
     check_and_set_acquire_args,
+    check_and_set_log_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,
@@ -1358,7 +1358,6 @@ class ActivitiesCache(Module):
 @module_arg("--ext-to-hash", action="append", help="Hash only files with the extensions provided")
 @module_arg("--glob-to-hash", action="append", help="Hash only files that match provided glob")
 class FileHashes(Module):
-
     DESC = "file hashes"
 
     DEFAULT_HASH_FUNCS = (HashFunc.MD5, HashFunc.SHA1, HashFunc.SHA256)
@@ -1418,7 +1417,6 @@ class FileHashes(Module):
             extensions = cls.DEFAULT_EXTENSIONS
 
         if cli_args.dir_to_hash or cli_args.glob_to_hash:
-
             if cli_args.glob_to_hash:
                 path_selectors.extend([("glob", glob) for glob in cli_args.glob_to_hash])
 
@@ -1657,7 +1655,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     log.info(get_report_summary(collection_report))
 
     if not args.disable_report:
-
         collection_report_serialized = collection_report.get_records_per_module_per_outcome(serialize_records=True)
 
         execution_report = {
@@ -1688,12 +1685,11 @@ def upload_files(
     upload_plugin: UploaderPlugin,
     no_proxy: bool = False,
 ):
-
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
     try:
-        upload_plugin.upload_files(paths, proxies)
+        upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
@@ -1936,6 +1932,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
         target = load_child(target, args.child)
 
     log.info("")
+
     try:
         files = acquire_target(target, args, args.start_time)
     except Exception:
@@ -1958,6 +1955,8 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
                 log.exception("Failed to acquire child target")
                 continue
 
+    files = sort_files(files)
+
     if args.auto_upload:
         log_file_handler = get_file_handler(log)
         if log_file_handler:
@@ -1968,6 +1967,25 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
             upload_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
+
+
+def sort_files(files: list[Union[str, Path]]) -> list[Path]:
+    log_files: list[Path] = []
+    tar_paths: list[Path] = []
+    report_paths: list[Path] = []
+
+    suffix_map = {".log": log_files, ".json": report_paths}
+
+    for file in files:
+        if isinstance(file, str):
+            file = Path(file)
+
+        suffix_map.get(file.suffix, tar_paths).append(file)
+
+    # Reverse log paths, as the first one in ``files`` is the main one.
+    log_files.reverse()
+
+    return tar_paths + report_paths + log_files
 
 
 if __name__ == "__main__":
