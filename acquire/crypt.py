@@ -1,25 +1,17 @@
-import io
 import hashlib
-
-from collections import defaultdict
+import io
 from datetime import datetime, timezone
 
 from dissect import cstruct
 
 try:
-    from Crypto.PublicKey import RSA
     from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
     from Crypto.Random import get_random_bytes
 
     HAS_PYCRYPTODOME = True
 except ImportError:
     HAS_PYCRYPTODOME = False
-
-try:
-    # Injected by pystandalone builder
-    from acquire.config import CONFIG
-except ImportError:
-    CONFIG = defaultdict(lambda: None)
 
 
 c_acquire = cstruct.cstruct()
@@ -69,9 +61,11 @@ FOOTER_MAGIC = b"FOOTER"
 class EncryptedStream(io.RawIOBase):
     """Encrypted AES-256-GCM stream.
 
-    Generates a random key and IV and uses AES-256-GCM to encrypt all written data.
-    The key and IV are encrypted with the given RSA public key (or from the embedded config)
-    and written as header. The header is included as AD to the AEAD cipher.
+    Generates a random key and IV and uses AES-256-GCM to encrypt all written
+    data.  The key and IV are encrypted with the given RSA public key and
+    written as header.
+
+    The header is included as AD to the AEAD cipher.
     The digest is written when the file is closed in the footer.
 
     Args:
@@ -79,15 +73,11 @@ class EncryptedStream(io.RawIOBase):
         public_key: The RSA public key to encrypt the header with.
     """
 
-    def __init__(self, fh, public_key=None):
+    def __init__(self, fh, public_key):
         if not HAS_PYCRYPTODOME:
             raise ImportError("PyCryptodome is not available")
 
         self.fh = fh
-
-        public_key = public_key or CONFIG.get("public_key")
-        if not public_key:
-            raise ValueError("No public key available (embedded or argument)")
 
         key = get_random_bytes(32)
         iv = get_random_bytes(12)

@@ -1,10 +1,18 @@
-class AccessDeniedError(Exception):
+class WindowsDynamicError(Exception):
     pass
 
 
-class NoMoreEntriesError(Exception):
+class AccessDeniedError(WindowsDynamicError):
     pass
 
 
-class HandleNotClosedSuccessfullyError(Exception):
+class NoMoreEntriesError(WindowsDynamicError):
+    pass
+
+
+class HandleNotClosedSuccessfullyError(WindowsDynamicError):
+    pass
+
+
+class OpenProcessError(WindowsDynamicError):
     pass
