@@ -46,7 +46,7 @@ class VolatileStream(AlignedStream):
         fcntl.fcntl(self.fd, fcntl.F_SETFL, flags)
 
         st_mode = os.fstat(self.fd).st_mode
-        write_only = (st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == 0
+        write_only = (st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == 0  # novermin
 
         super().__init__(0 if write_only else size)
 
