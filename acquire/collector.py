@@ -11,6 +11,7 @@ from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence, Type, Union
 
+from dissect.target import Target
 from dissect.target.exceptions import (
     FileNotFoundError,
     NotADirectoryError,
@@ -19,6 +20,7 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
+from acquire.outputs.base import Output
 from acquire.utils import StrEnum, get_formatted_exception
 
 log = logging.getLogger(__name__)
@@ -175,7 +177,7 @@ class Collector:
     METADATA_BASE = "$metadata$"
     COMMAND_OUTPUT_BASE = f"{METADATA_BASE}/command-output"
 
-    def __init__(self, target, output, base="fs"):
+    def __init__(self, target: Target, output: Output, base="fs"):
         self.target = target
         self.output = output
         self.base = base
@@ -247,7 +249,7 @@ class Collector:
 
     def collect_file(
         self,
-        path: Union[str, Path],
+        path: Union[str, fsutil.TargetPath],
         size: Optional[int] = None,
         outpath: Optional[str] = None,
         module_name: Optional[str] = None,
@@ -286,7 +288,7 @@ class Collector:
 
         log.info("- Collecting file %s: %s", path, result)
 
-    def collect_symlink(self, path: Path, module_name: Optional[str] = None) -> None:
+    def collect_symlink(self, path: fsutil.TargetPath, module_name: Optional[str] = None) -> None:
         try:
             outpath = self._create_output_path(path)
             self.output.write_bytes(outpath, b"", path.get(), 0)
@@ -302,7 +304,7 @@ class Collector:
 
     def collect_dir(
         self,
-        path: Union[str, Path],
+        path: Union[str, fsutil.TargetPath],
         seen_paths: Optional[set] = None,
         module_name: Optional[str] = None,
         follow: bool = True,
@@ -366,7 +368,7 @@ class Collector:
 
     def collect_path(
         self,
-        path: Union[str, Path],
+        path: Union[str, fsutil.TargetPath],
         seen_paths: Optional[set] = None,
         module_name: Optional[str] = None,
         follow: bool = True,

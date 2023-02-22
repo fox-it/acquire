@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO, Optional
 
 from dissect.target import Target
 from dissect.target.filesystem import FilesystemEntry
@@ -22,7 +22,7 @@ class Output:
 
     def write(
         self,
-        output_path: Union[str, Path],
+        output_path: str,
         fh: BinaryIO,
         entry: FilesystemEntry,
         size: Optional[int] = None,
@@ -39,7 +39,7 @@ class Output:
 
     def write_entry(
         self,
-        output_path: Union[str, Path],
+        output_path: str,
         entry: FilesystemEntry,
         size: Optional[int] = None,
     ) -> None:
@@ -55,7 +55,7 @@ class Output:
 
     def write_bytes(
         self,
-        output_path: Union[str, Path],
+        output_path: str,
         data: bytes,
         entry: FilesystemEntry,
         size: Optional[int] = None,
@@ -74,7 +74,7 @@ class Output:
 
     def write_volatile(
         self,
-        output_path: Union[str, Path],
+        output_path: str,
         entry: FilesystemEntry,
         size: Optional[int] = None,
     ) -> None:
