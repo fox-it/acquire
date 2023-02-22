@@ -1,7 +1,7 @@
 import io
 import tarfile
 from pathlib import Path
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, Union
 
 from dissect.target.filesystem import FilesystemEntry
 
@@ -49,7 +49,7 @@ class TarOutput(Output):
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: FilesystemEntry,
+        entry: Optional[Union[FilesystemEntry, Path]],
         size: Optional[int] = None,
     ) -> None:
         """Write a filesystem entry or file-like object to a tar file.
@@ -75,14 +75,15 @@ class TarOutput(Output):
         info.gname = "root"
         info.size = size or 0
 
-        if entry.is_symlink():
-            info.type = tarfile.SYMTYPE
-            info.linkname = entry.readlink()
+        if entry:
+            if entry.is_symlink():
+                info.type = tarfile.SYMTYPE
+                info.linkname = entry.readlink()
 
-        stat = entry.lstat()
+            stat = entry.lstat()
 
-        if stat:
-            info.mtime = stat.st_mtime
+            if stat:
+                info.mtime = stat.st_mtime
 
         self.tar.addfile(info, fh)
 

@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Type, Union
 
 from dissect.target import Target
 from dissect.target.exceptions import (
@@ -20,8 +20,10 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.outputs.base import Output
 from acquire.utils import StrEnum, get_formatted_exception
+
+if TYPE_CHECKING:
+    from acquire.outputs.base import Output
 
 log = logging.getLogger(__name__)
 
