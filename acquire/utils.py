@@ -1,7 +1,6 @@
 import argparse
 import ctypes
 import datetime
-import fcntl
 import getpass
 import json
 import os
@@ -19,6 +18,14 @@ from dissect.util.stream import AlignedStream
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
+try:
+    # Windows systems do not have the fcntl module.
+    from fcntl import F_SETFL, fcntl
+
+    HAS_FCNTL = True
+except ImportError:
+    HAS_FCNTL = False
+
 
 class VolatileStream(AlignedStream):
     """Streaming class to handle various procfs and sysfs edge-cases.  Backed by `AlignedStream`.
@@ -34,16 +41,15 @@ class VolatileStream(AlignedStream):
         self,
         path: Path,
         mode: str = "rb",
-        flags: int = os.O_RDONLY | os.O_NONBLOCK,
+        # Windows and Darwin systems dont have O_NOATIME or O_NONBLOCK. We still want to add them available.
+        flags: int = (os.O_RDONLY | getattr(os, "O_NOATIME", 0) | getattr(os, "O_NONBLOCK", 0)),
         size: int = 1024 * 1024 * 5,
     ):
-        if hasattr(os, "O_NOATIME"):
-            # O_NOATIME is not available on darwin systems. We still want to add it whenever possible when available.
-            flags = flags | os.O_NOATIME
-
         self.fh = path.open(mode)
         self.fd = self.fh.fileno()
-        fcntl.fcntl(self.fd, fcntl.F_SETFL, flags)
+
+        if HAS_FCNTL:
+            fcntl(self.fd, F_SETFL, flags)
 
         st_mode = os.fstat(self.fd).st_mode
         write_only = (st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == 0  # novermin
