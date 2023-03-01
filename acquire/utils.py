@@ -41,7 +41,7 @@ class VolatileStream(AlignedStream):
         self,
         path: Path,
         mode: str = "rb",
-        # Windows and Darwin systems dont have O_NOATIME or O_NONBLOCK. We still want to add them available.
+        # Windows and Darwin systems don't have O_NOATIME or O_NONBLOCK. Add them if they are available.
         flags: int = (os.O_RDONLY | getattr(os, "O_NOATIME", 0) | getattr(os, "O_NONBLOCK", 0)),
         size: int = 1024 * 1024 * 5,
     ):
