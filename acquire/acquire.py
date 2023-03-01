@@ -702,6 +702,14 @@ class Appcompat(Module):
     ]
 
 
+@register_module("--pca")
+class PCA(Module):
+    DESC = "Windows Program Compatibility Assistant"
+    SPEC = [
+        ("dir", "sysvol/windows/pca"),
+    ]
+
+
 @register_module("--syscache")
 class Syscache(Module):
     DESC = "Windows Syscache hive and log files"
@@ -1752,6 +1760,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Syscache,
             WBEM,
             AV,
@@ -1805,6 +1814,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Syscache,
             WBEM,
             AV,
@@ -1849,6 +1859,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Misc,
         ],
         "linux": [
