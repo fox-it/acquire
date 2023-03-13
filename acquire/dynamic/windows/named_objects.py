@@ -8,25 +8,33 @@ from acquire.dynamic.windows.types import OBJECT_DIRECTORY_INFORMATION
 class NamedObjectType(Enum):
     ALPC_PORT = "ALPC Port"
     CALLBACK = "Callback"
+    DESKTOP = "Desktop"
     DEVICE = "Device"  # NtOpenFile
     DIRECTORY = "Directory"  # NtOpenDirectoryObject
     DRIVER = "Driver"
+    ETW_REGISTRATION = "EtwRegistration"
     EVENT = "Event"  # NtOpenEvent
     FILE = "File"  # NtOpenFile
     FILTER_CONNECTION_PORT = "FilterConnectionPort"
+    IO_COMPLETION = "IoCompletion"
+    IR_TIMER = "IRTimer"
     JOB = "Job"
     KEY = "Key"  # (Zw|Nt)OpenKey
     KEYED_EVENT = "KeyedEvent"
     MUTANT = "Mutant"  # NtOpenMutant
     MUTEX = "Mutex"
     PARTITION = "Partition"
+    PROCESS = "Process"
     SECTION = "Section"  # NtOpenSection
     SESSION = "Session"
     SEMAPHORE = "Semaphore"  # (NtOpenSemaphore)
     SYMBOLIC_LINK = "SymbolicLink"  # NtOpenSymbolicLinkObject, NtQuerySymbolicLinkObject
     TIMER = "Timer"  # NtOpenTimer
     THREAD = "Thread"
+    TOKEN = "Token"
+    TP_WORKER_FACTORY = "TpWorkerFactory"
     TYPE = "Type"
+    WAIT_COMPLETION_PACKET = "WaitCompletionPacket"
     WINDOWS_STATION = "WindowStation"
 
     UNKNOWN = "Unknown"

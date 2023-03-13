@@ -1,12 +1,31 @@
 import io
 import tarfile
+from pathlib import Path
+from typing import BinaryIO, Optional, Union
+
+from dissect.target.filesystem import FilesystemEntry
 
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
 
 
 class TarOutput(Output):
-    def __init__(self, path, compress=False, encrypt=False, public_key=None, **kwargs):
+    """Tar archive acquire output format. Output can be compressed and/or encrypted.
+
+    Args:
+        path: The path to write the tar archive to.
+        compress: Whether to compress the tar archive.
+        encrypt: Whether to encrypt the tar archive.
+        public_key: The RSA public key to encrypt the header with.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        compress: bool = False,
+        encrypt: bool = False,
+        public_key: Optional[bytes] = None,
+    ) -> None:
         ext = ".tar" if ".tar" not in path.suffixes else ""
         mode = "w|" if encrypt else "w:"
 
@@ -26,23 +45,50 @@ class TarOutput(Output):
         else:
             self.tar = tarfile.open(name=self.path, mode=mode)
 
-    def write(self, path, fh, size=None, entry=None):
+    def write(
+        self,
+        output_path: str,
+        fh: BinaryIO,
+        entry: Optional[Union[FilesystemEntry, Path]],
+        size: Optional[int] = None,
+    ) -> None:
+        """Write a filesystem entry or file-like object to a tar file.
+
+        Args:
+            output_path: The path of the entry in the output format.
+            fh: The file-like object of the entry to write.
+            entry: The optional filesystem entry of the entry to write.
+            size: The optional file size in bytes of the entry to write.
+        """
+        stat = None
         size = size or getattr(fh, "size", None)
-        if size is None:
+
+        if size is None and fh.seekable():
             offset = fh.tell()
             fh.seek(0, io.SEEK_END)
             size = fh.tell()
             fh.seek(offset)
 
         info = self.tar.tarinfo()
-        info.name = path
+        info.name = output_path
         info.uname = "root"
         info.gname = "root"
-        info.size = size
+        info.size = size or 0
+
+        if entry:
+            if entry.is_symlink():
+                info.type = tarfile.SYMTYPE
+                info.linkname = entry.readlink()
+
+            stat = entry.lstat()
+
+            if stat:
+                info.mtime = stat.st_mtime
 
         self.tar.addfile(info, fh)
 
-    def close(self):
+    def close(self) -> None:
+        """Closes the tar file."""
         self.tar.close()
         if self._fh:
             self._fh.close()

@@ -13,16 +13,17 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from dissect.target import Target, exceptions
-from dissect.target.filesystems import ntfs
+from dissect.target.filesystems import dir, ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.plugins.os.windows import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
+from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.hashes import (
     HashFunc,
@@ -35,11 +36,11 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin
+from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
-    check_and_set_log_args,
     check_and_set_acquire_args,
+    check_and_set_log_args,
     create_argument_parser,
     format_output_name,
     get_formatted_exception,
@@ -250,6 +251,49 @@ class Module:
     @classmethod
     def _run(cls, target, collector):
         pass
+
+
+@register_module("--sys")
+@local_module
+class Sys(Module):
+    DESC = "Sysfs files (live systems only)"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, collector: Collector):
+        if not Path("/sys").exists():
+            log.error("/sys is unavailable! Skipping...")
+            return
+
+        spec = [("dir", "/sys")]
+
+        sysfs = dir.DirectoryFilesystem(Path("/sys"))
+
+        target.filesystems.add(sysfs)
+        target.fs.mount("/sys", sysfs)
+
+        collector.collect(spec, follow=False, volatile=True)
+
+
+@register_module("--proc")
+@local_module
+class Proc(Module):
+    DESC = "Procfs files (live systems only)"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, collector: Collector):
+        if not Path("/proc").exists():
+            log.error("/proc is unavailable! Skipping...")
+            return
+
+        spec = [("dir", "/proc")]
+        procfs = dir.DirectoryFilesystem(Path("/proc"))
+
+        target.filesystems.add(procfs)
+        target.fs.mount("/proc", procfs)
+
+        collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("-n", "--ntfs")
@@ -487,8 +531,8 @@ class WinMemDump(Module):
                         )
                         return
 
-            collector.output.write_entry(mem_dump_output_path, mem_dump_path)
-            collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
+            collector.output.write_entry(mem_dump_output_path, entry=mem_dump_path)
+            collector.output.write_entry(mem_dump_errors_output_path, entry=mem_dump_errors_path)
             collector.report.add_command_collected(cls.__name__, command_parts)
             mem_dump_path.unlink()
             mem_dump_errors_path.unlink()
@@ -655,6 +699,14 @@ class Appcompat(Module):
     DESC = "Windows Amcache and RecentFileCache"
     SPEC = [
         ("dir", "sysvol/windows/appcompat"),
+    ]
+
+
+@register_module("--pca")
+class PCA(Module):
+    DESC = "Windows Program Compatibility Assistant"
+    SPEC = [
+        ("dir", "sysvol/windows/pca"),
     ]
 
 
@@ -1358,7 +1410,6 @@ class ActivitiesCache(Module):
 @module_arg("--ext-to-hash", action="append", help="Hash only files with the extensions provided")
 @module_arg("--glob-to-hash", action="append", help="Hash only files that match provided glob")
 class FileHashes(Module):
-
     DESC = "file hashes"
 
     DEFAULT_HASH_FUNCS = (HashFunc.MD5, HashFunc.SHA1, HashFunc.SHA256)
@@ -1418,7 +1469,6 @@ class FileHashes(Module):
             extensions = cls.DEFAULT_EXTENSIONS
 
         if cli_args.dir_to_hash or cli_args.glob_to_hash:
-
             if cli_args.glob_to_hash:
                 path_selectors.extend([("glob", glob) for glob in cli_args.glob_to_hash])
 
@@ -1434,6 +1484,46 @@ class FileHashes(Module):
             hash_funcs = cls.DEFAULT_HASH_FUNCS
 
         return [(path_selector, hash_funcs) for path_selector in path_selectors]
+
+
+@register_module("--handles")
+@module_arg(
+    "--handle-types",
+    action="extend",
+    help="Collect only specified handle types",
+    type=NamedObjectType,
+    choices=[h.value for h in NamedObjectType],
+    nargs="*",
+)
+@local_module
+class OpenHandles(Module):
+    DESC = "Open handles"
+
+    @classmethod
+    def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
+        if not sys.platform == "win32":
+            log.error("Open Handles plugin can only run on Windows systems! Skipping...")
+            return
+
+        from acquire.dynamic.windows.collect import collect_open_handles
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+
+        log.info("*** Acquiring open handles")
+
+        handle_types = cli_args.handle_types
+
+        collector.bind(cls)
+        try:
+            handles = collect_open_handles(handle_types)
+            csv_compressed_handles = serialize_handles_into_csv(handles)
+
+            collector.write_bytes(
+                f"{collector.base}/{collector.METADATA_BASE}/open_handles.csv.gz",
+                csv_compressed_handles,
+            )
+            log.info("Collecting open handles is done.")
+        finally:
+            collector.unbind()
 
 
 def print_disks_overview(target):
@@ -1617,7 +1707,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     log.info(get_report_summary(collection_report))
 
     if not args.disable_report:
-
         collection_report_serialized = collection_report.get_records_per_module_per_outcome(serialize_records=True)
 
         execution_report = {
@@ -1648,12 +1737,11 @@ def upload_files(
     upload_plugin: UploaderPlugin,
     no_proxy: bool = False,
 ):
-
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
     try:
-        upload_plugin.upload_files(paths, proxies)
+        upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
         log.exception("")
@@ -1673,6 +1761,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Syscache,
             WBEM,
             AV,
@@ -1726,6 +1815,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Syscache,
             WBEM,
             AV,
@@ -1770,6 +1860,7 @@ PROFILES = {
             PowerShell,
             Prefetch,
             Appcompat,
+            PCA,
             Misc,
         ],
         "linux": [
@@ -1896,6 +1987,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
         target = load_child(target, args.child)
 
     log.info("")
+
     try:
         files = acquire_target(target, args, args.start_time)
     except Exception:
@@ -1918,6 +2010,8 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
                 log.exception("Failed to acquire child target")
                 continue
 
+    files = sort_files(files)
+
     if args.auto_upload:
         log_file_handler = get_file_handler(log)
         if log_file_handler:
@@ -1928,6 +2022,25 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace):
             upload_files(files, args.upload_plugin)
         except Exception:
             log.exception("Failed to upload files")
+
+
+def sort_files(files: list[Union[str, Path]]) -> list[Path]:
+    log_files: list[Path] = []
+    tar_paths: list[Path] = []
+    report_paths: list[Path] = []
+
+    suffix_map = {".log": log_files, ".json": report_paths}
+
+    for file in files:
+        if isinstance(file, str):
+            file = Path(file)
+
+        suffix_map.get(file.suffix, tar_paths).append(file)
+
+    # Reverse log paths, as the first one in ``files`` is the main one.
+    log_files.reverse()
+
+    return tar_paths + report_paths + log_files
 
 
 if __name__ == "__main__":
