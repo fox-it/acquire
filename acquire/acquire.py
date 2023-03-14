@@ -882,6 +882,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
         ("dir", "sysvol/ProgramData/Mcafee/VirusScan"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
+        ("dir", "sysvol/ProgramData/McAfee/MSC/Logs"),
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
