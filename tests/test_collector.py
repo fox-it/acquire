@@ -14,32 +14,35 @@ from dissect.target.filesystem import VirtualFile, VirtualFilesystem, VirtualSym
 from acquire.collector import Collector
 
 
-def test_collector():
+def test_collector() -> None:
     target = Target("local")
 
-    fs_1 = VirtualFilesystem()
-    fs_1.map_file("$MFT", None)
-    target.fs.mount("C:", fs_1)
-    target.filesystems.add(fs_1)
+    with patch("acquire.collector.log", autospec=True) as mock_log:
+        fs_1 = VirtualFilesystem()
+        fs_1.map_file("$MFT", None)
+        target.fs.mount("C:", fs_1)
+        target.filesystems.add(fs_1)
 
-    fs_2 = VirtualFilesystem()
-    fs_2.map_file("$MFT", None)
-    target.fs.mount("D:", fs_2)
-    target.filesystems.add(fs_2)
+        fs_2 = VirtualFilesystem()
+        fs_2.map_file("$MFT", None)
+        target.fs.mount("D:", fs_2)
+        target.filesystems.add(fs_2)
 
-    collector = Collector(target, Mock())
-    collector.collect_file("$MFT", module_name="test")
+        collector = Collector(target, Mock())
 
-    assert not collector.report.was_path_seen(fs_2.get("$MFT"))
+        collector.collect_dir("C:", module_name="test")
+        collector.collect_dir("D:", module_name="test")
+
+        assert not mock_log.info.call_args.args[0] == "- Collecting file %s: Skipped (DEDUP)"
 
 
 @pytest.fixture
-def mock_file():
+def mock_file() -> Mock:
     return Mock()
 
 
 @pytest.fixture
-def mock_fs(mock_file):
+def mock_fs(mock_file) -> VirtualFilesystem:
     fs = VirtualFilesystem(case_sensitive=False)
     fs.makedirs("/foo/bar")
     fs.map_file_entry("/foo/bar/some-file", VirtualFile(fs, "some-file", mock_file))
@@ -48,7 +51,7 @@ def mock_fs(mock_file):
 
 
 @pytest.fixture
-def mock_target(mock_fs):
+def mock_target(mock_fs) -> Target:
     target = Target()
     target.fs.mount("/", mock_fs)
     target.filesystems.add(mock_fs)
@@ -56,7 +59,7 @@ def mock_target(mock_fs):
 
 
 @pytest.fixture
-def mock_collector(mock_target):
+def mock_collector(mock_target) -> Collector:
     collector = Collector(mock_target, Mock())
     return collector
 
@@ -65,12 +68,12 @@ MOCK_SEEN_PATHS = set()
 MOCK_MODULE_NAME = "DUMMY"
 
 
-def test_collector_collect_path_no_module_name(mock_collector):
+def test_collector_collect_path_no_module_name(mock_collector) -> None:
     with pytest.raises(ValueError):
         mock_collector.collect_path("/some/path")
 
 
-def test_collector_collect_path_dir_as_target_path(mock_target, mock_collector):
+def test_collector_collect_path_dir_as_target_path(mock_target, mock_collector) -> None:
     with patch.object(mock_collector, "collect_dir", autospec=True):
         path = mock_target.fs.path("/foo/bar")
         mock_collector.collect_path(
@@ -81,7 +84,7 @@ def test_collector_collect_path_dir_as_target_path(mock_target, mock_collector):
         mock_collector.collect_dir.assert_called()
 
 
-def test_collector_collect_path_dir(mock_collector):
+def test_collector_collect_path_dir(mock_collector) -> None:
     with patch.object(mock_collector, "collect_dir", autospec=True):
         mock_collector.collect_path(
             "/foo/bar",
@@ -91,7 +94,7 @@ def test_collector_collect_path_dir(mock_collector):
         mock_collector.collect_dir.assert_called()
 
 
-def test_collector_collect_path_file(mock_collector):
+def test_collector_collect_path_file(mock_collector) -> None:
     with patch.object(mock_collector, "collect_file", autospec=True):
         mock_collector.collect_path(
             "/foo/bar/some-file",
@@ -101,20 +104,29 @@ def test_collector_collect_path_file(mock_collector):
         mock_collector.collect_file.assert_called()
 
 
-def test_collector_collect_path_symlink(mock_collector):
-    with patch("acquire.collector.log") as mock_log:
-        with patch.object(mock_collector, "report", autospec=True) as mock_report:
-            mock_collector.collect_path(
-                "/foo/bar/some-symlink",
-                seen_paths=MOCK_SEEN_PATHS,
-                module_name=MOCK_MODULE_NAME,
-            )
-            mock_report.add_path_failed.assert_called()
-            mock_log.error.assert_called()
-            assert mock_log.error.call_args.args[0] == "- Can't collect %s (symlink to %s) in module %s"
+def test_collector_collect_path_symlink(mock_collector) -> None:
+    with patch.object(mock_collector, "collect_symlink", autospec=True):
+        mock_collector.collect_path(
+            "/foo/bar/some-symlink",
+            follow=False,
+            seen_paths=MOCK_SEEN_PATHS,
+            module_name=MOCK_MODULE_NAME,
+        )
+        mock_collector.collect_symlink.assert_called()
 
 
-def test_collector_collect_path_non_existing_file(mock_collector):
+def test_collector_collect_path_symlink_follow(mock_collector) -> None:
+    with patch.object(mock_collector, "collect_symlink", autospec=True):
+        mock_collector.collect_path(
+            "/foo/bar/some-symlink",
+            follow=True,
+            seen_paths=MOCK_SEEN_PATHS,
+            module_name=MOCK_MODULE_NAME,
+        )
+        mock_collector.collect_symlink.assert_called()
+
+
+def test_collector_collect_path_non_existing_file(mock_collector) -> None:
     with patch("acquire.collector.log", autospec=True) as mock_log:
         with patch.object(mock_collector, "report", autospec=True) as mock_report:
             mock_collector.collect_path(
@@ -127,7 +139,7 @@ def test_collector_collect_path_non_existing_file(mock_collector):
             assert mock_log.error.call_args.args[0] == "- Path %s is not found"
 
 
-def test_collector_collect_path_no_file_type(mock_target, mock_collector):
+def test_collector_collect_path_no_file_type(mock_target, mock_collector) -> None:
     path = mock_target.fs.path("/foo/bar/non-existing-file")
     with patch("acquire.collector.log", autospec=True) as mock_log:
         with patch.object(mock_collector, "report", autospec=True) as mock_report:
@@ -195,7 +207,7 @@ def test_collector_collect_path_no_file_type(mock_target, mock_collector):
         ),
     ],
 )
-def test_collector_collect_path_with_exception(mock_target, mock_collector, report_func, exception, log_msg):
+def test_collector_collect_path_with_exception(mock_target, mock_collector, report_func, exception, log_msg) -> None:
     path = mock_target.fs.path("/foo/bar/non-existing-file")
     with patch("acquire.collector.log", autospec=True) as mock_log:
         with patch.object(mock_collector, "report", autospec=True) as mock_report:

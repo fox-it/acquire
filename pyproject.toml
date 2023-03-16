@@ -1,9 +1,43 @@
 [build-system]
-requires = ["setuptools>=43.0.0", "wheel", "setuptools_scm[toml]>=3.4.1"]
+requires = ["setuptools>=65.5.0", "setuptools_scm[toml]>=6.4.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
-write_to = "acquire/version.py"
+[project]
+name = "acquire"
+description = "A tool to quickly gather forensic artifacts from disk images or a live system into a lightweight container"
+readme = "README.md"
+requires-python = "~=3.9"
+license.text = "Affero General Public License v3"
+authors = [
+  {name = "Dissect Team", email = "dissect@fox-it.com"}
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "dissect.cstruct",
+    "dissect.target",
+]
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://dissect.tools"
+documentation = "https://docs.dissect.tools/en/latest/projects/acquire"
+repository = "https://github.com/fox-it/acquire"
+
+[project.optional-dependencies]
+full = [
+    "minio",
+    "pycryptodome",
+    "requests",
+    "rich",
+    "dissect.target[full]",
+    "requests_toolbelt",
+]
+
+[project.scripts]
+acquire = "acquire.acquire:main"
+acquire-decrypt = "acquire.tools.decrypter:main"
 
 [tool.black]
 line-length = 120
@@ -11,3 +45,12 @@ line-length = 120
 [tool.isort]
 profile = "black"
 known_first_party = ["acquire"]
+
+[tool.setuptools]
+license-files = ["LICENSE", "COPYRIGHT"]
+
+[tool.setuptools.packages.find]
+include = ["acquire", "acquire.*"]
+
+[tool.setuptools_scm]
+write_to = "acquire/version.py"
