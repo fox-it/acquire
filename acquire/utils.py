@@ -370,15 +370,12 @@ def get_formatted_exception() -> str:
 def format_output_name(prefix, postfix=None, ext=None):
     if not postfix:
         postfix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    name = "{}_{}".format(prefix, postfix)
+    name = f"{prefix}_{postfix}"
     if ext:
-        name = "{}.{}".format(name, ext)
+        name = f"{name}.{ext}"
     return name
 
 
-def persist_execution_report(output_dir: Path, prefix: str, timestamp: str, report_data: dict) -> Path:
-    report_filename = format_output_name(prefix, postfix=timestamp, ext="report.json")
-    report_full_path = output_dir / report_filename
-    with open(report_full_path, "w") as f:
+def persist_execution_report(path: Path, report_data: dict) -> Path:
+    with open(path, "w") as f:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
-    return report_full_path

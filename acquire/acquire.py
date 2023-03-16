@@ -1718,13 +1718,14 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
             **collection_report_serialized,
         }
 
-        report_output_dir = output_path if output_path.is_dir() else output_path.parent
-        report_file_path = persist_execution_report(
-            output_dir=report_output_dir,
-            prefix=target.name,
-            timestamp=output_ts,
-            report_data=execution_report,
-        )
+        if args.output.is_dir():
+            report_file_name = format_output_name(target.name, postfix=output_ts, ext="report.json")
+        else:
+            report_file_name = f"{output_path.name}.report.json"
+
+        report_file_path = output_path.parent / report_file_name
+        persist_execution_report(report_file_path, execution_report)
+
         files.append(report_file_path)
         log.info("Acquisition report for %s is written to %s", target, report_file_path)
 
