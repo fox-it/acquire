@@ -57,7 +57,7 @@ class Output:
         self,
         output_path: str,
         data: bytes,
-        entry: Optional[Union[FilesystemEntry, Path]],
+        entry: Optional[Union[FilesystemEntry, Path]] = None,
         size: Optional[int] = None,
     ) -> None:
         """Write raw bytes to the output format.
