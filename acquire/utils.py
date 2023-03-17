@@ -367,7 +367,7 @@ def get_formatted_exception() -> str:
     return "".join(traceback.format_exception(*exc_info))
 
 
-def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional[str] = None):
+def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional[str] = None) -> str:
     if not postfix:
         postfix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
     name = f"{prefix}_{postfix}"
