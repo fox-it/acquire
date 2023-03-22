@@ -1551,6 +1551,18 @@ def print_volumes_overview(target):
     log.info("")
 
 
+def print_acquire_warning(target: Target) -> None:
+    if target.os != "windows":
+        log.warning("========================================== WARNING ==========================================")
+        log.warning("")
+        log.warning(
+            "The operating system '%s' is not officially supported by acquire, and should be considered experimental.",
+            target.os,
+        )
+        log.warning("")
+        log.warning("========================================== WARNING ==========================================")
+
+
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -1594,6 +1606,8 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     # Prepare targets if necessary
     if target.os == "windows":
         mount_all_ntfs_filesystems(target)
+
+    print_acquire_warning(target)
 
     modules_selected = {}
     modules_successful = []
