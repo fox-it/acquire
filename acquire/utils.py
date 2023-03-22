@@ -11,7 +11,7 @@ from enum import Enum
 from io import SEEK_SET, UnsupportedOperation
 from pathlib import Path
 from stat import S_IRGRP, S_IROTH, S_IRUSR
-from typing import Any
+from typing import Any, Optional
 
 from dissect.util.stream import AlignedStream
 
@@ -367,18 +367,15 @@ def get_formatted_exception() -> str:
     return "".join(traceback.format_exception(*exc_info))
 
 
-def format_output_name(prefix, postfix=None, ext=None):
+def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional[str] = None) -> str:
     if not postfix:
         postfix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    name = "{}_{}".format(prefix, postfix)
+    name = f"{prefix}_{postfix}"
     if ext:
-        name = "{}.{}".format(name, ext)
+        name = f"{name}.{ext}"
     return name
 
 
-def persist_execution_report(output_dir: Path, prefix: str, timestamp: str, report_data: dict) -> Path:
-    report_filename = format_output_name(prefix, postfix=timestamp, ext="report.json")
-    report_full_path = output_dir / report_filename
-    with open(report_full_path, "w") as f:
+def persist_execution_report(path: Path, report_data: dict) -> Path:
+    with open(path, "w") as f:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
-    return report_full_path
