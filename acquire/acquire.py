@@ -1556,9 +1556,10 @@ def print_acquire_warning(target: Target) -> None:
         log.warning("========================================== WARNING ==========================================")
         log.warning("")
         log.warning(
-            "The operating system '%s' is not officially supported by acquire, and should be considered experimental.",
+            "The support for operating system '%s' is experimental. Some artifacts may not yet be included and some ",
             target.os,
         )
+        log.warning("features may not work as expected. Please notify upstream for any missing artifacts or features.")
         log.warning("")
         log.warning("========================================== WARNING ==========================================")
 
