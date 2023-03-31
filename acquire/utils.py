@@ -63,7 +63,20 @@ class VolatileStream(AlignedStream):
         return False
 
     def _read(self, offset: int, length: int) -> bytes:
-        return os.read(self.fd, min(length, self.size - offset))
+        result = []
+        while length:
+            try:
+                buf = os.read(self.fd, min(length, self.size - offset))
+            except BlockingIOError:
+                break
+
+            if not buf:
+                break
+
+            result.append(buf)
+            offset += len(buf)
+            length -= len(buf)
+        return b"".join(result)
 
 
 class StrEnum(str, Enum):
