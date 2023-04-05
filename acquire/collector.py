@@ -218,7 +218,12 @@ class Collector:
         return outpath
 
     def collect(
-        self, spec: Iterable, module_name: Optional[str] = None, follow: bool = True, volatile: bool = False
+        self,
+        spec: Iterable,
+        module_name: Optional[str] = None,
+        follow: bool = True,
+        volatile: bool = False,
+        skip_mounts: bool = True,
     ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
@@ -238,11 +243,18 @@ class Collector:
 
             for value in values:
                 if artifact_type in (ArtifactType.FILE, ArtifactType.DIR):
-                    self.collect_path(value, module_name=module_name, follow=follow, volatile=volatile)
+                    self.collect_path(
+                        value,
+                        module_name=module_name,
+                        follow=follow,
+                        volatile=volatile,
+                        skip_mounts=skip_mounts,
+                        is_initial=True,
+                    )
                 elif artifact_type == ArtifactType.SYMLINK:
                     self.collect_symlink(value, module_name=module_name)
                 elif artifact_type == ArtifactType.GLOB:
-                    self.collect_glob(value, module_name=module_name)
+                    self.collect_glob(value, module_name=module_name, skip_mounts=skip_mounts, is_initial=True)
                 elif artifact_type == ArtifactType.COMMAND:
                     command_parts, output_filename = value
                     self.collect_command_output(command_parts, output_filename, module_name=module_name)
@@ -348,7 +360,13 @@ class Collector:
             self.report.add_dir_failed(module_name, path)
             log.error("- Failed to collect directory %s", path, exc_info=True)
 
-    def collect_glob(self, pattern: str, module_name: Optional[str] = None) -> None:
+    def collect_glob(
+        self,
+        pattern: str,
+        module_name: Optional[str] = None,
+        skip_mounts: bool = True,
+        is_initial: bool = False,
+    ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -358,7 +376,7 @@ class Collector:
             glob_is_empty = True
             for entry in self.target.fs.path("/").glob(pattern.lstrip("/")):
                 glob_is_empty = False
-                self.collect_path(entry)
+                self.collect_path(entry, skip_mounts=skip_mounts, is_initial=is_initial)
         except Exception:
             log.error("- Failed to collect glob %s", pattern, exc_info=True)
             self.report.add_glob_failed(module_name, pattern)
@@ -375,6 +393,8 @@ class Collector:
         module_name: Optional[str] = None,
         follow: bool = True,
         volatile: bool = False,
+        skip_mounts: bool = True,
+        is_initial: bool = False,
     ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
@@ -390,6 +410,7 @@ class Collector:
             is_dir = path.is_dir()
             is_file = path.is_file()
             is_symlink = path.is_symlink()
+            is_mount = path.is_mount()
         except OSError as error:
             if error.errno == errno.ENOENT:
                 self.report.add_path_missing(module_name, path)
@@ -419,7 +440,11 @@ class Collector:
                     path.resolve(), seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
                 )
         elif is_dir:
-            self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
+            if is_mount and skip_mounts and not is_initial:
+                self.report.add_path_failed(module_name, path)
+                log.error("- Path %s is a mount point, skipping collection", path)
+            else:
+                self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:
             self.collect_file(path, module_name=module_name, volatile=volatile)
         else:

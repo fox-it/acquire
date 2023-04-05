@@ -272,7 +272,7 @@ class Sys(Module):
         target.filesystems.add(sysfs)
         target.fs.mount("/sys", sysfs)
 
-        collector.collect(spec, follow=False, volatile=True)
+        collector.collect(spec, follow=False, volatile=True, skip_mounts=False)
 
 
 @register_module("--proc")
@@ -293,7 +293,7 @@ class Proc(Module):
         target.filesystems.add(procfs)
         target.fs.mount("/proc", procfs)
 
-        collector.collect(spec, follow=False, volatile=True)
+        collector.collect(spec, follow=False, volatile=True, skip_mounts=False)
 
 
 @register_module("-n", "--ntfs")

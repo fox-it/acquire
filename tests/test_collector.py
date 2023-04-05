@@ -94,6 +94,28 @@ def test_collector_collect_path_dir(mock_collector) -> None:
         mock_collector.collect_dir.assert_called()
 
 
+@pytest.mark.parametrize(
+    "skip_mounts, is_initial",
+    [
+        (True, True),
+        (False, False),
+        (False, True),
+    ],
+)
+def test_collector_collect_path_dir_is_mount(mock_target, mock_collector, skip_mounts, is_initial) -> None:
+    path = mock_target.fs.path("/foo/bar")
+    with patch.object(mock_collector, "collect_dir", autospec=True):
+        with patch.object(path, "is_mount", return_value=True, autospec=True):
+            mock_collector.collect_path(
+                path,
+                seen_paths=MOCK_SEEN_PATHS,
+                module_name=MOCK_MODULE_NAME,
+                skip_mounts=skip_mounts,
+                is_initial=is_initial,
+            )
+            mock_collector.collect_dir.assert_called()
+
+
 def test_collector_collect_path_file(mock_collector) -> None:
     with patch.object(mock_collector, "collect_file", autospec=True):
         mock_collector.collect_path(
@@ -147,14 +169,37 @@ def test_collector_collect_path_no_file_type(mock_target, mock_collector) -> Non
                 with patch.object(path, "is_dir", return_value=False, autospec=True):
                     with patch.object(path, "is_file", return_value=False, autospec=True):
                         with patch.object(path, "is_symlink", return_value=False, autospec=True):
-                            mock_collector.collect_path(
-                                path,
-                                seen_paths=MOCK_SEEN_PATHS,
-                                module_name=MOCK_MODULE_NAME,
-                            )
-                            mock_report.add_path_failed.assert_called()
-                            mock_log.error.assert_called()
-                            assert mock_log.error.call_args.args[0] == "- Don't know how to collect %s in module %s"
+                            with patch.object(path, "is_mount", return_value=False, autospec=True):
+                                mock_collector.collect_path(
+                                    path,
+                                    seen_paths=MOCK_SEEN_PATHS,
+                                    module_name=MOCK_MODULE_NAME,
+                                )
+                                mock_report.add_path_failed.assert_called()
+                                mock_log.error.assert_called()
+                                assert mock_log.error.call_args.args[0] == "- Don't know how to collect %s in module %s"
+
+
+def test_collector_collect_path_mount_point(mock_target, mock_collector) -> None:
+    path = mock_target.fs.path("/foo/bar/non-existing-file")
+    with patch("acquire.collector.log", autospec=True) as mock_log:
+        with patch.object(mock_collector, "report", autospec=True) as mock_report:
+            with patch.object(path, "get", return_value=True, autospec=True):
+                with patch.object(path, "is_dir", return_value=True, autospec=True):
+                    with patch.object(path, "is_file", return_value=False, autospec=True):
+                        with patch.object(path, "is_symlink", return_value=False, autospec=True):
+                            with patch.object(path, "is_mount", return_value=True, autospec=True):
+                                mock_collector.collect_path(
+                                    path,
+                                    seen_paths=MOCK_SEEN_PATHS,
+                                    module_name=MOCK_MODULE_NAME,
+                                )
+                                mock_report.add_path_failed.assert_called()
+                                mock_log.error.assert_called()
+                                assert (
+                                    mock_log.error.call_args.args[0]
+                                    == "- Path %s is a mount point, skipping collection"
+                                )
 
 
 @pytest.mark.parametrize(
