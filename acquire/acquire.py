@@ -825,6 +825,7 @@ class Misc(Module):
         ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
         ("dir", "sysvol/windows/sysvol/domain/policies/"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
     ]
 
