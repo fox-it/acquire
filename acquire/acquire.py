@@ -1100,6 +1100,51 @@ class History(Module):
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
         ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        # Chrome - RHEL/Ubuntu - DNF
+        ("glob", ".config/google-chrome/*/Bookmarks", from_user_home),
+        ("glob", ".config/google-chrome/*/Favicons", from_user_home),
+        ("glob", ".config/google-chrome/*/History", from_user_home),
+        ("glob", ".config/google-chrome/*/Login Data", from_user_home),
+        ("glob", ".config/google-chrome/*/Login Data For Account", from_user_home),
+        ("glob", ".config/google-chrome/*/Shortcuts", from_user_home),
+        ("glob", ".config/google-chrome/*/Top Sites", from_user_home),
+        ("glob", ".config/google-chrome/*/Web Data", from_user_home),
+        # Chrome - RHEL/Ubuntu - Flatpak
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Bookmarks", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Favicons", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/History", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data For Account", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Shortcuts", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Top Sites", from_user_home),
+        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Web Data", from_user_home),
+        # Chromium - RHEL/Ubuntu - DNF/apt
+        ("glob", ".config/chromium/*/Bookmarks", from_user_home),
+        ("glob", ".config/chromium/*/Favicons", from_user_home),
+        ("glob", ".config/chromium/*/History", from_user_home),
+        ("glob", ".config/chromium/*/Login Data", from_user_home),
+        ("glob", ".config/chromium/*/Login Data For Account", from_user_home),
+        ("glob", ".config/chromium/*/Shortcuts", from_user_home),
+        ("glob", ".config/chromium/*/Top Sites", from_user_home),
+        ("glob", ".config/chromium/*/Web Data", from_user_home),
+        # Chromium - RHEL/Ubuntu - Flatpak
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Bookmarks", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Favicons", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/History", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data For Account", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Shortcuts", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Top Sites", from_user_home),
+        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Web Data", from_user_home),
+        # Chromium - RHEL/Ubuntu - snap
+        ("glob", "snap/chromium/common/chromium/*/Bookmarks", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Favicons", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/History", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Login Data", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Login Data For Account", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Shortcuts", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Top Sites", from_user_home),
+        ("glob", "snap/chromium/common/chromium/*/Web Data", from_user_home),
         # Edge
         ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
         ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
@@ -1164,12 +1209,37 @@ class History(Module):
         ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Shortcuts"),
         ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Top Sites"),
         ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Web Data"),
-        # Firefox
+        # Edge - RHEL/Ubuntu - DNF/apt
+        ("glob", ".config/microsoft-edge/*/Bookmarks", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Favicons", from_user_home),
+        ("glob", ".config/microsoft-edge/*/History", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Login Data", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Login Data For Account", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Shortcuts", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Top Sites", from_user_home),
+        ("glob", ".config/microsoft-edge/*/Web Data", from_user_home),
+        # Edge - RHEL/Ubuntu - Flatpak
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Bookmarks", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Favicons", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/History", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data For Account", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Shortcuts", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Top Sites", from_user_home),
+        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Web Data", from_user_home),
+        # Firefox - Windows
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "Application Data/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
+        # Firefox - macOS
         ("glob", "/Users/*/Library/Application Support/Firefox/Profiles/*/*.sqlite*"),
-        # Safari
+        # Firefox - RHEL/Ubuntu - Flatpak
+        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite", from_user_home),
+        # Firefox - RHEL/Ubuntu - DNF/apt
+        ("glob", ".mozilla/firefox/*/*.sqlite", from_user_home),
+        # Firefox - RHEL/Ubuntu - snap
+        ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite", from_user_home),
+        # Safari - macOS
         ("glob", "/Users/*/Library/Safari/Bookmarks.plist"),
         ("glob", "/Users/*/Library/Safari/Downloads.plist"),
         ("glob", "/Users/*/Library/Safari/Extensions/Extensions.plist"),
