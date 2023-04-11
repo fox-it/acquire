@@ -313,11 +313,10 @@ class NTFS(Module):
 
     @classmethod
     def collect_usnjrnl(cls, collector: Collector, fs, name: str) -> None:
-        usnjrnl_path = fs.path("$Extend/$Usnjrnl")
-
         try:
+            usnjrnl_path = fs.path("$Extend/$Usnjrnl:$J")
             entry = usnjrnl_path.get()
-            journal = entry.entry.open("$J")
+            journal = entry.open()
 
             i = 0
             while journal.runlist[i][0] is None:
@@ -344,10 +343,10 @@ class NTFS(Module):
 
     @classmethod
     def collect_ntfs_secure(cls, collector: Collector, fs, name: str) -> None:
-        secure_path = fs.path("$Secure")
         try:
+            secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
-            sds = entry.entry.open("$SDS")
+            sds = entry.open()
             collector.output.write(
                 f"{collector.base}/{name}/$Secure:$SDS",
                 sds,
