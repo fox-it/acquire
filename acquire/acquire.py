@@ -261,17 +261,15 @@ class Sys(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
-        if not Path("/sys").exists():
+        if not str(target.path) == "local":
+            log.error("Not running on a live system, skipping collection of /sys")
+            return
+
+        if not target.fs.path("/sys").exists():
             log.error("/sys is unavailable! Skipping...")
             return
 
         spec = [("dir", "/sys")]
-
-        sysfs = dir.DirectoryFilesystem(Path("/sys"))
-
-        target.filesystems.add(sysfs)
-        target.fs.mount("/sys", sysfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -283,16 +281,15 @@ class Proc(Module):
 
     @classmethod
     def _run(cls, target: Target, collector: Collector):
-        if not Path("/proc").exists():
+        if not str(target.path) == "local":
+            log.error("Not running on a live system, skipping collection of /proc")
+            return
+
+        if not target.fs.path("/proc").exists():
             log.error("/proc is unavailable! Skipping...")
             return
 
         spec = [("dir", "/proc")]
-        procfs = dir.DirectoryFilesystem(Path("/proc"))
-
-        target.filesystems.add(procfs)
-        target.fs.mount("/proc", procfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -1960,6 +1957,19 @@ def main():
             parser.exit(1)
         log.exception("Failed to load target")
         raise
+
+    if target_path == "local":
+        proc_path = Path("/proc")
+        if proc_path.exists():
+            procfs = dir.DirectoryFilesystem(proc_path)
+            target.filesystems.add(procfs)
+            target.fs.mount("/proc", procfs)
+
+        sys_path = Path("/sys")
+        if sys_path.exists():
+            sysfs = dir.DirectoryFilesystem(sys_path)
+            target.filesystems.add(sysfs)
+            target.fs.mount("/sys", sysfs)
 
     if target.os == "esxi":
         # Loader found that we are running on an esxi host

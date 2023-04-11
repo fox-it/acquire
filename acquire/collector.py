@@ -189,11 +189,27 @@ class Collector:
 
         self.output.init(self.target)
 
+        self.symlink_skip_list = self._create_symlink_skip_list()
+
     def __enter__(self) -> Collector:
         return self
 
     def __exit__(self, *args, **kwargs) -> None:
         self.close()
+
+    def _create_symlink_skip_list(self):
+        skip_list = set()
+
+        # Never collect the files pointed to by /proc/self/fd/* as they point
+        # to the fd's opened by acquire, amongst which are the log and
+        # collection tar file. Collecting the latter would result in a "self"
+        # collect.
+        proc_self = self.target.fs.path("/proc/self/fd")
+        if proc_self.exists():
+            proc_self = proc_self.resolve()
+            skip_list.add(str(proc_self))
+
+        return skip_list
 
     def bind(self, module: Type) -> None:
         self.bound_module_name = module.__name__
@@ -414,10 +430,13 @@ class Collector:
             self.collect_symlink(path, module_name=module_name)
 
             if follow:
-                # Follow the symlink, call ourself again with the resolved path
-                self.collect_path(
-                    path.resolve(), seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
-                )
+                # Follow the symlink, except if its parent is present in the skip list. Call ourself
+                # again with the resolved path.
+                if str(path.parent.resolve()) not in self.symlink_skip_list:
+                    path = path.resolve()
+                    self.collect_path(
+                        path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
+                    )
         elif is_dir:
             self.collect_dir(path, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile)
         elif is_file:

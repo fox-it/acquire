@@ -46,7 +46,11 @@ def mock_fs(mock_file) -> VirtualFilesystem:
     fs = VirtualFilesystem(case_sensitive=False)
     fs.makedirs("/foo/bar")
     fs.map_file_entry("/foo/bar/some-file", VirtualFile(fs, "some-file", mock_file))
-    fs.map_file_entry("/foo/bar/some-symlink", VirtualSymlink(fs, "some-symlink", "/foo/bar/some_file"))
+    fs.map_file_entry("/foo/bar/some-symlink", VirtualSymlink(fs, "some-symlink", "/foo/bar/some-file"))
+
+    fs.makedirs("/proc/1337/fd")
+    fs.map_file_entry("/proc/self", VirtualSymlink(fs, "self", "/proc/1337"))
+    fs.map_file_entry("/proc/1337/fd/6", VirtualSymlink(fs, "6", "/foo/bar/some-file"))
     return fs
 
 
@@ -61,11 +65,16 @@ def mock_target(mock_fs) -> Target:
 @pytest.fixture
 def mock_collector(mock_target) -> Collector:
     collector = Collector(mock_target, Mock())
+    collector.symlink_skip_list = {"/proc/1337/fd"}
     return collector
 
 
 MOCK_SEEN_PATHS = set()
 MOCK_MODULE_NAME = "DUMMY"
+
+
+def test_collector_collector__create_symlink_skip_list(mock_collector) -> None:
+    assert "/proc/1337/fd" in mock_collector.symlink_skip_list
 
 
 def test_collector_collect_path_no_module_name(mock_collector) -> None:
@@ -117,13 +126,35 @@ def test_collector_collect_path_symlink(mock_collector) -> None:
 
 def test_collector_collect_path_symlink_follow(mock_collector) -> None:
     with patch.object(mock_collector, "collect_symlink", autospec=True):
-        mock_collector.collect_path(
-            "/foo/bar/some-symlink",
-            follow=True,
-            seen_paths=MOCK_SEEN_PATHS,
-            module_name=MOCK_MODULE_NAME,
-        )
-        mock_collector.collect_symlink.assert_called()
+        with patch.object(mock_collector, "collect_file", autospec=True):
+            mock_collector.collect_path(
+                "/foo/bar/some-symlink",
+                follow=True,
+                seen_paths=MOCK_SEEN_PATHS,
+                module_name=MOCK_MODULE_NAME,
+            )
+            mock_collector.collect_symlink.assert_called()
+            mock_collector.collect_file.assert_called()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/proc/self/fd/6",
+        "/proc/1337/fd/6",
+    ],
+)
+def test_collector_collect_path_symlink_skip_list(mock_collector, path) -> None:
+    with patch.object(mock_collector, "collect_symlink", autospec=True):
+        with patch.object(mock_collector, "collect_file", autospec=True):
+            mock_collector.collect_path(
+                path,
+                follow=True,
+                seen_paths=MOCK_SEEN_PATHS,
+                module_name=MOCK_MODULE_NAME,
+            )
+            mock_collector.collect_symlink.assert_called()
+            mock_collector.collect_file.assert_not_called()
 
 
 def test_collector_collect_path_non_existing_file(mock_collector) -> None:
