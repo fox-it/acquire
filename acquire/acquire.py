@@ -1620,6 +1620,19 @@ def print_volumes_overview(target):
     log.info("")
 
 
+def print_acquire_warning(target: Target) -> None:
+    if target.os != "windows":
+        log.warning("========================================== WARNING ==========================================")
+        log.warning("")
+        log.warning(
+            "The support for operating system '%s' is experimental. Some artifacts may not yet be included and some ",
+            target.os,
+        )
+        log.warning("features may not work as expected. Please notify upstream for any missing artifacts or features.")
+        log.warning("")
+        log.warning("========================================== WARNING ==========================================")
+
+
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -1663,6 +1676,8 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     # Prepare targets if necessary
     if target.os == "windows":
         mount_all_ntfs_filesystems(target)
+
+    print_acquire_warning(target)
 
     modules_selected = {}
     modules_successful = []
