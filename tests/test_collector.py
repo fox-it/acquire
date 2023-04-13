@@ -9,7 +9,7 @@ from dissect.target.exceptions import (
     NotASymlinkError,
     SymlinkRecursionError,
 )
-from dissect.target.filesystem import VirtualFile, VirtualFilesystem, VirtualSymlink
+from dissect.target.filesystem import VirtualFilesystem
 
 from acquire.collector import Collector
 
@@ -34,28 +34,6 @@ def test_collector() -> None:
         collector.collect_dir("D:", module_name="test")
 
         assert not mock_log.info.call_args.args[0] == "- Collecting file %s: Skipped (DEDUP)"
-
-
-@pytest.fixture
-def mock_file() -> Mock:
-    return Mock()
-
-
-@pytest.fixture
-def mock_fs(mock_file) -> VirtualFilesystem:
-    fs = VirtualFilesystem(case_sensitive=False)
-    fs.makedirs("/foo/bar")
-    fs.map_file_entry("/foo/bar/some-file", VirtualFile(fs, "some-file", mock_file))
-    fs.map_file_entry("/foo/bar/some-symlink", VirtualSymlink(fs, "some-symlink", "/foo/bar/some_file"))
-    return fs
-
-
-@pytest.fixture
-def mock_target(mock_fs) -> Target:
-    target = Target()
-    target.fs.mount("/", mock_fs)
-    target.filesystems.add(mock_fs)
-    return target
 
 
 @pytest.fixture
@@ -106,24 +84,74 @@ def test_collector_collect_path_file(mock_collector) -> None:
 
 def test_collector_collect_path_symlink(mock_collector) -> None:
     with patch.object(mock_collector, "collect_symlink", autospec=True):
-        mock_collector.collect_path(
-            "/foo/bar/some-symlink",
-            follow=False,
-            seen_paths=MOCK_SEEN_PATHS,
-            module_name=MOCK_MODULE_NAME,
-        )
-        mock_collector.collect_symlink.assert_called()
+        with patch.object(mock_collector, "collect_file", autospec=True):
+            mock_collector.collect_path(
+                "/foo/bar/some-symlink",
+                follow=False,
+                seen_paths=MOCK_SEEN_PATHS,
+                module_name=MOCK_MODULE_NAME,
+            )
+            mock_collector.collect_symlink.assert_called()
+            mock_collector.collect_file.assert_not_called()
 
 
 def test_collector_collect_path_symlink_follow(mock_collector) -> None:
     with patch.object(mock_collector, "collect_symlink", autospec=True):
-        mock_collector.collect_path(
+        with patch.object(mock_collector, "collect_file", autospec=True):
+            mock_collector.collect_path(
+                "/foo/bar/some-symlink",
+                follow=True,
+                seen_paths=MOCK_SEEN_PATHS,
+                module_name=MOCK_MODULE_NAME,
+            )
+            mock_collector.collect_symlink.assert_called()
+            mock_collector.collect_file.assert_called()
+
+
+@pytest.mark.parametrize(
+    "path, symlink_called, file_called",
+    [
+        (
+            "/foo/bar/own-file",
+            False,
+            False,
+        ),
+        (
+            "/foo/own-symlink",
+            True,
+            False,
+        ),
+        (
+            "/foo/bar/some-file",
+            False,
+            True,
+        ),
+        (
             "/foo/bar/some-symlink",
-            follow=True,
-            seen_paths=MOCK_SEEN_PATHS,
-            module_name=MOCK_MODULE_NAME,
-        )
-        mock_collector.collect_symlink.assert_called()
+            True,
+            True,
+        ),
+    ],
+)
+def test_collector_collect_path_skip_list(mock_collector, path, symlink_called, file_called) -> None:
+    with patch.object(mock_collector, "skip_list", new={"/foo/bar/own-file"}):
+        with patch.object(mock_collector, "collect_symlink", autospec=True):
+            with patch.object(mock_collector, "collect_file", autospec=True):
+                mock_collector.collect_path(
+                    path,
+                    follow=True,
+                    seen_paths=MOCK_SEEN_PATHS,
+                    module_name=MOCK_MODULE_NAME,
+                )
+                if symlink_called:
+                    mock_collector.collect_symlink.assert_called()
+                else:
+                    mock_collector.collect_symlink.assert_not_called()
+
+                if file_called:
+                    mock_collector.collect_file.assert_called()
+                else:
+                    mock_collector.collect_file.assert_not_called()
 
 
 def test_collector_collect_glob(mock_collector) -> None:
@@ -132,7 +160,7 @@ def test_collector_collect_glob(mock_collector) -> None:
             "/foo/bar/*",
             module_name=MOCK_MODULE_NAME,
         )
-        mock_collector.collect_file.assert_called_once()
+        assert len(mock_collector.collect_file.mock_calls) == 3
         assert mock_collector.collect_file.call_args.kwargs.get("module_name", None) == MOCK_MODULE_NAME
 
 
