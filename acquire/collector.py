@@ -358,7 +358,7 @@ class Collector:
             glob_is_empty = True
             for entry in self.target.fs.path("/").glob(pattern.lstrip("/")):
                 glob_is_empty = False
-                self.collect_path(entry)
+                self.collect_path(entry, module_name=module_name)
         except Exception:
             log.error("- Failed to collect glob %s", pattern, exc_info=True)
             self.report.add_glob_failed(module_name, pattern)
