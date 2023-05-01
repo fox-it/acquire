@@ -126,6 +126,16 @@ def test_collector_collect_path_symlink_follow(mock_collector) -> None:
         mock_collector.collect_symlink.assert_called()
 
 
+def test_collector_collect_glob(mock_collector) -> None:
+    with patch.object(mock_collector, "collect_file", autospec=True):
+        mock_collector.collect_glob(
+            "/foo/bar/*",
+            module_name=MOCK_MODULE_NAME,
+        )
+        mock_collector.collect_file.assert_called_once()
+        assert mock_collector.collect_file.call_args.kwargs.get("module_name", None) == MOCK_MODULE_NAME
+
+
 def test_collector_collect_path_non_existing_file(mock_collector) -> None:
     with patch("acquire.collector.log", autospec=True) as mock_log:
         with patch.object(mock_collector, "report", autospec=True) as mock_report:
