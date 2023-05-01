@@ -132,7 +132,8 @@ def test_collector_collect_glob(mock_collector) -> None:
             "/foo/bar/*",
             module_name=MOCK_MODULE_NAME,
         )
-        mock_collector.collect_file.assert_called()
+        mock_collector.collect_file.assert_called_once()
+        assert mock_collector.collect_file.call_args.kwargs.get("module_name", None) == MOCK_MODULE_NAME
 
 
 def test_collector_collect_path_non_existing_file(mock_collector) -> None:
