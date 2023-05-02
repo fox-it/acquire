@@ -4,6 +4,8 @@ import datetime
 import getpass
 import json
 import os
+import pathlib
+import re
 import sys
 import textwrap
 import traceback
@@ -13,6 +15,7 @@ from pathlib import Path
 from stat import S_IRGRP, S_IROTH, S_IRUSR
 from typing import Any, Optional
 
+from dissect.target import Target
 from dissect.util.stream import AlignedStream
 
 from acquire.outputs import OUTPUTS
@@ -392,3 +395,22 @@ def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional
 def persist_execution_report(path: Path, report_data: dict) -> Path:
     with open(path, "w") as f:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
+
+
+SYSVOL_SUBST = re.compile(r"^(/\?\?/)?[cC]:")
+
+
+def normalize_path(target: Target, path: pathlib.Path, resolve: bool = False) -> str:
+    if resolve:
+        path = path.resolve()
+
+    path = path.as_posix()
+
+    if not target.fs.case_sensitive:
+        path = path.lower()
+
+    if target.os == "windows":
+        # As dissect.target always maps c: onto sysvol, we can do this substitution here.
+        path = SYSVOL_SUBST.sub("sysvol", path)
+
+    return path

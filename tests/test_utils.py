@@ -3,12 +3,14 @@ import pathlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dissect.target import Target
 
 from acquire.acquire import MODULES, PROFILES
 from acquire.utils import (
     check_and_set_acquire_args,
     check_and_set_log_args,
     create_argument_parser,
+    normalize_path,
 )
 
 
@@ -290,3 +292,91 @@ def test_check_and_set_acquire_args_cagent():
 
     assert args.cagent_key == cagent_key
     assert args.cagent_certificate == cagent_certificate
+
+
+@pytest.mark.parametrize(
+    "path, resolve, norm_path, case_sensitive, os",
+    [
+        (
+            pathlib.Path("/foo/bar"),
+            False,
+            "/foo/bar",
+            True,
+            "dummy",
+        ),
+        (
+            pathlib.Path("/foo/BAR"),
+            False,
+            "/foo/bar",
+            False,
+            "dummy",
+        ),
+        (
+            pathlib.Path("/foo/BAR"),
+            False,
+            "/foo/BAR",
+            True,
+            "dummy",
+        ),
+        (
+            pathlib.Path("/foo/../bar"),
+            False,
+            "/foo/../bar",
+            True,
+            "dummy",
+        ),
+        (
+            pathlib.Path("/foo/../foo/bar"),
+            True,
+            "/foo/bar",
+            True,
+            "dummy",
+        ),
+        (
+            pathlib.PureWindowsPath("c:\\foo\\bar"),
+            False,
+            "sysvol/foo/bar",
+            False,
+            "windows",
+        ),
+        (
+            pathlib.PureWindowsPath("C:\\foo\\bar"),
+            False,
+            "sysvol/foo/bar",
+            False,
+            "windows",
+        ),
+        (
+            pathlib.PureWindowsPath("\\??\\C:\\foo\\bar"),
+            False,
+            "sysvol/foo/bar",
+            False,
+            "windows",
+        ),
+        (
+            pathlib.PureWindowsPath("\\??\\c:\\foo\\bar"),
+            False,
+            "sysvol/foo/bar",
+            False,
+            "windows",
+        ),
+        (
+            pathlib.PureWindowsPath("D:\\foo\\bar"),
+            False,
+            "d:/foo/bar",
+            False,
+            "windows",
+        ),
+    ],
+)
+def test_utils_normalize_path(
+    mock_target: Target,
+    path: pathlib.Path,
+    resolve: bool,
+    norm_path: str,
+    case_sensitive: bool,
+    os: str,
+) -> None:
+    with patch.object(mock_target, "os", new=os):
+        with patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
+            assert normalize_path(mock_target, path, resolve=resolve) == norm_path

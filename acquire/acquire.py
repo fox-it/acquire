@@ -48,6 +48,7 @@ from acquire.utils import (
     get_utc_now,
     get_utc_now_str,
     is_user_admin,
+    normalize_path,
     parse_acquire_args,
     persist_execution_report,
 )
@@ -1638,13 +1639,17 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
         log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
+        # This will also rename the log file on disk, which was opened in main(), if the name is different
         reconfigure_log_file(log, log_file, delay=True)
     else:
         log_file = args.log_path
 
     files = []
+    skip_list = set()
     if log_file:
         files.append(log_file)
+        if target.path.name == "local":
+            skip_list.add(normalize_path(target, log_file, resolve=True))
 
     print_disks_overview(target)
     print_volumes_overview(target)
@@ -1723,14 +1728,19 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     # Prepare log file and output file names
     if log_file_handler and args.log_to_dir:
         log_file = format_output_name(target.name, output_ts, "log")
+        # This will also rename the log file on disk, which was opened and written previously.
         log_file_handler.set_filename(log_file)
-        log.info("Logging to file %s", Path(log_file_handler.baseFilename).resolve())
+        log_path = Path(log_file_handler.baseFilename).resolve()
+        log.info("Logging to file %s", log_path)
         files = [log_file_handler.baseFilename]
+        if target.path.name == "local":
+            skip_list = {normalize_path(target, log_path, resolve=True)}
 
     output_path = args.output
     if output_path.is_dir():
         output_dir = format_output_name(target.name, output_ts)
-        output_path = output_path.joinpath(output_dir).resolve()
+        output_path = output_path.joinpath(output_dir)
+    output_path = output_path.resolve()
 
     output = OUTPUTS[args.output_type](
         output_path,
@@ -1739,15 +1749,19 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         public_key=args.public_key,
     )
     files.append(output.path)
+    if target.path.name == "local":
+        skip_list.add(normalize_path(target, output.path, resolve=True))
 
     log.info("Writing output to %s", output.path)
+    if skip_list:
+        log.info("Skipping own files: %s", ", ".join(skip_list))
     log.info("")
 
     dir_base = "fs"
     if target.os != "windows":
         dir_base = "fs/$rootfs$"
 
-    with Collector(target, output, base=dir_base) as collector:
+    with Collector(target, output, base=dir_base, skip_list=skip_list) as collector:
         # Acquire specified files
         if args.file or args.directory or args.glob:
             log.info("*** Acquiring specified paths")

@@ -20,7 +20,7 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.utils import StrEnum, get_formatted_exception
+from acquire.utils import StrEnum, get_formatted_exception, normalize_path
 
 if TYPE_CHECKING:
     from acquire.outputs.base import Output
@@ -179,10 +179,11 @@ class Collector:
     METADATA_BASE = "$metadata$"
     COMMAND_OUTPUT_BASE = f"{METADATA_BASE}/command-output"
 
-    def __init__(self, target: Target, output: Output, base="fs"):
+    def __init__(self, target: Target, output: Output, base: str = "fs", skip_list: Optional[set] = None):
         self.target = target
         self.output = output
         self.base = base
+        self.skip_list = skip_list or set()
 
         self.report = CollectionReport()
         self.bound_module_name = None
@@ -382,6 +383,11 @@ class Collector:
 
         if not isinstance(path, fsutil.TargetPath):
             path = self.target.fs.path(path)
+
+        if self.skip_list and normalize_path(self.target, path) in self.skip_list:
+            self.report.add_path_failed(module_name, path)
+            log.error("- Skipping collection of %s, path is on the skip list", path)
+            return
 
         try:
             # If a path does not exist, is_dir(), is_file() and is_symlink() will return False (and not raise an
