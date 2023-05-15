@@ -6,6 +6,8 @@ dist/
 *.pyc
 __pycache__/
 .pytest_cache/
-.tox/
 
 acquire/version.py
+tests/docs/api
+tests/docs/build
+.tox/
