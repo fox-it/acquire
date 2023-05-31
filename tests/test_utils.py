@@ -1,5 +1,6 @@
 import argparse
 import pathlib
+import platform
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -369,6 +370,7 @@ def test_check_and_set_acquire_args_cagent():
         ),
     ],
 )
+@pytest.mark.skipif(platform.system() == "Windows", reason="Compares Posix Paths. Needs to be fixed.")
 def test_utils_normalize_path(
     mock_target: Target,
     path: pathlib.Path,
