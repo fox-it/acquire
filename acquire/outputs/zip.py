@@ -88,7 +88,7 @@ class ZipOutput(Output):
                 dt = datetime.fromtimestamp(stat.st_mtime)
                 info.date_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
-        self.archive.writestr(info, fh)
+        self.archive.writestr(info, fh, compress_type=pyzipper.ZIP_LZMA)
 
     def close(self) -> None:
         """Closes the archive file."""
