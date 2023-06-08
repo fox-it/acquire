@@ -32,10 +32,15 @@ class ZipOutput(Output):
         self._fh = None
         self.path = path.with_suffix(path.suffix + ext)
 
-        if encrypt:
-            self.archive = pyzipper.AESZipFile(self.path, 'w', compression=pyzipper.ZIP_LZMA)
+        if compress:
+            self.compression = pyzipper.ZIP_LZMA
         else:
-            self.archive = pyzipper.ZipFile(self.path, 'w', compression=pyzipper.ZIP_LZMA)
+            self.compression = pyzipper.ZIP_STORED
+
+        if encrypt:
+            self.archive = pyzipper.AESZipFile(self.path, 'w', compression=self.compression)
+        else:
+            self.archive = pyzipper.ZipFile(self.path, 'w', compression=self.compression)
 
     def write(
         self,
@@ -88,7 +93,7 @@ class ZipOutput(Output):
                 dt = datetime.fromtimestamp(stat.st_mtime)
                 info.date_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
-        self.archive.writestr(info, fh, compress_type=pyzipper.ZIP_LZMA)
+        self.archive.writestr(info, fh, compress_type=self.compression)
 
     def close(self) -> None:
         """Closes the archive file."""
