@@ -343,19 +343,16 @@ def main():
     if not progress:
         log.info("`rich` is not installed, progress will not be shown")
 
-    if args.output and len(args.files) > 1:
+    if args.output and len(args.files) > 1 and not args.files[0].is_file():
         parser.exit("--output is only allowed when decrypting a single file")
 
-    if not args.output:
-        for path in args.files:
-            if path.suffix != ".enc":
-                parser.exit(f"File doesn't have .enc extension: {path}")
+    files = [] if not args.output else find_enc_files(args.files)
 
     if args.output:
         outputs = [args.output.resolve()]
     else:
         # Strip .enc extension
-        outputs = [path.with_suffix("") for path in args.files]
+        outputs = [path.with_suffix("") for path in files]
 
     if not args.key_file and not args.key_server:
         parser.exit("Need either --key-file or --key-server")
@@ -378,7 +375,7 @@ def main():
             status_queue = mp.Queue()
             tasks = []
 
-            for in_path, out_path in zip(args.files, outputs):
+            for in_path, out_path in zip(files, outputs):
                 task_id = (
                     progress.add_task("decrypt", start=False, visible=False, filename=in_path.name)
                     if progress
@@ -422,6 +419,18 @@ def main():
                     stop_event.set()
                     executor.shutdown(wait=True, cancel_futures=True)
                     break
+
+
+def find_enc_files(files: list[Path]):
+    output_files = []
+    for path in files:
+        if path.is_file() and path.suffix == ".enc":
+            output_files.append(path)
+        elif path.is_dir():
+            output_files.extend(path.rglob("*.enc"))
+        else:
+            log.info(f"File {path!r} does not have the .enc extension. skipping.")
+    return output_files
 
 
 if __name__ == "__main__":
