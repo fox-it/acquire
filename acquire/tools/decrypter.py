@@ -343,13 +343,14 @@ def main():
     if not progress:
         log.info("`rich` is not installed, progress will not be shown")
 
-    if args.output and len(args.files) > 1 and not args.files[0].is_file():
-        parser.exit("--output is only allowed when decrypting a single file")
+    if args.output and args.output.is_file() and len(args.files) > 1:
+        parser.exit("--output should be a directory when decrypting multiple files.")
 
-    files = [] if not args.output else find_enc_files(args.files)
+    files: list[Path] = find_enc_files(args.files)
 
     if args.output:
-        outputs = [args.output.resolve()]
+        resolv_path = args.output.resolve()
+        outputs = [resolv_path / path.stem for path in files] if args.output.is_dir() else [resolv_path]
     else:
         # Strip .enc extension
         outputs = [path.with_suffix("") for path in files]
@@ -422,15 +423,15 @@ def main():
 
 
 def find_enc_files(files: list[Path]):
-    output_files = []
+    encrypted_files = []
     for path in files:
         if path.is_file() and path.suffix == ".enc":
-            output_files.append(path)
+            encrypted_files.append(path)
         elif path.is_dir():
-            output_files.extend(path.rglob("*.enc"))
+            encrypted_files.extend(path.rglob("*.enc"))
         else:
             log.info(f"File {path!r} does not have the .enc extension. skipping.")
-    return output_files
+    return encrypted_files
 
 
 if __name__ == "__main__":
