@@ -435,9 +435,12 @@ def show_duplicates(output_directory: Path, files: list[Path]) -> None:
 
     # Find all duplicates
     duplicate_generator = (file_paths for file_paths in input_files.values() if len(file_paths) > 1)
-    duplicates = textwrap.indent(
-        "\n".join(str(file) for file in itertools.chain.from_iterable(duplicate_generator)),
-        prefix="  - ",
+    duplicates = "\n\n".join(
+        textwrap.indent(
+            "\n".join(str(file) for file in file_paths),
+            prefix="  - ",
+        )
+        for file_paths in duplicate_generator
     )
     log.warning(
         "Two or more encrypted files have the same name. "
