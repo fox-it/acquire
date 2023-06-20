@@ -346,7 +346,7 @@ def main():
     if args.output and args.output.is_file() and len(args.files) > 1:
         parser.exit("--output should be a directory when decrypting multiple files.")
 
-    files: list[Path] = find_enc_files(args.files)
+    files = find_enc_files(args.files)
 
     if args.output:
         resolv_path = args.output.resolve()
