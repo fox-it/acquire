@@ -2,13 +2,15 @@ import argparse
 import base64
 import contextlib
 import io
+import itertools
 import json
 import logging
 import multiprocessing
 import os
 import signal
 import sys
-from collections import deque
+import textwrap
+from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -355,6 +357,9 @@ def main():
         # Strip .enc extension
         outputs = [path.with_suffix("") for path in files]
 
+    if len(set(outputs)) != len(outputs):
+        show_duplicates(args.output, files)
+
     if not args.key_file and not args.key_server:
         parser.exit("Need either --key-file or --key-server")
 
@@ -422,7 +427,27 @@ def main():
                     break
 
 
-def find_enc_files(files: list[Path]):
+def show_duplicates(output_directory: Path, files: list[Path]) -> None:
+    # Gather all files that could cause duplicates in `args.output`.
+    input_files = defaultdict(list)
+    for input_file in files:
+        input_files[input_file.name].append(input_file)
+
+    # Find all duplicates
+    duplicate_generator = (file_paths for file_paths in input_files.values() if len(file_paths) > 1)
+    duplicates = textwrap.indent(
+        "\n".join(str(file) for file in itertools.chain.from_iterable(duplicate_generator)),
+        prefix="  - ",
+    )
+    log.warning(
+        "Two or more encrypted files have the same name. "
+        f"This will skip decrypting the file if it already exists in '{output_directory}'\n"
+        f"The files with the same names are:\n"
+        f"{duplicates}"
+    )
+
+
+def find_enc_files(files: list[Path]) -> list[Path]:
     encrypted_files = []
     for path in files:
         if path.is_file() and path.suffix == ".enc":
