@@ -2,7 +2,6 @@ import argparse
 import base64
 import contextlib
 import io
-import itertools
 import json
 import logging
 import multiprocessing
