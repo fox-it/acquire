@@ -1328,17 +1328,17 @@ class Home(Module):
         ("dir", "/root/.config"),
         ("dir", "/root/.ssh"),
         ("glob", "/home/*/.*[akz]sh*"),
-        ("glob", "/home/*/.config"),
+        ("glob", "/home/*/.config/*"),
         ("glob", "/home/*/*/.*[akz]sh*"),
-        ("glob", "/home/*/*/.config"),
-        ("glob", "/home/*/.ssh"),
+        ("glob", "/home/*/*/.config/*"),
+        ("glob", "/home/*/.ssh/*"),
         # cPanel
         # https://forums.cpanel.net/threads/cpanel-control-panel-last-login-clarification.579221/
         ("glob", "/home/*/.lastlogin"),
         # OS-X home (aka /Users)
         ("glob", "/Users/*/.*[akz]sh*"),
-        ("glob", "/Users/*/.ssh"),
-        ("glob", "/Users/*/.config"),
+        ("glob", "/Users/*/.ssh/*"),
+        ("glob", "/Users/*/.config/*"),
         ("glob", "/Users/*/.bash_sessions/*"),
         ("glob", "/Users/*/Library/LaunchAgents/*"),
         ("glob", "/Users/*/Library/Logs/*"),
