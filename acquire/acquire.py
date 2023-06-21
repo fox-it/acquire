@@ -1329,9 +1329,10 @@ class Home(Module):
         ("dir", "/root/.ssh"),
         ("glob", "/home/*/.*[akz]sh*"),
         ("glob", "/home/*/.config/*"),
+        ("glob", "/home/*/.ssh/*"),
         ("glob", "/home/*/*/.*[akz]sh*"),
         ("glob", "/home/*/*/.config/*"),
-        ("glob", "/home/*/.ssh/*"),
+        ("glob", "/home/*/*/.ssh/*"),
         # cPanel
         # https://forums.cpanel.net/threads/cpanel-control-panel-last-login-clarification.579221/
         ("glob", "/home/*/.lastlogin"),
