@@ -1275,6 +1275,7 @@ class RemoteAccess(Module):
         ("dir", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
     ]
 
+
 @register_module("--webhosting")
 class WebHosting(Module):
     DESC = "Web hosting software log files"
@@ -1282,6 +1283,7 @@ class WebHosting(Module):
         # cPanel
         ("dir", "/usr/local/cpanel/logs"),
     ]
+
 
 @register_module("--wer")
 class WER(Module):
