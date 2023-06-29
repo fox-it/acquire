@@ -560,6 +560,8 @@ class Tasks(Module):
         ("dir", "sysvol/windows/tasks"),
         ("dir", "sysvol/windows/system32/tasks"),
         ("dir", "sysvol/windows/syswow64/tasks"),
+        ("dir", "sysvol/windows/sysvol/domain/policies"),
+        ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
     ]
 
 
@@ -908,6 +910,8 @@ class AV(Module):
         # TotalAV
         ("glob", "sysvol/Program Files*/TotalAV/logs"),
         ("dir", "sysvol/ProgramData/TotalAV/logs"),
+        # Trendmicro
+        ("glob", "sysvol/Program Files*/Trend Micro"),
         # VIPRE
         ("dir", "sysvol/ProgramData/VIPRE Business Agent/Logs"),
         ("dir", "AppData/Roaming/VIPRE Business", from_user_home),
