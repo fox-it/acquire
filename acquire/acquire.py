@@ -1332,22 +1332,20 @@ class Boot(Module):
 
 @register_module("--home")
 class Home(Module):
+    # TODO: Use from_user_home if OS X is supported
     SPEC = [
         ("glob", "/root/.*[akz]sh*"),
         ("dir", "/root/.config"),
         ("dir", "/root/.ssh"),
         ("glob", "/home/*/.*[akz]sh*"),
         ("glob", "/home/*/.config/*"),
-        ("glob", "/home/*/.ssh/*"),
         ("glob", "/home/*/*/.*[akz]sh*"),
         ("glob", "/home/*/*/.config/*"),
-        ("glob", "/home/*/*/.ssh/*"),
         # cPanel
         # https://forums.cpanel.net/threads/cpanel-control-panel-last-login-clarification.579221/
         ("glob", "/home/*/.lastlogin"),
         # OS-X home (aka /Users)
         ("glob", "/Users/*/.*[akz]sh*"),
-        ("glob", "/Users/*/.ssh/*"),
         ("glob", "/Users/*/.config/*"),
         ("glob", "/Users/*/.bash_sessions/*"),
         ("glob", "/Users/*/Library/LaunchAgents/*"),
@@ -1355,6 +1353,21 @@ class Home(Module):
         ("glob", "/Users/*/Preferences/*"),
         ("glob", "/Users/*/Library/Preferences/*"),
     ]
+
+    @classmethod
+    def _run(cls, target, collector):
+        # Skip SSH private keys
+        patterns = [
+            "/root/.ssh/*.pub",
+            "/root/.ssh/authorized_keys*",
+            "/home/*/.ssh/*.pub",
+            "/home/*/.ssh/authorized_keys*",
+            "/Users/*/.ssh/*.pub",
+            "/Users/*/.ssh/authorized_keys*",
+        ]
+        for pattern in patterns:
+            for path in target.fs.glob(pattern):
+                collector.collect_file(path, outpath=path)
 
 
 @register_module("--var")
