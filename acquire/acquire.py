@@ -1336,7 +1336,6 @@ class Home(Module):
     SPEC = [
         ("glob", "/root/.*[akz]sh*"),
         ("dir", "/root/.config"),
-        ("dir", "/root/.ssh"),
         ("glob", "/home/*/.*[akz]sh*"),
         ("glob", "/home/*/.config/*"),
         ("glob", "/home/*/*/.*[akz]sh*"),
