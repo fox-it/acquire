@@ -3,6 +3,7 @@ import enum
 import functools
 import io
 import itertools
+import json
 import logging
 import os
 import shutil
@@ -19,6 +20,7 @@ from dissect.target import Target, exceptions
 from dissect.target.filesystems import dir, ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
+from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webservers import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
@@ -1640,7 +1642,35 @@ def print_acquire_warning(target: Target) -> None:
         log.warning("========================================== WARNING ==========================================")
 
 
+def modargs2json(args: argparse.Namespace) -> dict:
+    json_opts = {}
+    for module in MODULES:
+        m = MODULES[module].__cli_args__[0][1]
+        if opt := m.get("dest"):
+            json_opts[opt] = getattr(args, opt)
+    return json_opts
+
+
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
+    files = []
+    if isinstance(target._loader, TargetdLoader):
+        if not len(target.hostname()):
+            log.error("Unable to initialize targetd.")
+            return files
+        json_opts = modargs2json(args)
+        json_opts["profile"] = args.profile
+        json_opts["file"] = args.file
+        json_opts["directory"] = args.directory
+        json_opts["glob"] = args.glob
+        m = {"targetd-meta": "acquire", "args": json_opts}
+        json_str = json.dumps(m)
+        targetd = target._loader.instance.client
+        targetd.send_message(json_str.encode("utf-8"))
+        targetd.sync()
+        for stream in targetd.streams:
+            files.append(stream.out_file)
+        return files
+
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
         log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
@@ -1649,7 +1679,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     else:
         log_file = args.log_path
 
-    files = []
     skip_list = set()
     if log_file:
         files.append(log_file)
