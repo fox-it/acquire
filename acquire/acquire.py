@@ -868,7 +868,7 @@ class AV(Module):
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
         ("dir", "sysvol/ProgramData/F-Secure/Log"),
-        ("dir", "sysvol/Users*/AppData/Local/F-Secure/Log"),
+        ("glob", "sysvol/Users*/AppData/Local/F-Secure/Log"),
         ("dir", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
         # HitmanPro
         ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
@@ -972,7 +972,7 @@ class History(Module):
         ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),
@@ -982,7 +982,7 @@ class History(Module):
             from_user_home,
         ),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),
