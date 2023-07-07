@@ -1885,6 +1885,7 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            History,
             Var,
         ],
         "bsd": [
