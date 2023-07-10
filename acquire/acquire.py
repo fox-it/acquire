@@ -868,7 +868,7 @@ class AV(Module):
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
         ("dir", "sysvol/ProgramData/F-Secure/Log"),
-        ("glob", "sysvol/Users*/AppData/Local/F-Secure/Log"),
+        ("dir", "AppData/Local/F-Secure/Log", from_user_home),
         ("dir", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
         # HitmanPro
         ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
@@ -878,7 +878,7 @@ class AV(Module):
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        ("glob", "sysvol/Users*/AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs"),
+        ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
         ("dir", "sysvol/Users/All Users/Application Data/McAfee/DesktopProtection"),
