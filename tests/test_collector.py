@@ -279,20 +279,11 @@ def test_collector_collect_path_with_exception(mock_target, mock_collector, repo
         assert mock_log.error.call_args.args[0] == log_msg
 
 
-def create_target_with_files(tmp_path: Path, paths: list[str]) -> Path:
-    target = Target("local")
-
-    fs = VirtualFilesystem()
-    target.filesystems.add(fs)
-
+def create_temp_files(tmp_path: Path, paths: list[str]) -> None:
     for path in paths:
         creation_path = tmp_path.joinpath(path)
         creation_path.parent.mkdir(parents=True, exist_ok=True)
         creation_path.touch()
-    fs.map_dir("/", tmp_path)
-    target.fs.mount("/", fs)
-
-    return target
 
 
 def collect_report(
@@ -332,14 +323,17 @@ def collect_report(
 )
 def test_collector_report_succeeded(
     tmp_path: Path,
+    mock_target: Target,
     mock_collector: Collector,
     function_name: str,
     collection_point: str,
     expected_results: int,
     create_paths: list[str],
 ):
-    target = create_target_with_files(tmp_path, create_paths)
-    mock_collector.target = target
+    create_temp_files(tmp_path, create_paths)
+    fs = mock_target.filesystems[0]
+    fs.map_dir("/", tmp_path)
+    mock_target.fs.mount("/", fs)
 
     report = collect_report(mock_collector, function_name, collection_point)
     successful_outputs = list(value for value in report.registry if value.outcome == Outcome.SUCCESS)
