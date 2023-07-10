@@ -878,7 +878,7 @@ class AV(Module):
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        ("dir", "sysvol/Users*/AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs"),
+        ("glob", "sysvol/Users*/AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs"),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
         ("dir", "sysvol/Users/All Users/Application Data/McAfee/DesktopProtection"),
@@ -891,7 +891,7 @@ class AV(Module):
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
-        ("dir", "sysvol/Users*/AppData/Roaming/SUPERAntiSpyware/Logs"),
+        ("dir", "AppData/Roaming/SUPERAntiSpyware/Logs", from_user_home),
         # SecureAge
         ("dir", "sysvol/ProgramData/SecureAge Technology/SecureAge/log"),
         # SentinelOne
