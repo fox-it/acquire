@@ -1,5 +1,6 @@
-import pytest
 from textwrap import indent
+
+import pytest
 
 from acquire.acquire import MODULES
 
