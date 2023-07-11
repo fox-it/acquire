@@ -1332,8 +1332,8 @@ class Boot(Module):
 
 @register_module("--home")
 class Home(Module):
-    # TODO: Use from_user_home if OS X is supported
     SPEC = [
+        # TODO: Use from_user_home if OS X is supported
         ("glob", "/root/.*[akz]sh*"),
         ("dir", "/root/.config"),
         ("glob", "/home/*/.*[akz]sh*"),
@@ -1343,7 +1343,7 @@ class Home(Module):
         # cPanel
         # https://forums.cpanel.net/threads/cpanel-control-panel-last-login-clarification.579221/
         ("glob", "/home/*/.lastlogin"),
-        # OS-X home (aka /Users)
+        # # OS-X home (aka /Users)
         ("glob", "/Users/*/.*[akz]sh*"),
         ("glob", "/Users/*/.config/*"),
         ("glob", "/Users/*/.bash_sessions/*"),
@@ -1353,20 +1353,35 @@ class Home(Module):
         ("glob", "/Users/*/Library/Preferences/*"),
     ]
 
+
+@register_module("--ssh")
+class SSH(Module):
     @classmethod
-    def _run(cls, target, collector):
-        # Skip SSH private keys
-        patterns = [
-            "/root/.ssh/*.pub",
-            "/root/.ssh/authorized_keys*",
-            "/home/*/.ssh/*.pub",
-            "/home/*/.ssh/authorized_keys*",
-            "/Users/*/.ssh/*.pub",
-            "/Users/*/.ssh/authorized_keys*",
-        ]
-        for pattern in patterns:
-            for path in target.fs.glob(pattern):
-                collector.collect_file(path, outpath=path)
+    def _run(cls, target: Target, collector):
+        user_pattern = ".ssh/*"
+
+        # Gather user paths
+        # TODO: Use from_user_home if OS X is supported
+        if target._os.os == "osx":
+            iterator = [f"/Users/*/{user_pattern}"]
+        else:
+            iterator = list(from_user_home(target, user_pattern))
+
+        # Acquire SSH configuration in sshd directories
+        iterator += ["/etc/ssh/*", "sysvol/ProgramData/ssh/*"]
+
+        globbed_path = (path for pattern in iterator for path in target.fs.glob(pattern))
+        for path in globbed_path:
+            if target.fs.path(path).is_dir():
+                collector.collect_dir(path)
+                continue
+
+            with target.fs.path(path).open("rt") as file:
+                if "PRIVATE KEY" in file.readline():
+                    # Detected a private key, skipping.
+                    continue
+
+            collector.collect_file(path, outpath=path)
 
 
 @register_module("--var")
@@ -1905,17 +1920,20 @@ PROFILES = {
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
+            SSH,
         ],
         "linux": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             WebHosting,
         ],
         "bsd": [
             Etc,
             Boot,
+            SSH,
             Home,
             Var,
             BSD,
@@ -1924,6 +1942,7 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
@@ -1931,6 +1950,7 @@ PROFILES = {
             Var,
             OSX,
             History,
+            SSH,
         ],
     },
     "default": {
@@ -1956,17 +1976,20 @@ PROFILES = {
             Misc,
             RemoteAccess,
             ActivitiesCache,
+            SSH,
         ],
         "linux": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
@@ -1974,10 +1997,12 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
             Home,
+            SSH,
             Var,
             OSX,
         ],
@@ -1998,12 +2023,14 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
