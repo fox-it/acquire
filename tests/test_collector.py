@@ -318,7 +318,12 @@ def collect_report(
             0,
             [],
         ),
-        ("file", "collect/this/file", 1, ["collect/this/file"]),
+        (
+            "file",
+            "collect/this/file",
+            1,
+            ["collect/this/file"],
+        ),
     ],
 )
 def test_collector_report_succeeded(
