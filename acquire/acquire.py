@@ -881,7 +881,7 @@ class AV(Module):
         ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
-        ("dir", "sysvol/Users/All Users/Application Data/McAfee/DesktopProtection"),
+        ("dir", "Application Data/McAfee/DesktopProtection", from_user_home),
         ("dir", "sysvol/ProgramData/McAfee/DesktopProtection"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
