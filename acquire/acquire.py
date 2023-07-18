@@ -868,20 +868,20 @@ class AV(Module):
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
         ("dir", "sysvol/ProgramData/F-Secure/Log"),
-        ("dir", "sysvol/Users*/AppData/Local/F-Secure/Log"),
+        ("dir", "AppData/Local/F-Secure/Log", from_user_home),
         ("dir", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
         # HitmanPro
         ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
         ("dir", "sysvol/ProgramData/HitmanPro.Alert/Logs"),
         ("file", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
-        ("glob", "sysvol/ProgramData/HitmanPro/Quarantine"),
+        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        ("dir", "sysvol/Users*/AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs"),
+        ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
-        ("dir", "sysvol/Users/All Users/Application Data/McAfee/DesktopProtection"),
+        ("dir", "Application Data/McAfee/DesktopProtection", from_user_home),
         ("dir", "sysvol/ProgramData/McAfee/DesktopProtection"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
@@ -891,7 +891,7 @@ class AV(Module):
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
-        ("dir", "sysvol/Users*/AppData/Roaming/SUPERAntiSpyware/Logs"),
+        ("dir", "AppData/Roaming/SUPERAntiSpyware/Logs", from_user_home),
         # SecureAge
         ("dir", "sysvol/ProgramData/SecureAge Technology/SecureAge/log"),
         # SentinelOne
@@ -972,7 +972,7 @@ class History(Module):
         ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),
@@ -982,7 +982,7 @@ class History(Module):
             from_user_home,
         ),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),

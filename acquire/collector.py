@@ -114,9 +114,6 @@ class CollectionReport:
     def add_file_missing(self, module: str, missing_path: Path) -> None:
         self._register(module, Outcome.MISSING, ArtifactType.FILE, missing_path)
 
-    def add_glob_collected(self, module: str, pattern: str) -> None:
-        self._register(module, Outcome.SUCCESS, ArtifactType.GLOB, pattern)
-
     def add_glob_failed(self, module: str, failed_pattern: str) -> None:
         exc = get_formatted_exception()
         self._register(module, Outcome.FAILURE, ArtifactType.GLOB, failed_pattern, exc)
@@ -367,7 +364,7 @@ class Collector:
             if glob_is_empty:
                 self.report.add_glob_empty(module_name, pattern)
             else:
-                self.report.add_glob_collected(module_name, pattern)
+                log.info("- Collecting glob %s succeeded", pattern)
 
     def collect_path(
         self,
