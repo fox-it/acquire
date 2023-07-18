@@ -1288,7 +1288,7 @@ class WebHosting(Module):
     SPEC = [
         # cPanel
         ("dir", "/usr/local/cpanel/logs"),
-        ("glob", ".lastlogin", from_user_home),
+        ("file", ".lastlogin", from_user_home),
     ]
 
 
