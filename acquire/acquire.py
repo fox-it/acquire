@@ -1282,6 +1282,16 @@ class RemoteAccess(Module):
     ]
 
 
+@register_module("--webhosting")
+class WebHosting(Module):
+    DESC = "Web hosting software log files"
+    SPEC = [
+        # cPanel
+        ("dir", "/usr/local/cpanel/logs"),
+        ("glob", ".lastlogin", from_user_home),
+    ]
+
+
 @register_module("--wer")
 class WER(Module):
     DESC = "WER (Windows Error Reporting) related files"
@@ -1960,6 +1970,7 @@ PROFILES = {
             History,
             SSH,
             Var,
+            WebHosting,
         ],
         "bsd": [
             Etc,
