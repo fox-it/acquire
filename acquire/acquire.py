@@ -1330,6 +1330,7 @@ class Boot(Module):
 @register_module("--home")
 class Home(Module):
     SPEC = [
+        # TODO: Use from_user_home if supported for osx
         ("glob", "/root/.*[akz]sh*"),
         ("dir", "/root/.config"),
         ("glob", "/home/*/.*[akz]sh*"),
@@ -1338,12 +1339,43 @@ class Home(Module):
         ("glob", "/home/*/*/.config"),
         # OS-X home (aka /Users)
         ("glob", "/Users/*/.*[akz]sh*"),
+        ("glob", "/Users/*/.config"),
         ("glob", "/Users/*/.bash_sessions/*"),
         ("glob", "/Users/*/Library/LaunchAgents/*"),
         ("glob", "/Users/*/Library/Logs/*"),
         ("glob", "/Users/*/Preferences/*"),
         ("glob", "/Users/*/Library/Preferences/*"),
     ]
+
+
+@register_module("--ssh")
+class SSH(Module):
+    @classmethod
+    def _run(cls, target: Target, collector):
+        user_pattern = ".ssh/*"
+
+        # Gather user paths
+        # TODO: Use from_user_home if supported for osx
+        if target._os.os == "osx":
+            iterator = [f"/Users/*/{user_pattern}"]
+        else:
+            iterator = list(from_user_home(target, user_pattern))
+
+        # Acquire SSH configuration in sshd directories
+        iterator += ["/etc/ssh/*", "sysvol/ProgramData/ssh/*"]
+
+        globbed_path = (path for pattern in iterator for path in target.fs.glob(pattern))
+        for path in globbed_path:
+            if target.fs.path(path).is_dir():
+                collector.collect_dir(path)
+                continue
+
+            with target.fs.path(path).open("rt") as file:
+                if "PRIVATE KEY" in file.readline():
+                    # Detected a private key, skipping.
+                    continue
+
+            collector.collect_file(path, outpath=path)
 
 
 @register_module("--var")
@@ -1919,17 +1951,20 @@ PROFILES = {
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
+            SSH,
         ],
         "linux": [
             Etc,
             Boot,
             Home,
             History,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
+            SSH,
             Home,
             Var,
             BSD,
@@ -1938,6 +1973,7 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
@@ -1945,6 +1981,7 @@ PROFILES = {
             Var,
             OSX,
             History,
+            SSH,
         ],
     },
     "default": {
@@ -1975,12 +2012,14 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
@@ -1988,6 +2027,7 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
@@ -2012,18 +2052,21 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
         "esxi": [
             Bootbanks,
             ESXi,
+            SSH,
         ],
         "osx": [
             Etc,
