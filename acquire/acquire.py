@@ -1358,6 +1358,11 @@ class Boot(Module):
     ]
 
 
+def private_key_filter(path: fsutil.TargetPath) -> bool:
+    with path.open("rt") as file:
+        return "PRIVATE KEY" in file.readline()
+
+
 @register_module("--home")
 class Home(Module):
     SPEC = [
@@ -1375,33 +1380,25 @@ class Home(Module):
 
 
 @register_module("--ssh")
+@module_arg("--private-keys", action="store_true", help="Add any private keys", default=False)
 class SSH(Module):
+    SPEC = [
+        ("glob", ".ssh/*", from_user_home),
+        ("glob", "/etc/ssh/*"),
+        ("glob", "sysvol/ProgramData/ssh/*"),
+    ]
+
     @classmethod
-    def _run(cls, target: Target, collector):
-        user_pattern = ".ssh/*"
-
-        # Gather user paths
-        # TODO: Use from_user_home if supported for osx
-        if target._os.os == "osx":
-            iterator = [f"/Users/*/{user_pattern}"]
-        else:
-            iterator = list(from_user_home(target, user_pattern))
-
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector):
         # Acquire SSH configuration in sshd directories
-        iterator += ["/etc/ssh/*", "sysvol/ProgramData/ssh/*"]
 
-        globbed_path = (path for pattern in iterator for path in target.fs.glob(pattern))
-        for path in globbed_path:
-            if target.fs.path(path).is_dir():
-                collector.collect_dir(path)
-                continue
+        filter = None if cli_args.private_keys else private_key_filter
 
-            with target.fs.path(path).open("rt") as file:
-                if "PRIVATE KEY" in file.readline():
-                    # Detected a private key, skipping.
-                    continue
+        if filter:
+            log.info("Executing SSH without --private-keys, skipping private keys.")
 
-            collector.collect_file(path, outpath=path)
+        with collector.file_filter(filter):
+            super().run(target, cli_args, collector)
 
 
 @register_module("--var")
