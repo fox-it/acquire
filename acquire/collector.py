@@ -10,7 +10,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
 
 from dissect.target import Target
 from dissect.target.exceptions import (
@@ -185,6 +194,7 @@ class Collector:
 
         self.report = CollectionReport()
         self.bound_module_name = None
+        self.filter = lambda _: False
 
         self.output.init(self.target)
 
@@ -201,6 +211,15 @@ class Collector:
             yield self
         finally:
             self.unbind()
+
+    @contextmanager
+    def file_filter(self, filter: Optional[Callable[[fsutil.TargetPath], bool]]) -> Collector:
+        try:
+            if filter:
+                self.filter = filter
+            yield self
+        finally:
+            self.filter = lambda _: False
 
     def bind(self, module: Type) -> None:
         self.bound_module_name = module.__name__
@@ -271,6 +290,10 @@ class Collector:
 
         if not isinstance(path, fsutil.TargetPath):
             path = self.target.fs.path(path)
+
+        if self.filter(path) is True:
+            log.info("- Collecting file %s: Skipped (filtered out)", path)
+            return
 
         if self.report.was_path_seen(path):
             log.info("- Collecting file %s: Skipped (DEDUP)", path)
