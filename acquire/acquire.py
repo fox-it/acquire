@@ -255,13 +255,11 @@ class Module:
     EXEC_ORDER = ExecutionOrder.DEFAULT
 
     @classmethod
-    def run(cls, target, cli_args, collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector):
         desc = cls.DESC or cls.__name__.lower()
         log.info("*** Acquiring %s", desc)
 
-        collector.bind(cls)
-
-        try:
+        with collector.bind_module(cls):
             collector.collect(cls.SPEC)
 
             spec_ext = cls.get_spec_additions(target)
@@ -269,8 +267,6 @@ class Module:
                 collector.collect(list(spec_ext))
 
             cls._run(target, collector)
-        finally:
-            collector.unbind()
 
     @classmethod
     def get_spec_additions(cls, target):
@@ -1584,8 +1580,7 @@ class FileHashes(Module):
 
         specs = cls.get_specs(cli_args)
 
-        collector.bind(cls)
-        try:
+        with collector.bind_module(cls):
             start = time.time()
 
             path_hashes = collect_hashes(target, specs, path_filters=cls.DEFAULT_FILE_FILTERS)
@@ -1596,8 +1591,6 @@ class FileHashes(Module):
                 csv_compressed_bytes,
             )
             log.info("Hashing is done, %s files processed in %.2f secs", rows_count, (time.time() - start))
-        finally:
-            collector.unbind()
 
     @classmethod
     def get_specs(cls, cli_args):
@@ -1652,8 +1645,7 @@ class OpenHandles(Module):
 
         handle_types = cli_args.handle_types
 
-        collector.bind(cls)
-        try:
+        with collector.bind_module(cls):
             handles = collect_open_handles(handle_types)
             csv_compressed_handles = serialize_handles_into_csv(handles)
 
@@ -1662,8 +1654,6 @@ class OpenHandles(Module):
                 csv_compressed_handles,
             )
             log.info("Collecting open handles is done.")
-        finally:
-            collector.unbind()
 
 
 def print_disks_overview(target):
