@@ -6,6 +6,7 @@ import logging
 import subprocess
 import textwrap
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
@@ -192,6 +193,14 @@ class Collector:
 
     def __exit__(self, *args, **kwargs) -> None:
         self.close()
+
+    @contextmanager
+    def bind_module(self, module: Type) -> Collector:
+        try:
+            self.bind(module)
+            yield self
+        finally:
+            self.unbind()
 
     def bind(self, module: Type) -> None:
         self.bound_module_name = module.__name__
