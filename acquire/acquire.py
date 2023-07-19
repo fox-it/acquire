@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Union
+from typing import Iterator, Optional, Union
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystems import dir, ntfs
@@ -95,7 +95,7 @@ logging.lastResort = None
 logging.raiseExceptions = False
 
 
-def misc_windows_user_homes(target):
+def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     misc_dirs = {
         ("windows/serviceprofiles/localservice", False),
         ("windows/serviceprofiles/networkservice", False),
@@ -122,12 +122,37 @@ def misc_windows_user_homes(target):
                 yield misc_path
 
 
-def from_user_home(target, path):
+def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+    user_dirs = ["root", "home/*"]
+
+    home_dirs = (target.fs.path("/").glob(path) for path in user_dirs)
+    for home_dir in itertools.chain.from_iterable(home_dirs):
+        yield home_dir
+
+
+def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+    for homedir in itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target)):
+        yield homedir
+
+
+MISC_MAPPING = {
+    "osx": misc_osx_user_homes,
+    "windows": misc_windows_user_homes,
+}
+
+
+def from_user_home(target: Target, path: str):
+    # Until getting the users from osx is implemented in dissect.target
+    if target.os == "osx":
+        for misc_dir in misc_osx_user_homes(target):
+            yield str(misc_dir.joinpath(path))
+        return
     for user_details in target.user_details.all_with_home():
         yield str(user_details.home_path.joinpath(path))
-    if target.os == "windows":
-        for misc_dir in misc_windows_user_homes(target):
-            yield str(misc_dir.joinpath(path))
+
+    misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
+    for user_dir in misc_user_homes(target):
+        yield str(user_dir.joinpath(path))
 
 
 def iter_ntfs_filesystems(target):
@@ -1082,33 +1107,33 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
             from_user_home,
         ),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data For Account"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Web Data"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data For Account"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
+        ("glob", "Library/Application Support/Google/Chrome/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/History", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Login Data For Account", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Web Data", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/History", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Login Data For Account", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Web Data", from_user_home),
         # Chrome - Legacy
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Session"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Session"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        ("glob", "Library/Application Support/Google/Chrome/*/Current Session", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Current Tabs", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Archived History", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Last Session", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Last Tabs", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Current Session", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Current Tabs", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Archived History", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Last Session", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Last Tabs", from_user_home),
         # Chrome - RHEL/Ubuntu - DNF
         ("glob", ".config/google-chrome/*/Bookmarks", from_user_home),
         ("glob", ".config/google-chrome/*/Favicons", from_user_home),
@@ -1209,15 +1234,15 @@ class History(Module):
             "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
             from_user_home,
         ),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Extension Cookies"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Media History"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Web Data"),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Extension Cookies", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/History", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Media History", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Web Data", from_user_home),
         # Edge - RHEL/Ubuntu - DNF/apt
         ("glob", ".config/microsoft-edge/*/Bookmarks", from_user_home),
         ("glob", ".config/microsoft-edge/*/Favicons", from_user_home),
@@ -1249,12 +1274,12 @@ class History(Module):
         # Firefox - RHEL/Ubuntu - snap
         ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite", from_user_home),
         # Safari - macOS
-        ("glob", "/Users/*/Library/Safari/Bookmarks.plist"),
-        ("glob", "/Users/*/Library/Safari/Downloads.plist"),
-        ("glob", "/Users/*/Library/Safari/Extensions/Extensions.plist"),
-        ("glob", "/Users/*/Library/Safari/History.*"),
-        ("glob", "/Users/*/Library/Safari/LastSession.plist"),
-        ("glob", "/Users/*/Library/Caches/com.apple.Safari/Cache.db"),
+        ("file", "Library/Safari/Bookmarks.plist", from_user_home),
+        ("file", "Library/Safari/Downloads.plist", from_user_home),
+        ("file", "Library/Safari/Extensions/Extensions.plist", from_user_home),
+        ("glob", "Library/Safari/History.*", from_user_home),
+        ("file", "Library/Safari/LastSession.plist", from_user_home),
+        ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
     ]
 
 
@@ -1340,21 +1365,16 @@ class Boot(Module):
 @register_module("--home")
 class Home(Module):
     SPEC = [
-        # TODO: Use from_user_home if supported for osx
-        ("glob", "/root/.*[akz]sh*"),
-        ("dir", "/root/.config"),
-        ("glob", "/home/*/.*[akz]sh*"),
-        ("glob", "/home/*/.config"),
-        ("glob", "/home/*/*/.*[akz]sh*"),
-        ("glob", "/home/*/*/.config"),
+        ("glob", ".*[akz]sh*", from_user_home),
+        ("dir", ".config", from_user_home),
+        ("glob", "*/.*[akz]sh*", from_user_home),
+        ("glob", "*/.config", from_user_home),
         # OS-X home (aka /Users)
-        ("glob", "/Users/*/.*[akz]sh*"),
-        ("glob", "/Users/*/.config"),
-        ("glob", "/Users/*/.bash_sessions/*"),
-        ("glob", "/Users/*/Library/LaunchAgents/*"),
-        ("glob", "/Users/*/Library/Logs/*"),
-        ("glob", "/Users/*/Preferences/*"),
-        ("glob", "/Users/*/Library/Preferences/*"),
+        ("glob", ".bash_sessions/*", from_user_home),
+        ("glob", "Library/LaunchAgents/*", from_user_home),
+        ("glob", "Library/Logs/*", from_user_home),
+        ("glob", "Preferences/*", from_user_home),
+        ("glob", "Library/Preferences/*", from_user_home),
     ]
 
 
