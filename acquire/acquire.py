@@ -583,8 +583,6 @@ class Tasks(Module):
         ("dir", "sysvol/windows/tasks"),
         ("dir", "sysvol/windows/system32/tasks"),
         ("dir", "sysvol/windows/syswow64/tasks"),
-        ("dir", "sysvol/windows/sysvol/domain/policies"),
-        ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
     ]
 
 
