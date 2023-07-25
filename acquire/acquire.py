@@ -625,7 +625,10 @@ class Recents(Module):
     SPEC = [
         ("dir", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
         ("dir", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
+        ("glob", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk", from_user_home),
+        ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
+        ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
     ]
 
 
