@@ -588,26 +588,37 @@ class Tasks(Module):
     ]
 
 
-@register_module("-nt", "--ntds")
-class NTDS(Module):
+@register_module("-ad", "--activedirectory")
+class ActiveDirectory(Module):
     SPEC = [
         ("dir", "sysvol/windows/NTDS"),
+        ("dir", "sysvol/windows/sysvol/domain"),
     ]
 
     @classmethod
     def get_spec_additions(cls, target):
         spec = set()
-        key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
+
+        ntds_key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
             ("dir", "DSA Working Directory"),
             ("file", "DSA Database File"),
             ("file", "Database backup path"),
             ("dir", "Database log files path"),
         ]
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.iterkeys(ntds_key):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
+
+        netlogon_key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
+        for reg_key in target.registry.iterkeys(netlogon_key):
+            try:
+                for path in target.fs.path(reg_key.value("SysVol").value).iterdir():
+                    spec.add((("dir"), path))
+            except Exception:
+                pass
+
         return spec
 
 
@@ -852,7 +863,7 @@ class Misc(Module):
         ("dir", "sysvol/windows/system32/sru"),
         ("dir", "sysvol/windows/system32/drivers/etc"),
         ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
-        ("dir", "sysvol/windows/sysvol/domain/policies/"),
+        ("dir", "sysvol/windows/sysvol/domain/"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
@@ -1967,7 +1978,7 @@ PROFILES = {
             DNS,
             History,
             Misc,
-            NTDS,
+            ActiveDirectory,
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
