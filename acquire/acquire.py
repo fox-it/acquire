@@ -634,16 +634,28 @@ class Recents(Module):
 
 @register_module("--recyclebin")
 class RecycleBin(Module):
-    DESC = "recycle bin metadata"
+    DESC = "recycle bin metadata and data files"
 
     @classmethod
     def _run(cls, target, collector):
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring recycle bin metadata from %s (%s)", fs, mountpoints)
+            log.info("Acquiring recycle bin metadata and data files from %s (%s)", fs, mountpoints)
 
-            patterns = ["$Recycle.bin/**/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
+            patterns = [
+                "$Recycle.bin/**/$I*",
+                "Recycler/*/INFO2",
+                "Recycled/INFO2",
+                "$Recycle.Bin/$R*",
+                "$Recycle.Bin/*/$R",
+                "RECYCLE*/D*",
+            ]
+
             for pattern in patterns:
                 for entry in fs.path().glob(pattern):
+                    if entry.stat().st_size >= (10 * 1024 * 1024):  # 10MB
+                        log.debug("Skipping file in Recycle Bin because it exceeds 10MB: %s", entry)
+                        continue
+
                     collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
