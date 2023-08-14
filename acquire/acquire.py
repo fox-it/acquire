@@ -632,12 +632,22 @@ class Recents(Module):
     ]
 
 
+def recyclebin_filter(path: fsutil.TargetPath) -> bool:
+    return bool(path.stat().st_size >= (10 * 1024 * 1024))  # 10MB
+
+
 @register_module("--recyclebin")
+@module_arg("--large-files", action="store_true", help="Add files larger than 10MB in the Recycle Bin", default=False)
 class RecycleBin(Module):
     DESC = "recycle bin metadata and data files"
 
     @classmethod
-    def _run(cls, target, collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector):
+        filter = None if cli_args.large_files else recyclebin_filter
+
+        if filter:
+            log.info("Skipping files in Recycle Bin that are larger than 10MB.")
+
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring recycle bin metadata and data files from %s (%s)", fs, mountpoints)
 
@@ -652,11 +662,10 @@ class RecycleBin(Module):
 
             for pattern in patterns:
                 for entry in fs.path().glob(pattern):
-                    if entry.stat().st_size >= (10 * 1024 * 1024):  # 10MB
-                        log.debug("Skipping file in Recycle Bin because it exceeds 10MB: %s", entry)
+                    if filter and recyclebin_filter(entry):
                         continue
-
-                    collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+                    else:
+                        collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
 @register_module("--drivers")
