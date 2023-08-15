@@ -300,9 +300,9 @@ class Collector:
             return
 
         outpath = self._create_output_path(outpath or path, base)
-        entry = path.get()
 
         try:
+            entry = path.get()
             if volatile:
                 self.output.write_volatile(outpath, entry, size)
             else:
