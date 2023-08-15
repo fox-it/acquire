@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Iterator, Optional, Union
 
 from dissect.target import Target, exceptions
+from dissect.target.filesystem import Filesystem
 from dissect.target.filesystems import dir, ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
@@ -141,7 +142,7 @@ MISC_MAPPING = {
 }
 
 
-def from_user_home(target: Target, path: str):
+def from_user_home(target: Target, path: str) -> Iterator[str]:
     for user_details in target.user_details.all_with_home():
         yield str(user_details.home_path.joinpath(path))
 
@@ -150,7 +151,7 @@ def from_user_home(target: Target, path: str):
         yield str(user_dir.joinpath(path))
 
 
-def iter_ntfs_filesystems(target):
+def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str, str]]:
     mount_lookup = defaultdict(list)
     for mount, fs in target.fs.mounts.items():
         mount_lookup[fs].append(mount)
@@ -176,13 +177,13 @@ def iter_ntfs_filesystems(target):
         yield fs, name, mountpoints
 
 
-def mount_all_ntfs_filesystems(target):
+def mount_all_ntfs_filesystems(target: Target) -> None:
     for fs, name, _ in iter_ntfs_filesystems(target):
         if name not in target.fs.mounts:
             target.fs.mount(name, fs)
 
 
-def iter_esxi_filesystems(target):
+def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
             continue
@@ -250,25 +251,25 @@ class Module:
     EXEC_ORDER = ExecutionOrder.DEFAULT
 
     @classmethod
-    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         desc = cls.DESC or cls.__name__.lower()
         log.info("*** Acquiring %s", desc)
 
         with collector.bind_module(cls):
             collector.collect(cls.SPEC)
 
-            spec_ext = cls.get_spec_additions(target)
+            spec_ext = cls.get_spec_additions(target, cli_args)
             if spec_ext:
                 collector.collect(list(spec_ext))
 
-            cls._run(target, collector)
+            cls._run(target, cli_args, collector)
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         pass
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         pass
 
 
@@ -279,7 +280,7 @@ class Sys(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target: Target, collector: Collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         if not Path("/sys").exists():
             log.error("/sys is unavailable! Skipping...")
             return
@@ -301,7 +302,7 @@ class Proc(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target: Target, collector: Collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         if not Path("/proc").exists():
             log.error("/proc is unavailable! Skipping...")
             return
@@ -320,7 +321,7 @@ class NTFS(Module):
     DESC = "NTFS filesystem metadata"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring %s (%s)", fs, mountpoints)
 
@@ -331,7 +332,7 @@ class NTFS(Module):
             cls.collect_ntfs_secure(collector, fs, name)
 
     @classmethod
-    def collect_usnjrnl(cls, collector: Collector, fs, name: str) -> None:
+    def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
         try:
             usnjrnl_path = fs.path("$Extend/$Usnjrnl:$J")
             entry = usnjrnl_path.get()
@@ -361,7 +362,7 @@ class NTFS(Module):
         log.info("- Collecting file $Extend/$Usnjrnl:$J: %s", result)
 
     @classmethod
-    def collect_ntfs_secure(cls, collector: Collector, fs, name: str) -> None:
+    def collect_ntfs_secure(cls, collector: Collector, fs: Filesystem, name: str) -> None:
         try:
             secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
@@ -399,7 +400,7 @@ class Registry(Module):
     ]
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # Glob all hives to include e.g. .LOG files and .regtrans-ms files.
         files = []
         for hive in cls.HIVES:
@@ -453,7 +454,7 @@ class WinArpCache(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         if float(target.ntversion) < 6.2:
             commands = [
                 # < Windows 10
@@ -474,7 +475,7 @@ class WinRDPSessions(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # where.exe instead of where, just in case the client runs in PS instead of CMD
         # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
         # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
@@ -494,7 +495,7 @@ class WinMemDump(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         winpmem_file_name = "winpmem.exe"
         winpmem_exec = shutil.which(winpmem_file_name)
 
@@ -561,7 +562,7 @@ class EventLogs(Module):
     DESC = "event logs"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         evt_log_paths = evt.EvtPlugin(target).get_logs(filename_glob="*.evt")
         for path in evt_log_paths:
@@ -590,7 +591,7 @@ class NTDS(Module):
     ]
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
@@ -632,7 +633,7 @@ class RecycleBin(Module):
     DESC = "recycle bin metadata"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring recycle bin metadata from %s (%s)", fs, mountpoints)
 
@@ -655,7 +656,7 @@ class Exchange(Module):
     DESC = "interesting Exchange configuration files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         key = "HKLM\\SOFTWARE\\Microsoft\\ExchangeServer"
@@ -694,7 +695,7 @@ class IIS(Module):
     DESC = "IIS logs"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set(
             [
                 ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
@@ -784,7 +785,7 @@ class DHCP(Module):
     DESC = "Windows Server DHCP files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DhcpServer\\Parameters"
         for reg_key in target.registry.iterkeys(key):
@@ -1327,7 +1328,7 @@ class WER(Module):
     DESC = "WER (Windows Error Reporting) related files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         for wer_dir in itertools.chain(
@@ -1398,7 +1399,7 @@ class SSH(Module):
     ]
 
     @classmethod
-    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         # Acquire SSH configuration in sshd directories
 
         filter = None if cli_args.private_keys else private_key_filter
@@ -1476,7 +1477,7 @@ class Bootbanks(Module):
     DESC = "ESXi bootbanks"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         # Both ESXi 6 and 7 compatible
         boot_dirs = {
             "boot": "BOOT",
@@ -1519,7 +1520,7 @@ class VMFS(Module):
     DESC = "ESXi VMFS metadata files"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for uuid, name, fs in iter_esxi_filesystems(target):
             if not fs.__fstype__ == "vmfs":
                 continue
@@ -1581,7 +1582,7 @@ class FileHashes(Module):
     )
 
     @classmethod
-    def run(cls, target, cli_args, collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         log.info("*** Acquiring file hashes")
 
         specs = cls.get_specs(cli_args)
@@ -1599,7 +1600,7 @@ class FileHashes(Module):
             log.info("Hashing is done, %s files processed in %.2f secs", rows_count, (time.time() - start))
 
     @classmethod
-    def get_specs(cls, cli_args):
+    def get_specs(cls, cli_args: argparse.Namespace) -> Iterator[tuple]:
         path_selectors = []
 
         if cli_args.ext_to_hash:
@@ -1639,7 +1640,7 @@ class OpenHandles(Module):
     DESC = "Open handles"
 
     @classmethod
-    def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         if not sys.platform == "win32":
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
@@ -1662,7 +1663,7 @@ class OpenHandles(Module):
             log.info("Collecting open handles is done.")
 
 
-def print_disks_overview(target):
+def print_disks_overview(target: Target) -> None:
     log.info("// Disks")
     try:
         for disk in target.disks:
@@ -1677,7 +1678,7 @@ def print_disks_overview(target):
     log.info("")
 
 
-def print_volumes_overview(target):
+def print_volumes_overview(target: Target) -> None:
     log.info("// Volumes")
     try:
         for volume in target.volumes:
@@ -1709,7 +1710,7 @@ def modargs2json(args: argparse.Namespace) -> dict:
     return json_opts
 
 
-def acquire_target(target: Target, *args, **kwargs):
+def acquire_target(target: Target, *args, **kwargs) -> list[str]:
     if isinstance(target._loader, TargetdLoader):
         files = acquire_target_targetd(target, *args, **kwargs)
     else:
@@ -1717,7 +1718,7 @@ def acquire_target(target: Target, *args, **kwargs):
     return files
 
 
-def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
+def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
     if not len(target.hostname()):
         log.error("Unable to initialize targetd.")
@@ -1737,7 +1738,7 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
-def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
+def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -1934,11 +1935,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
-def upload_files(
-    paths: list[Path],
-    upload_plugin: UploaderPlugin,
-    no_proxy: bool = False,
-):
+def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: bool = False) -> None:
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
@@ -2106,7 +2103,7 @@ PROFILES = {
 }
 
 
-def main():
+def main() -> None:
     parser = create_argument_parser(PROFILES, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
@@ -2197,7 +2194,7 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(target: Target, args: argparse.Namespace):
+def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> None:
     if args.child:
         target = load_child(target, args.child)
 
