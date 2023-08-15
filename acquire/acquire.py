@@ -876,6 +876,8 @@ class AV(Module):
         ("file", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
         # Avira
         ("dir", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
+        ("dir", "sysvol/ProgramData/Avira/Security/Logs"),
+        ("dir", "sysvol/ProgramData/Avira/VPN"),
         # Bitdefender
         ("dir", "sysvol/ProgramData/Bitdefender/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/Bitdefender/Desktop/Profiles/Logs"),
@@ -886,9 +888,16 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/crs1/Logs"),
         ("dir", "sysvol/ProgramData/apv2/Logs"),
         ("dir", "sysvol/ProgramData/crb1/Logs"),
+        # Cylance
+        ("dir", "sysvol/ProgramData/Cylance/Desktop"),
+        ("dir", "sysvol/ProgramData/Cylance/Optics/Log"),
+        ("dir", "sysvol/Program Files/Cylance/Desktop/log"),
         # ESET
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs"),
         ("dir", "sysvol/ProgramData/ESET/ESET NOD32 Antivirus/Logs"),
+        ("dir", "sysvol/ProgramData/ESET/ESET Security/Logs"),
+        ("dir", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
+        ("dir", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
         # Emsisoft
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
@@ -950,6 +959,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
         ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
+        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
     ]
