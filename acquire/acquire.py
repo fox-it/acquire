@@ -614,8 +614,7 @@ class ActiveDirectory(Module):
         netlogon_key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
         for reg_key in target.registry.iterkeys(netlogon_key):
             try:
-                for path in target.fs.path(reg_key.value("SysVol").value).iterdir():
-                    spec.add(("dir", path))
+                spec.add(("dir", reg_key.value("SysVol").value))
             except Exception:
                 pass
 
