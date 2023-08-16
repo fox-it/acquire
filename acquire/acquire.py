@@ -142,11 +142,6 @@ MISC_MAPPING = {
 
 
 def from_user_home(target: Target, path: str):
-    # Until getting the users from osx is implemented in dissect.target
-    if target.os == "osx":
-        for misc_dir in misc_osx_user_homes(target):
-            yield str(misc_dir.joinpath(path))
-        return
     for user_details in target.user_details.all_with_home():
         yield str(user_details.home_path.joinpath(path))
 
