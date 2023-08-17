@@ -1704,7 +1704,7 @@ def print_acquire_warning(target: Target) -> None:
 def modargs2json(args: argparse.Namespace) -> dict:
     json_opts = {}
     for module in MODULES.values():
-        cli_arg = module.__cli_args__[0][1]
+        cli_arg = module.__cli_args__[-1:][0][1]
         if opt := cli_arg.get("dest"):
             json_opts[opt] = getattr(args, opt)
     return json_opts
