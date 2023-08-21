@@ -609,7 +609,7 @@ class NTDS(Module):
     ]
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
