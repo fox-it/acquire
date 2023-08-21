@@ -624,6 +624,8 @@ class NTDS(Module):
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
 
+        return spec
+
 
 @register_module("--etl")
 class ETL(Module):
