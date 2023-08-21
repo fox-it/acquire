@@ -591,34 +591,42 @@ class Tasks(Module):
 @register_module("-ad", "--activedirectory")
 class ActiveDirectory(Module):
     SPEC = [
-        ("dir", "sysvol/windows/NTDS"),
         ("dir", "sysvol/windows/sysvol/domain"),
     ]
 
     @classmethod
     def get_spec_additions(cls, target):
         spec = set()
+        key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
+        for reg_key in target.registry.iterkeys(key):
+            try:
+                spec.add(("dir", reg_key.value("SysVol").value))
+            except Exception:
+                pass
+        return spec
 
-        ntds_key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
+
+@register_module("-nt", "--ntds")
+class NTDS(Module):
+    SPEC = [
+        ("dir", "sysvol/windows/NTDS"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        spec = set()
+
+        key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
             ("dir", "DSA Working Directory"),
             ("file", "DSA Database File"),
             ("file", "Database backup path"),
             ("dir", "Database log files path"),
         ]
-        for reg_key in target.registry.iterkeys(ntds_key):
+        for reg_key in target.registry.iterkeys(key):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
-
-        netlogon_key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
-        for reg_key in target.registry.iterkeys(netlogon_key):
-            try:
-                spec.add(("dir", reg_key.value("SysVol").value))
-            except Exception:
-                pass
-
-        return spec
 
 
 @register_module("--etl")
@@ -1987,6 +1995,7 @@ PROFILES = {
             DNS,
             History,
             Misc,
+            NTDS,
             ActiveDirectory,
             QuarantinedFiles,
             RemoteAccess,
