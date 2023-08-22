@@ -1,18 +1,18 @@
 from dissect.target import Target
 from dissect.target.filesystem import VirtualFilesystem
 
-from acquire.acquire import from_user_home, misc_osx_user_homes, misc_unix_user_homes
+from acquire.acquire import misc_osx_user_homes, misc_unix_user_homes
 
 
-def test_from_user_home_osx(mock_target: Target, mock_fs: VirtualFilesystem):
+def test_misc_osx_user_homes(mock_target: Target, mock_fs: VirtualFilesystem):
     mock_target.os = "osx"
     expected_results = []
     for user in ["Foo", "Bar"]:
         mock_fs.makedirs(f"/Users/{user}")
         mock_fs.map_file_entry(f"/Users/{user}/application", None)
-        expected_results.append(f"/Users/{user}/application")
+        expected_results.append(f"/Users/{user}")
 
-    assert list(from_user_home(mock_target, "application")) == expected_results
+    assert list(str(home) for home in misc_osx_user_homes(mock_target)) == expected_results
 
 
 def test_misc_osx_from_user_home(mock_target: Target, mock_fs: VirtualFilesystem):
