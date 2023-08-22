@@ -22,6 +22,7 @@ from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webservers import iis
+from dissect.target.plugins.filesystem.resolver import ResolverPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
@@ -559,6 +560,36 @@ class WinMemDump(Module):
             collector.report.add_command_collected(cls.__name__, command_parts)
             mem_dump_path.unlink()
             mem_dump_errors_path.unlink()
+
+
+@register_module("--winmem-files")
+class WinMemFiles(Module):
+    DESC = "Windows memory files"
+    SPEC = [
+        ("file", "sysvol/pagefile.sys"),
+        ("file", "sysvol/hiberfil.sys"),
+        ("file", "sysvol/swapfile.sys"),
+        ("file", "sysvol/windows/memory.dmp"),
+        ("dir", "sysvol/windows/minidump"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target) -> Iterator[tuple]:
+        spec = set()
+
+        resolver = ResolverPlugin(target)
+
+        page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        for reg_key in target.registry.iterkeys(page_key):
+            for page_path in reg_key.value("ExistingPageFiles").value:
+                spec.add(("file", resolver.resolve(page_path)))
+
+        crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
+        for reg_key in target.registry.iterkeys(crash_key):
+            spec.add(("file", resolver.resolve(reg_key.value("DumpFile").value)))
+            spec.add(("dir", resolver.resolve(reg_key.value("MinidumpDir").value)))
+
+        return spec
 
 
 @register_module("-e", "--eventlogs")
