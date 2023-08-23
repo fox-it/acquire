@@ -633,30 +633,39 @@ def recyclebin_filter(path: fsutil.TargetPath) -> bool:
 
 
 @register_module("--recyclebin")
-@module_arg("--large-files", action="store_true", help="Add files larger than 10MB in the Recycle Bin", default=False)
+@module_arg(
+    "--large-files",
+    action="store_true",
+    help="Collect files larger than 10MB in the Recycle Bin",
+    default=False,
+)
+@module_arg(
+    "--no-data-files",
+    action="store_true",
+    help="Skip collection of data files in the Recycle Bin",
+    default=False,
+)
 class RecycleBin(Module):
     DESC = "recycle bin metadata and data files"
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        large_files_filter = None if cli_args.large_files else recyclebin_filter
+
+        if large_files_filter:
+            log.info("Skipping files in Recycle Bin that are larger than 10MB.")
+
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring recycle bin metadata and data files from %s (%s)", fs, mountpoints)
 
-            patterns = [
-                "$Recycle.bin/**/$I*",
-                "Recycler/*/INFO2",
-                "Recycled/INFO2",
-                "$Recycle.Bin/$R*",
-                "$Recycle.Bin/*/$R",
-                "RECYCLE*/D*",
-            ]
+            patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
+
+            if not cli_args.no_data_files:
+                patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
             for pattern in patterns:
                 for entry in fs.path().glob(pattern):
-                    if filter and recyclebin_filter(entry):
-                        continue
-                    else:
-                        collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+                    collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
 @register_module("--drivers")
