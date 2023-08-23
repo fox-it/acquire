@@ -584,7 +584,7 @@ class Tasks(Module):
     ]
 
 
-@register_module("-ad", "--activedirectory")
+@register_module("-ad", "--active-directory")
 class ActiveDirectory(Module):
     SPEC = [
         ("dir", "sysvol/windows/sysvol/domain"),
