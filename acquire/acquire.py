@@ -656,13 +656,14 @@ class RecycleBin(Module):
             log.info("Skipping files in Recycle Bin that are larger than 10MB.")
 
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring recycle bin metadata and data files from %s (%s)", fs, mountpoints)
+            log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
 
             patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
 
             if not cli_args.no_data_files:
                 patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
+            # FIXME: collect files using the large_files_filter
             for pattern in patterns:
                 for entry in fs.path().glob(pattern):
                     collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
