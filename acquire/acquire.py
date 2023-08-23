@@ -2049,6 +2049,7 @@ PROFILES = {
             DHCP,
             DNS,
             Misc,
+            ActiveDirectory,
             RemoteAccess,
             ActivitiesCache,
         ],
