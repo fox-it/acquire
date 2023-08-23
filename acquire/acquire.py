@@ -584,7 +584,7 @@ class Tasks(Module):
     ]
 
 
-@register_module("-ad", "--activedirectory")
+@register_module("-ad", "--active-directory")
 class ActiveDirectory(Module):
     DESC = "Active Directory data (policies, scripts, etc.)"
     SPEC = [
