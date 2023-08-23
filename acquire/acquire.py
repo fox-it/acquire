@@ -586,6 +586,7 @@ class Tasks(Module):
 
 @register_module("-ad", "--activedirectory")
 class ActiveDirectory(Module):
+    DESC = "Active Directory data (policies, scripts, etc.)"
     SPEC = [
         ("dir", "sysvol/windows/sysvol/domain"),
     ]
