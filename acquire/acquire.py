@@ -655,18 +655,18 @@ class RecycleBin(Module):
         if large_files_filter:
             log.info("Skipping files in Recycle Bin that are larger than 10MB.")
 
-        for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
+        patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
 
-            patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
+        if not cli_args.no_data_files:
+            patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
-            if not cli_args.no_data_files:
-                patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
+        with collector.file_filter(large_files_filter):
+            for fs, _, mountpoints in iter_ntfs_filesystems(target):
+                log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
 
-            # FIXME: collect files using the large_files_filter
-            for pattern in patterns:
-                for entry in fs.path().glob(pattern):
-                    collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+                for pattern in patterns:
+                    for entry in fs.path().glob(pattern):
+                        collector.collect_path(entry, follow=False)
 
 
 @register_module("--drivers")
