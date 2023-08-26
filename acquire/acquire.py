@@ -557,6 +557,34 @@ class WinMemDump(Module):
             mem_dump_errors_path.unlink()
 
 
+@register_module("--winmem-files")
+class WinMemFiles(Module):
+    DESC = "Windows memory files"
+    SPEC = [
+        ("file", "sysvol/pagefile.sys"),
+        ("file", "sysvol/hiberfil.sys"),
+        ("file", "sysvol/swapfile.sys"),
+        ("file", "sysvol/windows/memory.dmp"),
+        ("dir", "sysvol/windows/minidump"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        for reg_key in target.registry.iterkeys(page_key):
+            for page_path in reg_key.value("ExistingPageFiles").value:
+                spec.add(("file", target.resolve(page_path)))
+
+        crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
+        for reg_key in target.registry.iterkeys(crash_key):
+            spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
+            spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
+
+        return spec
+
+
 @register_module("-e", "--eventlogs")
 class EventLogs(Module):
     DESC = "event logs"
