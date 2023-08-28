@@ -2027,6 +2027,7 @@ PROFILES = {
             RemoteAccess,
             WindowsNotifications,
             SSH,
+            IIS,
         ],
         "linux": [
             Etc,
