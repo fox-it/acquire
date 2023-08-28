@@ -557,6 +557,34 @@ class WinMemDump(Module):
             mem_dump_errors_path.unlink()
 
 
+@register_module("--winmem-files")
+class WinMemFiles(Module):
+    DESC = "Windows memory files"
+    SPEC = [
+        ("file", "sysvol/pagefile.sys"),
+        ("file", "sysvol/hiberfil.sys"),
+        ("file", "sysvol/swapfile.sys"),
+        ("file", "sysvol/windows/memory.dmp"),
+        ("dir", "sysvol/windows/minidump"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        for reg_key in target.registry.iterkeys(page_key):
+            for page_path in reg_key.value("ExistingPageFiles").value:
+                spec.add(("file", target.resolve(page_path)))
+
+        crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
+        for reg_key in target.registry.iterkeys(crash_key):
+            spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
+            spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
+
+        return spec
+
+
 @register_module("-e", "--eventlogs")
 class EventLogs(Module):
     DESC = "event logs"
@@ -584,6 +612,25 @@ class Tasks(Module):
     ]
 
 
+@register_module("-ad", "--active-directory")
+class ActiveDirectory(Module):
+    DESC = "Active Directory data (policies, scripts, etc.)"
+    SPEC = [
+        ("dir", "sysvol/windows/sysvol/domain"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
+        for reg_key in target.registry.iterkeys(key):
+            try:
+                spec.add(("dir", reg_key.value("SysVol").value))
+            except Exception:
+                pass
+        return spec
+
+
 @register_module("-nt", "--ntds")
 class NTDS(Module):
     SPEC = [
@@ -593,6 +640,7 @@ class NTDS(Module):
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
+
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
             ("dir", "DSA Working Directory"),
@@ -604,6 +652,7 @@ class NTDS(Module):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
+
         return spec
 
 
@@ -848,11 +897,13 @@ class Misc(Module):
         ("dir", "sysvol/windows/system32/sru"),
         ("dir", "sysvol/windows/system32/drivers/etc"),
         ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
-        ("dir", "sysvol/windows/sysvol/domain/policies/"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
         ("dir", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
+        ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
+        ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
+        ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
     ]
 
 
@@ -1971,6 +2022,7 @@ PROFILES = {
             History,
             Misc,
             NTDS,
+            ActiveDirectory,
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
@@ -2030,6 +2082,7 @@ PROFILES = {
             DHCP,
             DNS,
             Misc,
+            ActiveDirectory,
             RemoteAccess,
             ActivitiesCache,
         ],
