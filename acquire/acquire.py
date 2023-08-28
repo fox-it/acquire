@@ -612,6 +612,25 @@ class Tasks(Module):
     ]
 
 
+@register_module("-ad", "--active-directory")
+class ActiveDirectory(Module):
+    DESC = "Active Directory data (policies, scripts, etc.)"
+    SPEC = [
+        ("dir", "sysvol/windows/sysvol/domain"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
+        for reg_key in target.registry.iterkeys(key):
+            try:
+                spec.add(("dir", reg_key.value("SysVol").value))
+            except Exception:
+                pass
+        return spec
+
+
 @register_module("-nt", "--ntds")
 class NTDS(Module):
     SPEC = [
@@ -621,6 +640,7 @@ class NTDS(Module):
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
+
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
             ("dir", "DSA Working Directory"),
@@ -632,6 +652,7 @@ class NTDS(Module):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
+
         return spec
 
 
@@ -876,7 +897,6 @@ class Misc(Module):
         ("dir", "sysvol/windows/system32/sru"),
         ("dir", "sysvol/windows/system32/drivers/etc"),
         ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
-        ("dir", "sysvol/windows/sysvol/domain/policies/"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
         ("dir", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
@@ -2004,6 +2024,7 @@ PROFILES = {
             History,
             Misc,
             NTDS,
+            ActiveDirectory,
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
@@ -2062,6 +2083,7 @@ PROFILES = {
             DHCP,
             DNS,
             Misc,
+            ActiveDirectory,
             RemoteAccess,
             ActivitiesCache,
         ],
