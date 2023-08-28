@@ -903,7 +903,7 @@ class Misc(Module):
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
-        ("glob", "sysvol/Windows/Logs/CBS/CBS*.log")
+        ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
     ]
 
 
