@@ -901,11 +901,9 @@ class Misc(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
         ("dir", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
-        ("glob", "sysvol/ProgramData/USOShared/Logs/System/UpdateSessionOrchestration*.etl"),
+        ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
-        ("glob", "sysvol/ProgramData/USOShared/Logs/System/NotificationUxBroker*.etl"),
-        ("glob", "sysvol/Windows/Logs/CBS/CbsPersist_*.log"),
-        ("file", "sysvol/Windows/Logs/CBS/CBS.log"),
+        ("glob", "sysvol/Windows/Logs/CBS/CBS*.log")
     ]
 
 
