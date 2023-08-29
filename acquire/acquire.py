@@ -1462,10 +1462,36 @@ class OSX(Module):
         ("file", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
         ("dir", "/Library/Preferences"),
-        # applications
-        ("dir", "/Applications"),
-        ("dir", "Applications", from_user_home),
     ]
+
+
+@register_module("--osx-applications")
+class OSXApplications(Module):
+    DESC = "OS-X application files"
+    SPEC = [
+        # applications
+        ("glob", "/Applications/*/Contents/Info.plist"),
+        ("glob", "Applications/*/Contents/Info.plist", from_user_home),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target):
+        spec = set()
+
+        for appplication_support in itertools.chain(
+            ["/Library/Application Support"],
+            from_user_home(target, "Library/Application Support"),
+        ):
+            for path in target.fs.path(appplication_support).rglob("*"):
+                if not path.is_file():
+                    continue
+
+                if path.stat().st_size >= (1 * 1024 * 1024):  # 1MB
+                    continue
+
+                spec.add(("file", path))
+
+        return spec
 
 
 @register_module("--bootbanks")
@@ -2004,6 +2030,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplications,
             History,
             SSH,
         ],
