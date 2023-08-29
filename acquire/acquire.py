@@ -1462,6 +1462,9 @@ class OSX(Module):
         ("file", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
         ("dir", "/Library/Preferences"),
+        # applications
+        ("dir", "/Applications"),
+        ("dir", "Applications", from_user_home),
     ]
 
 
