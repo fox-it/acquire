@@ -49,15 +49,17 @@ class TarOutput(Output):
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]],
+        entry: Optional[Union[FilesystemEntry, Path]] = None,
         size: Optional[int] = None,
     ) -> None:
-        """Write a filesystem entry or file-like object to a tar file.
+        """Write a file-like object to a tar file.
+
+        The data from ``fh`` is written, while ``entry`` is used to get some properties of the file.
 
         Args:
-            output_path: The path of the entry in the output format.
+            output_path: The path of the entry in the output.
             fh: The file-like object of the entry to write.
-            entry: The optional filesystem entry of the entry to write.
+            entry: The optional filesystem entry to write.
             size: The optional file size in bytes of the entry to write.
         """
         stat = None
@@ -79,6 +81,8 @@ class TarOutput(Output):
             if entry.is_symlink():
                 info.type = tarfile.SYMTYPE
                 info.linkname = entry.readlink()
+            elif entry.is_dir():
+                info.type = tarfile.DIRTYPE
 
             stat = entry.lstat()
 

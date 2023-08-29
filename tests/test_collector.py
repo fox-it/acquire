@@ -39,8 +39,9 @@ def test_collector() -> None:
 
 @pytest.fixture
 def mock_collector(mock_target) -> Collector:
-    collector = Collector(mock_target, Mock())
-    return collector
+    with patch("acquire.outputs.base.Output", autospec=True) as mock_output:
+        collector = Collector(mock_target, mock_output)
+        return collector
 
 
 MOCK_SEEN_PATHS = set()
@@ -277,6 +278,36 @@ def test_collector_collect_path_with_exception(mock_target, mock_collector, repo
         report_func.assert_called()
         mock_log.error.assert_called()
         assert mock_log.error.call_args.args[0] == log_msg
+
+
+@pytest.mark.parametrize(
+    "path_name, volatile, collect_path_called, write_entry_called",
+    [
+        ("/foo/bar/some-dir", False, False, False),
+        ("/foo/bar/some-dir", True, False, True),
+        ("/foo/bar", False, True, False),
+        ("foo/bar", True, True, False),
+    ],
+)
+def test_collector_collect_dir(
+    mock_target: Target,
+    mock_collector: Collector,
+    path_name: str,
+    volatile: bool,
+    collect_path_called: bool,
+    write_entry_called: bool,
+) -> None:
+    path = mock_target.fs.path(path_name)
+    with patch.object(mock_collector, "collect_path", autospec=True):
+        mock_collector.collect_dir(
+            path,
+            seen_paths=MOCK_SEEN_PATHS,
+            module_name=MOCK_MODULE_NAME,
+            follow=False,
+            volatile=volatile,
+        )
+        assert mock_collector.collect_path.called == collect_path_called
+        assert mock_collector.output.write_entry.called == write_entry_called
 
 
 def create_temp_files(tmp_path: Path, paths: list[str]) -> None:
