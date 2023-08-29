@@ -230,7 +230,7 @@ class Collector:
     def close(self) -> None:
         self.output.close()
 
-    def _create_output_path(self, path: Path, base: Optional[str] = None) -> str:
+    def _output_path(self, path: Path, base: Optional[str] = None) -> str:
         base = base or self.base
         outpath = str(path)
 
@@ -299,14 +299,14 @@ class Collector:
             log.info("- Collecting file %s: Skipped (DEDUP)", path)
             return
 
-        outpath = self._create_output_path(outpath or path, base)
+        outpath = self._output_path(outpath or path, base)
 
         try:
             entry = path.get()
             if volatile:
-                self.output.write_volatile(outpath, entry, size)
+                self.output.write_volatile(outpath, entry, size=size)
             else:
-                self.output.write_entry(outpath, entry, size)
+                self.output.write_entry(outpath, entry, size=size)
 
             self.report.add_file_collected(module_name, path)
             result = "OK"
@@ -322,8 +322,8 @@ class Collector:
 
     def collect_symlink(self, path: fsutil.TargetPath, module_name: Optional[str] = None) -> None:
         try:
-            outpath = self._create_output_path(path)
-            self.output.write_bytes(outpath, b"", path.get(), 0)
+            outpath = self._output_path(path)
+            self.output.write_entry(outpath, path.get())
 
             self.report.add_symlink_collected(module_name, path)
             result = "OK"
@@ -359,10 +359,16 @@ class Collector:
                 return
             seen_paths.add(resolved)
 
+            dir_is_empty = True
             for entry in path.iterdir():
+                dir_is_empty = False
                 self.collect_path(
                     entry, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
                 )
+
+            if dir_is_empty and volatile:
+                outpath = self._output_path(path)
+                self.output.write_entry(outpath, path)
 
         except OSError as error:
             if error.errno == errno.ENOENT:
@@ -485,7 +491,7 @@ class Collector:
             return
 
     def write_bytes(self, destination_path: str, data: bytes) -> None:
-        self.output.write_bytes(destination_path, data, None)
+        self.output.write_bytes(destination_path, data)
         self.report.add_file_collected(self.bound_module_name, destination_path)
 
 

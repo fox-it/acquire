@@ -550,8 +550,8 @@ class WinMemDump(Module):
                         )
                         return
 
-            collector.output.write_entry(mem_dump_output_path, entry=mem_dump_path)
-            collector.output.write_entry(mem_dump_errors_output_path, entry=mem_dump_errors_path)
+            collector.output.write_entry(mem_dump_output_path, mem_dump_path)
+            collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
             collector.report.add_command_collected(cls.__name__, command_parts)
             mem_dump_path.unlink()
             mem_dump_errors_path.unlink()
