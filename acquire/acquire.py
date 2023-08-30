@@ -1523,24 +1523,28 @@ class OSX(Module):
     ]
 
 
-@register_module("--osx-applications")
-class OSXApplications(Module):
-    DESC = "OS-X application files"
+@register_module("--osx-applications-info")
+class OSXApplicationsInfo(Module):
+    DESC = "OS-X info.plist from all installed applications"
     SPEC = [
-        # applications
         ("glob", "/Applications/*/Contents/Info.plist"),
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
     ]
 
+
+@register_module("--osx-applications-data")
+class OSXApplicationsData(Module):
+    DESC = "OS-X data from all installed applications"
+
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
-        for appplication_support in itertools.chain(
+        for app_support_path in itertools.chain(
             ["/Library/Application Support"],
             from_user_home(target, "Library/Application Support"),
         ):
-            for path in target.fs.path(appplication_support).rglob("*"):
+            for path in target.fs.path(app_support_path).glob("*/*"):
                 if not path.is_file():
                     continue
 
@@ -2086,7 +2090,8 @@ PROFILES = {
             Home,
             Var,
             OSX,
-            OSXApplications,
+            OSXApplicationsInfo,
+            OSXApplicationsData,
             History,
             SSH,
         ],
@@ -2142,6 +2147,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "minimal": {
@@ -2181,6 +2187,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "none": None,
