@@ -1544,7 +1544,11 @@ class OSXApplicationsData(Module):
             ["/Library/Application Support"],
             from_user_home(target, "Library/Application Support"),
         ):
-            for path in target.fs.path(app_support_path).glob("*/*/*"):
+            for path in itertools.chain(
+                target.fs.path(app_support_path).glob("*"),
+                target.fs.path(app_support_path).glob("*/*"),
+                target.fs.path(app_support_path).glob("*/*/*"),
+            ):
                 if not path.is_file():
                     continue
 
