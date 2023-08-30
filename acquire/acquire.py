@@ -18,7 +18,7 @@ from typing import Iterator, Optional, Union
 
 from dissect.target import Target, exceptions
 from dissect.target.filesystem import Filesystem
-from dissect.target.filesystems import dir, ntfs
+from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
@@ -281,17 +281,7 @@ class Sys(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        if not Path("/sys").exists():
-            log.error("/sys is unavailable! Skipping...")
-            return
-
         spec = [("dir", "/sys")]
-
-        sysfs = dir.DirectoryFilesystem(Path("/sys"))
-
-        target.filesystems.add(sysfs)
-        target.fs.mount("/sys", sysfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -303,16 +293,7 @@ class Proc(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        if not Path("/proc").exists():
-            log.error("/proc is unavailable! Skipping...")
-            return
-
         spec = [("dir", "/proc")]
-        procfs = dir.DirectoryFilesystem(Path("/proc"))
-
-        target.filesystems.add(procfs)
-        target.fs.mount("/proc", procfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
