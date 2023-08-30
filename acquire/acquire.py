@@ -661,12 +661,13 @@ class RecycleBin(Module):
             patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
         with collector.file_filter(large_files_filter):
-            for fs, _, mountpoints in iter_ntfs_filesystems(target):
+            for fs, name, mountpoints in iter_ntfs_filesystems(target):
                 log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
 
                 for pattern in patterns:
                     for entry in fs.path().glob(pattern):
-                        collector.collect_path(entry, follow=False)
+                        if entry.is_file():
+                            collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
 @register_module("--drivers")
