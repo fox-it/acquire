@@ -1512,35 +1512,6 @@ class OSXApplicationsInfo(Module):
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
     ]
 
-
-@register_module("--osx-applications-data")
-class OSXApplicationsData(Module):
-    DESC = "OS-X data from all installed applications"
-
-    @classmethod
-    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        spec = set()
-
-        for app_support_path in itertools.chain(
-            ["/Library/Application Support"],
-            from_user_home(target, "Library/Application Support"),
-        ):
-            for path in itertools.chain(
-                target.fs.path(app_support_path).glob("*"),
-                target.fs.path(app_support_path).glob("*/*"),
-                target.fs.path(app_support_path).glob("*/*/*"),
-            ):
-                if not path.is_file():
-                    continue
-
-                if path.stat().st_size >= (1 * 1024 * 1024):  # 1MB
-                    continue
-
-                spec.add(("file", path))
-
-        return spec
-
-
 @register_module("--bootbanks")
 class Bootbanks(Module):
     DESC = "ESXi bootbanks"
@@ -2076,7 +2047,6 @@ PROFILES = {
             Var,
             OSX,
             OSXApplicationsInfo,
-            OSXApplicationsData,
             History,
             SSH,
         ],
