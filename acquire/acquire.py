@@ -1512,6 +1512,7 @@ class OSXApplicationsInfo(Module):
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
     ]
 
+
 @register_module("--bootbanks")
 class Bootbanks(Module):
     DESC = "ESXi bootbanks"
