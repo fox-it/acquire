@@ -1504,6 +1504,15 @@ class OSX(Module):
     ]
 
 
+@register_module("--osx-applications-info")
+class OSXApplicationsInfo(Module):
+    DESC = "OS-X info.plist from all installed applications"
+    SPEC = [
+        ("glob", "/Applications/*/Contents/Info.plist"),
+        ("glob", "Applications/*/Contents/Info.plist", from_user_home),
+    ]
+
+
 @register_module("--bootbanks")
 class Bootbanks(Module):
     DESC = "ESXi bootbanks"
@@ -2038,6 +2047,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
             History,
             SSH,
         ],
@@ -2093,6 +2103,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "minimal": {
@@ -2132,6 +2143,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "none": None,
