@@ -1501,6 +1501,8 @@ class OSX(Module):
         ("file", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
         ("dir", "/Library/Preferences"),
+        # DHCP settings
+        ("dir", "/private/var/db/dhcpclient/leases"),
     ]
 
 
