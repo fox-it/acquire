@@ -6,10 +6,20 @@ import logging
 import subprocess
 import textwrap
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
 
 from dissect.target import Target
 from dissect.target.exceptions import (
@@ -114,9 +124,6 @@ class CollectionReport:
     def add_file_missing(self, module: str, missing_path: Path) -> None:
         self._register(module, Outcome.MISSING, ArtifactType.FILE, missing_path)
 
-    def add_glob_collected(self, module: str, pattern: str) -> None:
-        self._register(module, Outcome.SUCCESS, ArtifactType.GLOB, pattern)
-
     def add_glob_failed(self, module: str, failed_pattern: str) -> None:
         exc = get_formatted_exception()
         self._register(module, Outcome.FAILURE, ArtifactType.GLOB, failed_pattern, exc)
@@ -187,6 +194,7 @@ class Collector:
 
         self.report = CollectionReport()
         self.bound_module_name = None
+        self.filter = lambda _: False
 
         self.output.init(self.target)
 
@@ -195,6 +203,23 @@ class Collector:
 
     def __exit__(self, *args, **kwargs) -> None:
         self.close()
+
+    @contextmanager
+    def bind_module(self, module: Type) -> Collector:
+        try:
+            self.bind(module)
+            yield self
+        finally:
+            self.unbind()
+
+    @contextmanager
+    def file_filter(self, filter: Optional[Callable[[fsutil.TargetPath], bool]]) -> Collector:
+        try:
+            if filter:
+                self.filter = filter
+            yield self
+        finally:
+            self.filter = lambda _: False
 
     def bind(self, module: Type) -> None:
         self.bound_module_name = module.__name__
@@ -205,7 +230,7 @@ class Collector:
     def close(self) -> None:
         self.output.close()
 
-    def _create_output_path(self, path: Path, base: Optional[str] = None) -> str:
+    def _output_path(self, path: Path, base: Optional[str] = None) -> str:
         base = base or self.base
         outpath = str(path)
 
@@ -266,18 +291,22 @@ class Collector:
         if not isinstance(path, fsutil.TargetPath):
             path = self.target.fs.path(path)
 
+        if self.filter(path) is True:
+            log.info("- Collecting file %s: Skipped (filtered out)", path)
+            return
+
         if self.report.was_path_seen(path):
             log.info("- Collecting file %s: Skipped (DEDUP)", path)
             return
 
-        outpath = self._create_output_path(outpath or path, base)
-        entry = path.get()
+        outpath = self._output_path(outpath or path, base)
 
         try:
+            entry = path.get()
             if volatile:
-                self.output.write_volatile(outpath, entry, size)
+                self.output.write_volatile(outpath, entry, size=size)
             else:
-                self.output.write_entry(outpath, entry, size)
+                self.output.write_entry(outpath, entry, size=size)
 
             self.report.add_file_collected(module_name, path)
             result = "OK"
@@ -293,8 +322,8 @@ class Collector:
 
     def collect_symlink(self, path: fsutil.TargetPath, module_name: Optional[str] = None) -> None:
         try:
-            outpath = self._create_output_path(path)
-            self.output.write_bytes(outpath, b"", path.get(), 0)
+            outpath = self._output_path(path)
+            self.output.write_entry(outpath, path.get())
 
             self.report.add_symlink_collected(module_name, path)
             result = "OK"
@@ -330,10 +359,16 @@ class Collector:
                 return
             seen_paths.add(resolved)
 
+            dir_is_empty = True
             for entry in path.iterdir():
+                dir_is_empty = False
                 self.collect_path(
                     entry, seen_paths=seen_paths, module_name=module_name, follow=follow, volatile=volatile
                 )
+
+            if dir_is_empty and volatile:
+                outpath = self._output_path(path)
+                self.output.write_entry(outpath, path)
 
         except OSError as error:
             if error.errno == errno.ENOENT:
@@ -367,7 +402,7 @@ class Collector:
             if glob_is_empty:
                 self.report.add_glob_empty(module_name, pattern)
             else:
-                self.report.add_glob_collected(module_name, pattern)
+                log.info("- Collecting glob %s succeeded", pattern)
 
     def collect_path(
         self,
@@ -456,7 +491,7 @@ class Collector:
             return
 
     def write_bytes(self, destination_path: str, data: bytes) -> None:
-        self.output.write_bytes(destination_path, data, None)
+        self.output.write_bytes(destination_path, data)
         self.report.add_file_collected(self.bound_module_name, destination_path)
 
 

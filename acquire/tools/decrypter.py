@@ -8,7 +8,8 @@ import multiprocessing
 import os
 import signal
 import sys
-from collections import deque
+import textwrap
+from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -343,19 +344,20 @@ def main():
     if not progress:
         log.info("`rich` is not installed, progress will not be shown")
 
-    if args.output and len(args.files) > 1:
-        parser.exit("--output is only allowed when decrypting a single file")
+    if args.output and args.output.is_file() and len(args.files) > 1:
+        parser.exit("--output should be a directory when decrypting multiple files.")
 
-    if not args.output:
-        for path in args.files:
-            if path.suffix != ".enc":
-                parser.exit(f"File doesn't have .enc extension: {path}")
+    files = find_enc_files(args.files)
 
     if args.output:
-        outputs = [args.output.resolve()]
+        resolv_path = args.output.resolve()
+        outputs = [resolv_path / path.stem for path in files] if args.output.is_dir() else [resolv_path]
     else:
         # Strip .enc extension
-        outputs = [path.with_suffix("") for path in args.files]
+        outputs = [path.with_suffix("") for path in files]
+
+    if len(set(outputs)) != len(outputs):
+        show_duplicates(args.output, files)
 
     if not args.key_file and not args.key_server:
         parser.exit("Need either --key-file or --key-server")
@@ -378,7 +380,7 @@ def main():
             status_queue = mp.Queue()
             tasks = []
 
-            for in_path, out_path in zip(args.files, outputs):
+            for in_path, out_path in zip(files, outputs):
                 task_id = (
                     progress.add_task("decrypt", start=False, visible=False, filename=in_path.name)
                     if progress
@@ -422,6 +424,41 @@ def main():
                     stop_event.set()
                     executor.shutdown(wait=True, cancel_futures=True)
                     break
+
+
+def show_duplicates(output_directory: Path, files: list[Path]) -> None:
+    # Gather all files that could cause duplicates in `args.output`.
+    input_files = defaultdict(list)
+    for input_file in files:
+        input_files[input_file.name].append(input_file)
+
+    # Find all duplicates
+    duplicate_generator = (file_paths for file_paths in input_files.values() if len(file_paths) > 1)
+    duplicates = "\n\n".join(
+        textwrap.indent(
+            "\n".join(str(file) for file in file_paths),
+            prefix="  - ",
+        )
+        for file_paths in duplicate_generator
+    )
+    log.warning(
+        "Two or more encrypted files have the same name. "
+        f"This will skip decrypting the file if it already exists in '{output_directory}'\n"
+        f"The files with the same names are:\n"
+        f"{duplicates}"
+    )
+
+
+def find_enc_files(files: list[Path]) -> list[Path]:
+    encrypted_files = []
+    for path in files:
+        if path.is_file() and path.suffix == ".enc":
+            encrypted_files.append(path)
+        elif path.is_dir():
+            encrypted_files.extend(path.rglob("*.enc"))
+        else:
+            log.info(f"File {path!r} does not have the .enc extension. skipping.")
+    return encrypted_files
 
 
 if __name__ == "__main__":

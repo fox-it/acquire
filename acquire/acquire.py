@@ -3,6 +3,7 @@ import enum
 import functools
 import io
 import itertools
+import json
 import logging
 import os
 import shutil
@@ -13,12 +14,14 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Union
+from typing import Iterator, Optional, Union
 
 from dissect.target import Target, exceptions
-from dissect.target.filesystems import dir, ntfs
+from dissect.target.filesystem import Filesystem
+from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
+from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webservers import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
@@ -93,7 +96,7 @@ logging.lastResort = None
 logging.raiseExceptions = False
 
 
-def misc_windows_user_homes(target):
+def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     misc_dirs = {
         ("windows/serviceprofiles/localservice", False),
         ("windows/serviceprofiles/networkservice", False),
@@ -120,15 +123,35 @@ def misc_windows_user_homes(target):
                 yield misc_path
 
 
-def from_user_home(target, path):
+def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+    user_dirs = ["root", "home/*"]
+
+    home_dirs = (target.fs.path("/").glob(path) for path in user_dirs)
+    for home_dir in itertools.chain.from_iterable(home_dirs):
+        yield home_dir
+
+
+def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+    for homedir in itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target)):
+        yield homedir
+
+
+MISC_MAPPING = {
+    "osx": misc_osx_user_homes,
+    "windows": misc_windows_user_homes,
+}
+
+
+def from_user_home(target: Target, path: str) -> Iterator[str]:
     for user_details in target.user_details.all_with_home():
         yield str(user_details.home_path.joinpath(path))
-    if target.os == "windows":
-        for misc_dir in misc_windows_user_homes(target):
-            yield str(misc_dir.joinpath(path))
+
+    misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
+    for user_dir in misc_user_homes(target):
+        yield str(user_dir.joinpath(path))
 
 
-def iter_ntfs_filesystems(target):
+def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str, str]]:
     mount_lookup = defaultdict(list)
     for mount, fs in target.fs.mounts.items():
         mount_lookup[fs].append(mount)
@@ -154,13 +177,13 @@ def iter_ntfs_filesystems(target):
         yield fs, name, mountpoints
 
 
-def mount_all_ntfs_filesystems(target):
+def mount_all_ntfs_filesystems(target: Target) -> None:
     for fs, name, _ in iter_ntfs_filesystems(target):
         if name not in target.fs.mounts:
             target.fs.mount(name, fs)
 
 
-def iter_esxi_filesystems(target):
+def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
             continue
@@ -228,29 +251,25 @@ class Module:
     EXEC_ORDER = ExecutionOrder.DEFAULT
 
     @classmethod
-    def run(cls, target, cli_args, collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         desc = cls.DESC or cls.__name__.lower()
         log.info("*** Acquiring %s", desc)
 
-        collector.bind(cls)
-
-        try:
+        with collector.bind_module(cls):
             collector.collect(cls.SPEC)
 
-            spec_ext = cls.get_spec_additions(target)
+            spec_ext = cls.get_spec_additions(target, cli_args)
             if spec_ext:
                 collector.collect(list(spec_ext))
 
-            cls._run(target, collector)
-        finally:
-            collector.unbind()
+            cls._run(target, cli_args, collector)
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         pass
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         pass
 
 
@@ -261,18 +280,8 @@ class Sys(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target: Target, collector: Collector):
-        if not Path("/sys").exists():
-            log.error("/sys is unavailable! Skipping...")
-            return
-
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         spec = [("dir", "/sys")]
-
-        sysfs = dir.DirectoryFilesystem(Path("/sys"))
-
-        target.filesystems.add(sysfs)
-        target.fs.mount("/sys", sysfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -283,17 +292,8 @@ class Proc(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target: Target, collector: Collector):
-        if not Path("/proc").exists():
-            log.error("/proc is unavailable! Skipping...")
-            return
-
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         spec = [("dir", "/proc")]
-        procfs = dir.DirectoryFilesystem(Path("/proc"))
-
-        target.filesystems.add(procfs)
-        target.fs.mount("/proc", procfs)
-
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -302,7 +302,7 @@ class NTFS(Module):
     DESC = "NTFS filesystem metadata"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring %s (%s)", fs, mountpoints)
 
@@ -313,7 +313,7 @@ class NTFS(Module):
             cls.collect_ntfs_secure(collector, fs, name)
 
     @classmethod
-    def collect_usnjrnl(cls, collector: Collector, fs, name: str) -> None:
+    def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
         try:
             usnjrnl_path = fs.path("$Extend/$Usnjrnl:$J")
             entry = usnjrnl_path.get()
@@ -343,7 +343,7 @@ class NTFS(Module):
         log.info("- Collecting file $Extend/$Usnjrnl:$J: %s", result)
 
     @classmethod
-    def collect_ntfs_secure(cls, collector: Collector, fs, name: str) -> None:
+    def collect_ntfs_secure(cls, collector: Collector, fs: Filesystem, name: str) -> None:
         try:
             secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
@@ -381,7 +381,7 @@ class Registry(Module):
     ]
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # Glob all hives to include e.g. .LOG files and .regtrans-ms files.
         files = []
         for hive in cls.HIVES:
@@ -435,7 +435,7 @@ class WinArpCache(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         if float(target.ntversion) < 6.2:
             commands = [
                 # < Windows 10
@@ -456,7 +456,7 @@ class WinRDPSessions(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # where.exe instead of where, just in case the client runs in PS instead of CMD
         # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
         # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
@@ -476,7 +476,7 @@ class WinMemDump(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         winpmem_file_name = "winpmem.exe"
         winpmem_exec = shutil.which(winpmem_file_name)
 
@@ -531,11 +531,39 @@ class WinMemDump(Module):
                         )
                         return
 
-            collector.output.write_entry(mem_dump_output_path, entry=mem_dump_path)
-            collector.output.write_entry(mem_dump_errors_output_path, entry=mem_dump_errors_path)
+            collector.output.write_entry(mem_dump_output_path, mem_dump_path)
+            collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
             collector.report.add_command_collected(cls.__name__, command_parts)
             mem_dump_path.unlink()
             mem_dump_errors_path.unlink()
+
+
+@register_module("--winmem-files")
+class WinMemFiles(Module):
+    DESC = "Windows memory files"
+    SPEC = [
+        ("file", "sysvol/pagefile.sys"),
+        ("file", "sysvol/hiberfil.sys"),
+        ("file", "sysvol/swapfile.sys"),
+        ("file", "sysvol/windows/memory.dmp"),
+        ("dir", "sysvol/windows/minidump"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        for reg_key in target.registry.iterkeys(page_key):
+            for page_path in reg_key.value("ExistingPageFiles").value:
+                spec.add(("file", target.resolve(page_path)))
+
+        crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
+        for reg_key in target.registry.iterkeys(crash_key):
+            spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
+            spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
+
+        return spec
 
 
 @register_module("-e", "--eventlogs")
@@ -543,7 +571,7 @@ class EventLogs(Module):
     DESC = "event logs"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         evt_log_paths = evt.EvtPlugin(target).get_logs(filename_glob="*.evt")
         for path in evt_log_paths:
@@ -560,7 +588,28 @@ class Tasks(Module):
         ("dir", "sysvol/windows/tasks"),
         ("dir", "sysvol/windows/system32/tasks"),
         ("dir", "sysvol/windows/syswow64/tasks"),
+        ("dir", "sysvol/windows/sysvol/domain/policies"),
+        ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
     ]
+
+
+@register_module("-ad", "--active-directory")
+class ActiveDirectory(Module):
+    DESC = "Active Directory data (policies, scripts, etc.)"
+    SPEC = [
+        ("dir", "sysvol/windows/sysvol/domain"),
+    ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
+        for reg_key in target.registry.iterkeys(key):
+            try:
+                spec.add(("dir", reg_key.value("SysVol").value))
+            except Exception:
+                pass
+        return spec
 
 
 @register_module("-nt", "--ntds")
@@ -570,8 +619,9 @@ class NTDS(Module):
     ]
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
+
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
             ("dir", "DSA Working Directory"),
@@ -583,6 +633,7 @@ class NTDS(Module):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
+
         return spec
 
 
@@ -600,7 +651,10 @@ class Recents(Module):
     SPEC = [
         ("dir", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
         ("dir", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
+        ("glob", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk", from_user_home),
+        ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
+        ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
     ]
 
 
@@ -609,7 +663,7 @@ class RecycleBin(Module):
     DESC = "recycle bin metadata"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring recycle bin metadata from %s (%s)", fs, mountpoints)
 
@@ -632,7 +686,7 @@ class Exchange(Module):
     DESC = "interesting Exchange configuration files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         key = "HKLM\\SOFTWARE\\Microsoft\\ExchangeServer"
@@ -671,7 +725,7 @@ class IIS(Module):
     DESC = "IIS logs"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set(
             [
                 ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
@@ -761,7 +815,7 @@ class DHCP(Module):
     DESC = "Windows Server DHCP files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DhcpServer\\Parameters"
         for reg_key in target.registry.iterkeys(key):
@@ -824,10 +878,13 @@ class Misc(Module):
         ("dir", "sysvol/windows/system32/sru"),
         ("dir", "sysvol/windows/system32/drivers/etc"),
         ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
-        ("dir", "sysvol/windows/sysvol/domain/policies/"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
+        ("dir", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
+        ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
+        ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
+        ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
     ]
 
 
@@ -847,6 +904,8 @@ class AV(Module):
         ("file", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
         # Avira
         ("dir", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
+        ("dir", "sysvol/ProgramData/Avira/Security/Logs"),
+        ("dir", "sysvol/ProgramData/Avira/VPN"),
         # Bitdefender
         ("dir", "sysvol/ProgramData/Bitdefender/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/Bitdefender/Desktop/Profiles/Logs"),
@@ -857,27 +916,34 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/crs1/Logs"),
         ("dir", "sysvol/ProgramData/apv2/Logs"),
         ("dir", "sysvol/ProgramData/crb1/Logs"),
+        # Cylance
+        ("dir", "sysvol/ProgramData/Cylance/Desktop"),
+        ("dir", "sysvol/ProgramData/Cylance/Optics/Log"),
+        ("dir", "sysvol/Program Files/Cylance/Desktop/log"),
         # ESET
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs"),
         ("dir", "sysvol/ProgramData/ESET/ESET NOD32 Antivirus/Logs"),
+        ("dir", "sysvol/ProgramData/ESET/ESET Security/Logs"),
+        ("dir", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
+        ("dir", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
         # Emsisoft
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
         ("dir", "sysvol/ProgramData/F-Secure/Log"),
-        ("dir", "sysvol/Users*/AppData/Local/F-Secure/Log"),
+        ("dir", "AppData/Local/F-Secure/Log", from_user_home),
         ("dir", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
         # HitmanPro
         ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
         ("dir", "sysvol/ProgramData/HitmanPro.Alert/Logs"),
         ("file", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
-        ("glob", "sysvol/ProgramData/HitmanPro/Quarantine"),
+        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        ("dir", "sysvol/Users*/AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs"),
+        ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
-        ("dir", "sysvol/Users/All Users/Application Data/McAfee/DesktopProtection"),
+        ("dir", "Application Data/McAfee/DesktopProtection", from_user_home),
         ("dir", "sysvol/ProgramData/McAfee/DesktopProtection"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
@@ -887,7 +953,7 @@ class AV(Module):
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
-        ("dir", "sysvol/Users*/AppData/Roaming/SUPERAntiSpyware/Logs"),
+        ("dir", "AppData/Roaming/SUPERAntiSpyware/Logs", from_user_home),
         # SecureAge
         ("dir", "sysvol/ProgramData/SecureAge Technology/SecureAge/log"),
         # SentinelOne
@@ -908,6 +974,8 @@ class AV(Module):
         # TotalAV
         ("glob", "sysvol/Program Files*/TotalAV/logs"),
         ("dir", "sysvol/ProgramData/TotalAV/logs"),
+        # Trendmicro
+        ("glob", "sysvol/Program Files*/Trend Micro"),
         # VIPRE
         ("dir", "sysvol/ProgramData/VIPRE Business Agent/Logs"),
         ("dir", "AppData/Roaming/VIPRE Business", from_user_home),
@@ -919,6 +987,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
         ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
+        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
     ]
@@ -946,6 +1015,7 @@ class QuarantinedFiles(Module):
         # Sophos
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
+        ("dir", "sysvol/ProgramData/Sophos/Safestore"),
         # HitmanPRO
         ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
     ]
@@ -965,7 +1035,7 @@ class History(Module):
         ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),
@@ -975,7 +1045,7 @@ class History(Module):
             from_user_home,
         ),
         (
-            "file",
+            "glob",
             "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
             from_user_home,
         ),
@@ -1075,33 +1145,33 @@ class History(Module):
             "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
             from_user_home,
         ),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Login Data For Account"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Web Data"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Login Data For Account"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Web Data"),
+        ("glob", "Library/Application Support/Google/Chrome/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/History", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Login Data For Account", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Web Data", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/History", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Login Data For Account", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Web Data", from_user_home),
         # Chrome - Legacy
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Session"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Archived History"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Session"),
-        ("glob", "/Users/*/Library/Application Support/Google/Chrome/*/Last Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Session"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Current Tabs"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Archived History"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Session"),
-        ("glob", "/Users/*/Library/Application Support/Chromium/*/Last Tabs"),
+        ("glob", "Library/Application Support/Google/Chrome/*/Current Session", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Current Tabs", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Archived History", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Last Session", from_user_home),
+        ("glob", "Library/Application Support/Google/Chrome/*/Last Tabs", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Current Session", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Current Tabs", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Archived History", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Last Session", from_user_home),
+        ("glob", "Library/Application Support/Chromium/*/Last Tabs", from_user_home),
         # Chrome - RHEL/Ubuntu - DNF
         ("glob", ".config/google-chrome/*/Bookmarks", from_user_home),
         ("glob", ".config/google-chrome/*/Favicons", from_user_home),
@@ -1202,15 +1272,15 @@ class History(Module):
             "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
             from_user_home,
         ),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Bookmarks"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Extension Cookies"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Favicons"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/History"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Login Data"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Media History"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Shortcuts"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Top Sites"),
-        ("glob", "/Users/*/Library/Application Support/Microsoft Edge/*/Web Data"),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Bookmarks", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Extension Cookies", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Favicons", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/History", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Login Data", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Media History", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Shortcuts", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Top Sites", from_user_home),
+        ("glob", "Library/Application Support/Microsoft Edge/*/Web Data", from_user_home),
         # Edge - RHEL/Ubuntu - DNF/apt
         ("glob", ".config/microsoft-edge/*/Bookmarks", from_user_home),
         ("glob", ".config/microsoft-edge/*/Favicons", from_user_home),
@@ -1242,12 +1312,12 @@ class History(Module):
         # Firefox - RHEL/Ubuntu - snap
         ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite", from_user_home),
         # Safari - macOS
-        ("glob", "/Users/*/Library/Safari/Bookmarks.plist"),
-        ("glob", "/Users/*/Library/Safari/Downloads.plist"),
-        ("glob", "/Users/*/Library/Safari/Extensions/Extensions.plist"),
-        ("glob", "/Users/*/Library/Safari/History.*"),
-        ("glob", "/Users/*/Library/Safari/LastSession.plist"),
-        ("glob", "/Users/*/Library/Caches/com.apple.Safari/Cache.db"),
+        ("file", "Library/Safari/Bookmarks.plist", from_user_home),
+        ("file", "Library/Safari/Downloads.plist", from_user_home),
+        ("file", "Library/Safari/Extensions/Extensions.plist", from_user_home),
+        ("glob", "Library/Safari/History.*", from_user_home),
+        ("file", "Library/Safari/LastSession.plist", from_user_home),
+        ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
     ]
 
 
@@ -1275,12 +1345,22 @@ class RemoteAccess(Module):
     ]
 
 
+@register_module("--webhosting")
+class WebHosting(Module):
+    DESC = "Web hosting software log files"
+    SPEC = [
+        # cPanel
+        ("dir", "/usr/local/cpanel/logs"),
+        ("file", ".lastlogin", from_user_home),
+    ]
+
+
 @register_module("--wer")
 class WER(Module):
     DESC = "WER (Windows Error Reporting) related files"
 
     @classmethod
-    def get_spec_additions(cls, target):
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         for wer_dir in itertools.chain(
@@ -1320,23 +1400,47 @@ class Boot(Module):
     ]
 
 
+def private_key_filter(path: fsutil.TargetPath) -> bool:
+    with path.open("rt") as file:
+        return "PRIVATE KEY" in file.readline()
+
+
 @register_module("--home")
 class Home(Module):
     SPEC = [
-        ("glob", "/root/.*[akz]sh*"),
-        ("dir", "/root/.config"),
-        ("glob", "/home/*/.*[akz]sh*"),
-        ("glob", "/home/*/.config"),
-        ("glob", "/home/*/*/.*[akz]sh*"),
-        ("glob", "/home/*/*/.config"),
+        ("glob", ".*[akz]sh*", from_user_home),
+        ("dir", ".config", from_user_home),
+        ("glob", "*/.*[akz]sh*", from_user_home),
+        ("glob", "*/.config", from_user_home),
         # OS-X home (aka /Users)
-        ("glob", "/Users/*/.*[akz]sh*"),
-        ("glob", "/Users/*/.bash_sessions/*"),
-        ("glob", "/Users/*/Library/LaunchAgents/*"),
-        ("glob", "/Users/*/Library/Logs/*"),
-        ("glob", "/Users/*/Preferences/*"),
-        ("glob", "/Users/*/Library/Preferences/*"),
+        ("glob", ".bash_sessions/*", from_user_home),
+        ("glob", "Library/LaunchAgents/*", from_user_home),
+        ("glob", "Library/Logs/*", from_user_home),
+        ("glob", "Preferences/*", from_user_home),
+        ("glob", "Library/Preferences/*", from_user_home),
     ]
+
+
+@register_module("--ssh")
+@module_arg("--private-keys", action="store_true", help="Add any private keys", default=False)
+class SSH(Module):
+    SPEC = [
+        ("glob", ".ssh/*", from_user_home),
+        ("glob", "/etc/ssh/*"),
+        ("glob", "sysvol/ProgramData/ssh/*"),
+    ]
+
+    @classmethod
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        # Acquire SSH configuration in sshd directories
+
+        filter = None if cli_args.private_keys else private_key_filter
+
+        if filter:
+            log.info("Executing SSH without --private-keys, skipping private keys.")
+
+        with collector.file_filter(filter):
+            super().run(target, cli_args, collector)
 
 
 @register_module("--var")
@@ -1397,6 +1501,17 @@ class OSX(Module):
         ("file", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
         ("dir", "/Library/Preferences"),
+        # DHCP settings
+        ("dir", "/private/var/db/dhcpclient/leases"),
+    ]
+
+
+@register_module("--osx-applications-info")
+class OSXApplicationsInfo(Module):
+    DESC = "OS-X info.plist from all installed applications"
+    SPEC = [
+        ("glob", "/Applications/*/Contents/Info.plist"),
+        ("glob", "Applications/*/Contents/Info.plist", from_user_home),
     ]
 
 
@@ -1405,7 +1520,7 @@ class Bootbanks(Module):
     DESC = "ESXi bootbanks"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         # Both ESXi 6 and 7 compatible
         boot_dirs = {
             "boot": "BOOT",
@@ -1448,7 +1563,7 @@ class VMFS(Module):
     DESC = "ESXi VMFS metadata files"
 
     @classmethod
-    def _run(cls, target, collector):
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for uuid, name, fs in iter_esxi_filesystems(target):
             if not fs.__fstype__ == "vmfs":
                 continue
@@ -1510,13 +1625,12 @@ class FileHashes(Module):
     )
 
     @classmethod
-    def run(cls, target, cli_args, collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         log.info("*** Acquiring file hashes")
 
         specs = cls.get_specs(cli_args)
 
-        collector.bind(cls)
-        try:
+        with collector.bind_module(cls):
             start = time.time()
 
             path_hashes = collect_hashes(target, specs, path_filters=cls.DEFAULT_FILE_FILTERS)
@@ -1527,11 +1641,9 @@ class FileHashes(Module):
                 csv_compressed_bytes,
             )
             log.info("Hashing is done, %s files processed in %.2f secs", rows_count, (time.time() - start))
-        finally:
-            collector.unbind()
 
     @classmethod
-    def get_specs(cls, cli_args):
+    def get_specs(cls, cli_args: argparse.Namespace) -> Iterator[tuple]:
         path_selectors = []
 
         if cli_args.ext_to_hash:
@@ -1571,7 +1683,7 @@ class OpenHandles(Module):
     DESC = "Open handles"
 
     @classmethod
-    def run(cls, target: Target, cli_args: dict[str, any], collector: Collector):
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         if not sys.platform == "win32":
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
@@ -1583,8 +1695,7 @@ class OpenHandles(Module):
 
         handle_types = cli_args.handle_types
 
-        collector.bind(cls)
-        try:
+        with collector.bind_module(cls):
             handles = collect_open_handles(handle_types)
             csv_compressed_handles = serialize_handles_into_csv(handles)
 
@@ -1593,11 +1704,9 @@ class OpenHandles(Module):
                 csv_compressed_handles,
             )
             log.info("Collecting open handles is done.")
-        finally:
-            collector.unbind()
 
 
-def print_disks_overview(target):
+def print_disks_overview(target: Target) -> None:
     log.info("// Disks")
     try:
         for disk in target.disks:
@@ -1612,7 +1721,7 @@ def print_disks_overview(target):
     log.info("")
 
 
-def print_volumes_overview(target):
+def print_volumes_overview(target: Target) -> None:
     log.info("// Volumes")
     try:
         for volume in target.volumes:
@@ -1635,7 +1744,45 @@ def print_acquire_warning(target: Target) -> None:
         log.warning("========================================== WARNING ==========================================")
 
 
-def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None):
+def modargs2json(args: argparse.Namespace) -> dict:
+    json_opts = {}
+    for module in MODULES.values():
+        cli_arg = module.__cli_args__[-1:][0][1]
+        if opt := cli_arg.get("dest"):
+            json_opts[opt] = getattr(args, opt)
+    return json_opts
+
+
+def acquire_target(target: Target, *args, **kwargs) -> list[str]:
+    if isinstance(target._loader, TargetdLoader):
+        files = acquire_target_targetd(target, *args, **kwargs)
+    else:
+        files = acquire_target_regular(target, *args, **kwargs)
+    return files
+
+
+def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+    files = []
+    if not len(target.hostname()):
+        log.error("Unable to initialize targetd.")
+        return files
+    json_opts = modargs2json(args)
+    json_opts["profile"] = args.profile
+    json_opts["file"] = args.file
+    json_opts["directory"] = args.directory
+    json_opts["glob"] = args.glob
+    m = {"targetd-meta": "acquire", "args": json_opts}
+    json_str = json.dumps(m)
+    targetd = target._loader.instance.client
+    targetd.send_message(json_str.encode("utf-8"))
+    targetd.sync()
+    for stream in targetd.streams:
+        files.append(stream.out_file)
+    return files
+
+
+def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+    files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
         log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
@@ -1644,7 +1791,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     else:
         log_file = args.log_path
 
-    files = []
     skip_list = set()
     if log_file:
         files.append(log_file)
@@ -1832,11 +1978,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     return files
 
 
-def upload_files(
-    paths: list[Path],
-    upload_plugin: UploaderPlugin,
-    no_proxy: bool = False,
-):
+def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: bool = False) -> None:
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
@@ -1872,19 +2014,26 @@ PROFILES = {
             History,
             Misc,
             NTDS,
+            ActiveDirectory,
             QuarantinedFiles,
             RemoteAccess,
             WindowsNotifications,
+            SSH,
+            IIS,
         ],
         "linux": [
             Etc,
             Boot,
             Home,
+            History,
+            SSH,
             Var,
+            WebHosting,
         ],
         "bsd": [
             Etc,
             Boot,
+            SSH,
             Home,
             Var,
             BSD,
@@ -1893,13 +2042,16 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
             History,
+            SSH,
         ],
     },
     "default": {
@@ -1923,6 +2075,7 @@ PROFILES = {
             DHCP,
             DNS,
             Misc,
+            ActiveDirectory,
             RemoteAccess,
             ActivitiesCache,
         ],
@@ -1930,12 +2083,14 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
@@ -1943,12 +2098,14 @@ PROFILES = {
             Bootbanks,
             ESXi,
             VMFS,
+            SSH,
         ],
         "osx": [
             Etc,
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "minimal": {
@@ -1967,31 +2124,35 @@ PROFILES = {
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
         ],
         "bsd": [
             Etc,
             Boot,
             Home,
+            SSH,
             Var,
             BSD,
         ],
         "esxi": [
             Bootbanks,
             ESXi,
+            SSH,
         ],
         "osx": [
             Etc,
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "none": None,
 }
 
 
-def main():
+def main() -> None:
     parser = create_argument_parser(PROFILES, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
@@ -2082,7 +2243,7 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(target: Target, args: argparse.Namespace):
+def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> None:
     if args.child:
         target = load_child(target, args.child)
 
