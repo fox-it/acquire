@@ -95,6 +95,7 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
         action="store_true",
         help="collect all children in addition to main target",
     )
+    parser.add_argument("--skip-parent", action="store_true", help="skip parent collection (when using --children)")
 
     parser.add_argument(
         "--force-fallback",

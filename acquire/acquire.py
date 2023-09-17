@@ -2250,11 +2250,13 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
 
     log.info("")
 
-    try:
-        files = acquire_target(target, args, args.start_time)
-    except Exception:
-        log.exception("Failed to acquire target")
-        raise
+    files = []
+    if (args.children and not args.skip_parent) or not args.children:
+        try:
+            files.extend(acquire_target(target, args, args.start_time))
+        except Exception:
+            log.exception("Failed to acquire target")
+            raise
 
     if args.children:
         for child in target.list_children():
