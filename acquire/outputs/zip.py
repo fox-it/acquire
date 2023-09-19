@@ -1,5 +1,6 @@
 import io
-import pyzipper
+import stat
+import zipfile
 from pathlib import Path
 from typing import BinaryIO, Optional, Union
 from datetime import datetime
@@ -29,18 +30,21 @@ class ZipOutput(Output):
     ) -> None:
         ext = ".zip" if ".zip" not in path.suffixes else ""
 
+        if encrypt:
+            ext += ".enc"
+
         self._fh = None
         self.path = path.with_suffix(path.suffix + ext)
 
         if compress:
-            self.compression = pyzipper.ZIP_LZMA
+            self.compression = zipfile.ZIP_LZMA
         else:
-            self.compression = pyzipper.ZIP_STORED
+            self.compression = zipfile.ZIP_STORED
 
-        if encrypt:
-            self.archive = pyzipper.AESZipFile(self.path, 'w', compression=self.compression)
-        else:
-            self.archive = pyzipper.ZipFile(self.path, 'w', compression=self.compression)
+        self.archive = zipfile.ZipFile(self.path,
+                                        mode='w',
+                                        compression=self.compression,
+                                        allowZip64=True)
 
     def write(
         self,
@@ -57,7 +61,7 @@ class ZipOutput(Output):
             entry: The optional filesystem entry of the entry to write.
             size: The optional file size in bytes of the entry to write.
         """
-        stat = None
+        lstat = None
         size = size or getattr(fh, "size", None)
 
         if size is None and fh.seekable():
@@ -66,7 +70,7 @@ class ZipOutput(Output):
             size = fh.tell()
             fh.seek(offset)
 
-        info = pyzipper.ZipInfo()
+        info = zipfile.ZipInfo()
         info.filename = output_path
 
         # some BinaryIO objects have no size, but `zipfile` uses len() in several places,
@@ -78,6 +82,7 @@ class ZipOutput(Output):
             info.file_size = len(fh)
 
         if entry:
+
             if entry.is_symlink():
                 # System which created ZIP archive, 3 = Unix; 0 = Windows
                 # Windows does not have symlinks, so this must be a unixoid system
@@ -87,10 +92,9 @@ class ZipOutput(Output):
                 unix_st_mode = stat.S_IFLNK | stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH
                 info.external_attr = unix_st_mode << 16
 
-            stat = entry.lstat()
-
-            if stat:
-                dt = datetime.fromtimestamp(stat.st_mtime)
+            lstat = entry.lstat()
+            if lstat:
+                dt = datetime.fromtimestamp(lstat.st_mtime)
                 info.date_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
         self.archive.writestr(info, fh, compress_type=self.compression)

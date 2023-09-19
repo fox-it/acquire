@@ -1,25 +1,15 @@
 from acquire.outputs.dir import DirectoryOutput
 from acquire.outputs.tar import TarOutput
-
-try:
-    import pyzipper
-    from acquire.outputs.zip import ZipOutput
-    HAVE_ZIP = True
-except:
-    HAVE_ZIP = False
+from acquire.outputs.zip import ZipOutput
 
 __all__ = [
     "DirectoryOutput",
-    "TarOutput"
+    "TarOutput",
+    "ZipOutput"
 ]
-
-if HAVE_ZIP:
-    __all__.append("ZipOutput")
 
 OUTPUTS = {
     "tar": TarOutput,
-    "dir": DirectoryOutput
+    "dir": DirectoryOutput,
+    "zip": ZipOutput
 }
-
-if HAVE_ZIP:
-    OUTPUTS["zip"] = ZipOutput
