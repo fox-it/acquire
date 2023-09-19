@@ -1397,6 +1397,7 @@ class Boot(Module):
         ("glob", "/boot/efi*"),
         ("glob", "/boot/grub*"),
         ("glob", "/boot/init*"),
+        ("glob", "/boot/system*"),
     ]
 
 
