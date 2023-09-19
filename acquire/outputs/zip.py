@@ -40,11 +40,19 @@ class ZipOutput(Output):
             self.compression = zipfile.ZIP_LZMA
         else:
             self.compression = zipfile.ZIP_STORED
+        
+        if encrypt:
+            self._fh = EncryptedStream(self.path.open("wb"), public_key)
+            self.archive = zipfile.ZipFile(fileobj=self._fh, 
+                                            mode='w',
+                                            compression=self.compression,
+                                            allowZip64=True)
+        else:
+            self.archive = zipfile.ZipFile(self.path,
+                                            mode='w',
+                                            compression=self.compression,
+                                            allowZip64=True)
 
-        self.archive = zipfile.ZipFile(self.path,
-                                        mode='w',
-                                        compression=self.compression,
-                                        allowZip64=True)
 
     def write(
         self,
