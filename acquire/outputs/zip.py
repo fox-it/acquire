@@ -103,3 +103,5 @@ class ZipOutput(Output):
     def close(self) -> None:
         """Closes the archive file."""
         self.archive.close()
+        if self._fh:
+            self._fh.close()
