@@ -287,6 +287,9 @@ def check_and_set_acquire_args(
         setattr(args, "cagent_key", args.config.get("cagent_key"))
         setattr(args, "cagent_certificate", args.config.get("cagent_certificate"))
 
+    if not args.children and args.skip_parent:
+        raise ValueError("--skip-parent can only be set with --children")
+
 
 def get_user_name() -> str:
     try:
