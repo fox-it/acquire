@@ -80,14 +80,7 @@ class ZipOutput(Output):
 
         info = zipfile.ZipInfo()
         info.filename = output_path
-
-        # some BinaryIO objects have no size, but `zipfile` uses len() in several places,
-        # so we read the whole data first
-        try:
-            info.file_size = len(fh)
-        except:
-            fh = fh.read()
-            info.file_size = len(fh)
+        info.file_size = size or 0
 
         if entry:
 
