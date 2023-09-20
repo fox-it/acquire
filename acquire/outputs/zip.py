@@ -40,19 +40,12 @@ class ZipOutput(Output):
             self.compression = zipfile.ZIP_LZMA
         else:
             self.compression = zipfile.ZIP_STORED
-        
+
         if encrypt:
             self._fh = EncryptedStream(self.path.open("wb"), public_key)
-            self.archive = zipfile.ZipFile(fileobj=self._fh, 
-                                            mode='w',
-                                            compression=self.compression,
-                                            allowZip64=True)
+            self.archive = zipfile.ZipFile(fileobj=self._fh, mode="w", compression=self.compression, allowZip64=True)
         else:
-            self.archive = zipfile.ZipFile(self.path,
-                                            mode='w',
-                                            compression=self.compression,
-                                            allowZip64=True)
-
+            self.archive = zipfile.ZipFile(self.path, mode="w", compression=self.compression, allowZip64=True)
 
     def write(
         self,
@@ -83,14 +76,24 @@ class ZipOutput(Output):
         info.file_size = size or 0
 
         if entry:
-
             if entry.is_symlink():
                 # System which created ZIP archive, 3 = Unix; 0 = Windows
                 # Windows does not have symlinks, so this must be a unixoid system
                 info.create_system = 3
 
                 # The Python zipfile module accepts the 16-bit "Mode" field (that stores st_mode field from struct stat, containing user/group/other permissions, setuid/setgid and symlink info, etc) of the ASi extra block for Unix as bits 16-31 of the external_attr
-                unix_st_mode = stat.S_IFLNK | stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH
+                unix_st_mode = (
+                    stat.S_IFLNK
+                    | stat.S_IRUSR
+                    | stat.S_IWUSR
+                    | stat.S_IXUSR
+                    | stat.S_IRGRP
+                    | stat.S_IWGRP
+                    | stat.S_IXGRP
+                    | stat.S_IROTH
+                    | stat.S_IWOTH
+                    | stat.S_IXOTH
+                )
                 info.external_attr = unix_st_mode << 16
 
             lstat = entry.lstat()
