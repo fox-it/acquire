@@ -95,6 +95,7 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
         action="store_true",
         help="collect all children in addition to main target",
     )
+    parser.add_argument("--skip-parent", action="store_true", help="skip parent collection (when using --children)")
 
     parser.add_argument(
         "--force-fallback",
@@ -285,6 +286,9 @@ def check_and_set_acquire_args(
         # set cagent related configuration
         setattr(args, "cagent_key", args.config.get("cagent_key"))
         setattr(args, "cagent_certificate", args.config.get("cagent_certificate"))
+
+    if not args.children and args.skip_parent:
+        raise ValueError("--skip-parent can only be set with --children")
 
 
 def get_user_name() -> str:
