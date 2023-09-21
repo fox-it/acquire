@@ -1,9 +1,9 @@
 import io
 import stat
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Optional, Union
-from datetime import datetime
 
 from dissect.target.filesystem import FilesystemEntry
 
@@ -81,7 +81,13 @@ class ZipOutput(Output):
                 # Windows does not have symlinks, so this must be a unixoid system
                 info.create_system = 3
 
-                # The Python zipfile module accepts the 16-bit "Mode" field (that stores st_mode field from struct stat, containing user/group/other permissions, setuid/setgid and symlink info, etc) of the ASi extra block for Unix as bits 16-31 of the external_attr
+                """
+                The Python zipfile module accepts the 16-bit "Mode" field
+                (that stores st_mode field from struct stat, containing
+                user/group/other permissions, setuid/setgid and symlink
+                info, etc) of the ASi extra block for Unix as bits 16-31 of
+                the external_attr
+                """
                 unix_st_mode = (
                     stat.S_IFLNK
                     | stat.S_IRUSR
