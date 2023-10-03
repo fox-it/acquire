@@ -219,13 +219,17 @@ def get_handles() -> Iterable[Handle]:
         ctypes.POINTER(SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX * system_handle_information.NumberOfHandles),
     )
     for handle in p_handles.contents:
-        handle_type = get_handle_type_info(handle.HandleValue)
-        handle_name = get_handle_name(handle.UniqueProcessId, handle.HandleValue)
+        try:
+            handle_type = get_handle_type_info(handle.HandleValue)
+            handle_name = get_handle_name(handle.UniqueProcessId, handle.HandleValue)
 
-        if not handle_name:
-            continue
+            if not handle_name:
+                continue
 
-        yield Handle(handle, handle_type, handle_name)
+            yield Handle(handle, handle_type, handle_name)
+        except Exception as handle_error:
+            log.error(f"An error occurred while parsing handle, skipping handle. Error: {handle_error}")
+
     log.removeFilter(duplicate_filter)
 
 
