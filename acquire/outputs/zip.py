@@ -103,7 +103,8 @@ class ZipOutput(Output):
                 dt = datetime.fromtimestamp(lstat.st_mtime)
                 info.date_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
-        self.archive.writestr(info, fh, compress_type=self.compression)
+        with self.archive.open(info, "w") as zfh:
+            shutil.copyfileobj(fh, zfh)
 
     def close(self) -> None:
         """Closes the archive file."""
