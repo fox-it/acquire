@@ -1,4 +1,5 @@
 import io
+import shutil
 import stat
 import zipfile
 from datetime import datetime
