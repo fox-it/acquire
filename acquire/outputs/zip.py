@@ -13,7 +13,7 @@ from acquire.outputs.base import Output
 
 
 class ZipOutput(Output):
-    """zip archive acquire output format. Output can be compressed and/or encrypted.
+    """Zip archive acquire output format. Output can be compressed and/or encrypted.
 
     Args:
         path: The path to write the zip archive to.
