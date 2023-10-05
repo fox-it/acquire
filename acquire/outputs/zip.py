@@ -52,7 +52,7 @@ class ZipOutput(Output):
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]],
+        entry: Optional[Union[FilesystemEntry, Path]] = None,
         size: Optional[int] = None,
     ) -> None:
         """Write a filesystem entry or file-like object to a zip file.
