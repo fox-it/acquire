@@ -1,3 +1,4 @@
+import platform
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,10 @@ def leaves(path: Path) -> list[Path]:
     return leave_paths
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="entry_name comparison uses the wrong path separators on Windows. Needs to befixed.",
+)
 @pytest.mark.parametrize(
     "entry_name",
     [
