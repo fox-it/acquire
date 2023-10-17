@@ -146,8 +146,9 @@ def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
         for user_details in target.user_details.all_with_home():
             yield normalize_path(target, user_details.home_path.joinpath(path))
-    except Exception:
+    except Exception as e:
         log.warning("Error occurred when requesting all user homes")
+        log.debug("", exc_info=e)
 
     misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
     for user_dir in misc_user_homes(target):
