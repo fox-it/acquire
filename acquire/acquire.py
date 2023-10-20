@@ -2166,6 +2166,21 @@ def main() -> None:
     except ValueError as err:
         parser.exit(err)
 
+    if args.targetd:
+        from targetd.tools.targetd import start_client
+
+        # Configure your targetd agent here
+        config = {
+            "function": "agent",
+            "topics": ["/host/a", "/host/*"],
+            "link": "pipe-server://tmp/b",
+            "address": "10.0.2.3",
+            "port": 1884,
+            "cacert": Path("targetd.crt"),
+        }
+        start_client(args, presets=config)
+        parser.exit("Done")
+
     if args.log_to_dir:
         # When args.upload files are specified, only these files are uploaded
         # and no other action is done. Thus a log file specifically named

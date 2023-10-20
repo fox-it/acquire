@@ -74,6 +74,11 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
         help="compress output (if supported by the output type)",
     )
     parser.add_argument(
+        "--targetd",
+        action="store_true",
+        help="Setup and install targetd agent",
+    )
+    parser.add_argument(
         "--encrypt",
         action="store_true",
         help="encrypt output (if supported by the output type)",
