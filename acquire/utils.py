@@ -17,6 +17,20 @@ from dissect.target import Target
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
+# Acquire Configuration for CAgent and TargetD
+CAGENT_TARGETD_ATTRS = {
+    "cagent_key",
+    "cagent_certificate",
+    "targetd_func",
+    "targetd_cacert",
+    "targetd_ip",
+    "targetd_port",
+    "targetd_hostname",
+    "targetd_groupname",
+    "targetd_globalname",
+    "targetd_link",
+}
+
 
 class StrEnum(str, Enum):
     """Sortable and serializible string-based enum"""
@@ -288,9 +302,9 @@ def check_and_set_acquire_args(
                 raise ValueError("No public key available (embedded or argument)")
             setattr(args, "public_key", public_key)
 
-        # set cagent related configuration
-        setattr(args, "cagent_key", args.config.get("cagent_key"))
-        setattr(args, "cagent_certificate", args.config.get("cagent_certificate"))
+        # set cagent/targetd related configuration
+        for attr in CAGENT_TARGETD_ATTRS:
+            setattr(args, attr, args.config.get(attr))
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
