@@ -90,7 +90,7 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
     parser.add_argument(
         "--targetd",
         action="store_true",
-        help="Setup and install targetd agent",
+        help="setup and install targetd agent",
     )
     parser.add_argument(
         "--encrypt",
