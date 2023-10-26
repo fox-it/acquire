@@ -2192,6 +2192,25 @@ def main() -> None:
         log.exception(err)
         parser.exit(1)
 
+    if args.targetd:
+        from targetd.tools.targetd import start_client
+
+        # set @auto hostname to real hostname
+        if args.targetd_hostname == "@auto":
+            args.targetd_hostname = f"/host/{Target.open('local').hostname}"
+
+        config = {
+            "function": args.targetd_func,
+            "topics": [args.targetd_hostname, args.targetd_groupname, args.targetd_globalname],
+            "link": args.targetd_link,
+            "address": args.targetd_ip,
+            "port": args.targetd_port,
+            "cacert_str": args.targetd_cacert,
+            "cacert": None,
+        }
+        start_client(args, presets=config)
+        return
+
     if args.upload:
         try:
             upload_files(args.upload, args.upload_plugin, args.no_proxy)
