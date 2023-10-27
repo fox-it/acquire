@@ -22,7 +22,7 @@ from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
-from dissect.target.plugins.apps.webservers import iis
+from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
