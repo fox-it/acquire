@@ -143,8 +143,12 @@ MISC_MAPPING = {
 
 
 def from_user_home(target: Target, path: str) -> Iterator[str]:
-    for user_details in target.user_details.all_with_home():
-        yield str(user_details.home_path.joinpath(path))
+    try:
+        for user_details in target.user_details.all_with_home():
+            yield normalize_path(target, user_details.home_path.joinpath(path))
+    except Exception as e:
+        log.warning("Error occurred when requesting all user homes")
+        log.debug("", exc_info=e)
 
     misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
     for user_dir in misc_user_homes(target):
@@ -1424,6 +1428,7 @@ class Boot(Module):
         ("glob", "/boot/efi*"),
         ("glob", "/boot/grub*"),
         ("glob", "/boot/init*"),
+        ("glob", "/boot/system*"),
     ]
 
 
@@ -1528,6 +1533,17 @@ class OSX(Module):
         ("file", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
         ("dir", "/Library/Preferences"),
+        # DHCP settings
+        ("dir", "/private/var/db/dhcpclient/leases"),
+    ]
+
+
+@register_module("--osx-applications-info")
+class OSXApplicationsInfo(Module):
+    DESC = "OS-X info.plist from all installed applications"
+    SPEC = [
+        ("glob", "/Applications/*/Contents/Info.plist"),
+        ("glob", "Applications/*/Contents/Info.plist", from_user_home),
     ]
 
 
@@ -2065,6 +2081,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
             History,
             SSH,
         ],
@@ -2120,6 +2137,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "minimal": {
@@ -2159,6 +2177,7 @@ PROFILES = {
             Home,
             Var,
             OSX,
+            OSXApplicationsInfo,
         ],
     },
     "none": None,
@@ -2199,6 +2218,25 @@ def main() -> None:
     except ValueError as err:
         log.exception(err)
         parser.exit(1)
+
+    if args.targetd:
+        from targetd.tools.targetd import start_client
+
+        # set @auto hostname to real hostname
+        if args.targetd_hostname == "@auto":
+            args.targetd_hostname = f"/host/{Target.open('local').hostname}"
+
+        config = {
+            "function": args.targetd_func,
+            "topics": [args.targetd_hostname, args.targetd_groupname, args.targetd_globalname],
+            "link": args.targetd_link,
+            "address": args.targetd_ip,
+            "port": args.targetd_port,
+            "cacert_str": args.targetd_cacert,
+            "cacert": None,
+        }
+        start_client(args, presets=config)
+        return
 
     if args.upload:
         try:
@@ -2262,11 +2300,13 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
 
     log.info("")
 
-    try:
-        files = acquire_target(target, args, args.start_time)
-    except Exception:
-        log.exception("Failed to acquire target")
-        raise
+    files = []
+    if (args.children and not args.skip_parent) or not args.children:
+        try:
+            files.extend(acquire_target(target, args, args.start_time))
+        except Exception:
+            log.exception("Failed to acquire target")
+            raise
 
     if args.children:
         for child in target.list_children():
