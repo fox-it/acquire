@@ -2247,7 +2247,7 @@ def main() -> None:
             "address": args.targetd_ip,
             "port": args.targetd_port,
             "cacert_str": args.targetd_cacert,
-            "service": True,
+            "service": args.targetd_func == "service",
             "cacert": None,
         }
         start_client(args, presets=config)
