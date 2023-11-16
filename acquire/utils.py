@@ -48,6 +48,8 @@ def _create_profile_information(profiles: dict):
         descfmt = f"  {{:{minindent}s}}: {{}}\n"
 
         for os_, modlist in profile_dict.items():
+            if not modlist:
+                continue
             indent = 4 + len(os_)
             modlist = textwrap.wrap(", ".join([mod.__modname__ for mod in modlist]), 50)
             moddesc = modlist.pop(0)
