@@ -2021,164 +2021,124 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         log.exception("")
 
 
+class WindowsProfile:
+    MINIMAL = [
+        NTFS,
+        EventLogs,
+        Registry,
+        Tasks,
+        PowerShell,
+        Prefetch,
+        Appcompat,
+        PCA,
+        Misc,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        ETL,
+        Recents,
+        RecycleBin,
+        Drivers,
+        Syscache,
+        WBEM,
+        AV,
+        BITS,
+        DHCP,
+        DNS,
+        ActiveDirectory,
+        RemoteAccess,
+        ActivitiesCache,
+    ]
+    FULL = [
+        *DEFAULT,
+        History,
+        NTDS,
+        QuarantinedFiles,
+        WindowsNotifications,
+        SSH,
+        IIS,
+    ]
+
+
+class LinuxProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        WebHosting,
+    ]
+
+
+class BsdProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+        BSD,
+    ]
+    DEFAULT = MINIMAL
+    FULL = MINIMAL
+
+
+class ESXiProfile:
+    MINIMAL = [
+        Bootbanks,
+        ESXi,
+        SSH,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        VMFS,
+    ]
+    FULL = DEFAULT
+
+
+class OSXProfile:
+    MINIMAL = [
+        Etc,
+        Home,
+        Var,
+        OSX,
+        OSXApplicationsInfo,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        SSH,
+    ]
+
+
 PROFILES = {
     "full": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            ActivitiesCache,
-            BITS,
-            DHCP,
-            DNS,
-            History,
-            Misc,
-            NTDS,
-            ActiveDirectory,
-            QuarantinedFiles,
-            RemoteAccess,
-            WindowsNotifications,
-            SSH,
-            IIS,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            History,
-            SSH,
-            Var,
-            WebHosting,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            SSH,
-            Home,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-            History,
-            SSH,
-        ],
+        "windows": WindowsProfile.FULL,
+        "linux": LinuxProfile.FULL,
+        "bsd": BsdProfile.FULL,
+        "esxi": ESXiProfile.FULL,
+        "osx": OSXProfile.FULL,
     },
     "default": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            BITS,
-            DHCP,
-            DNS,
-            Misc,
-            ActiveDirectory,
-            RemoteAccess,
-            ActivitiesCache,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.DEFAULT,
+        "linux": LinuxProfile.DEFAULT,
+        "bsd": BsdProfile.DEFAULT,
+        "esxi": ESXiProfile.DEFAULT,
+        "osx": OSXProfile.DEFAULT,
     },
     "minimal": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Misc,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.MINIMAL,
+        "linux": LinuxProfile.MINIMAL,
+        "bsd": BsdProfile.MINIMAL,
+        "esxi": ESXiProfile.MINIMAL,
+        "osx": OSXProfile.MINIMAL,
     },
     "none": None,
 }
