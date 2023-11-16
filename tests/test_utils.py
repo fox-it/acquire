@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from dissect.target import Target
 
-from acquire.acquire import MODULES, PROFILES
+from acquire.acquire import MODULES, PROFILES, VOLATILE
 from acquire.utils import (
     check_and_set_acquire_args,
     check_and_set_log_args,
@@ -26,7 +26,7 @@ def get_args(**kwargs):
         "public_key": None,
     }
 
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     default_args = dict(parser.parse_args(args=[])._get_kwargs())
     default_args.update(kwargs)
 
