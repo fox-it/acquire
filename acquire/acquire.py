@@ -1813,14 +1813,14 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
-def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str):
+def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
     modules_selected = dict()
 
     if choice and choice != "none":
         profile_dict = profile[choice]
         if operating_system not in profile_dict:
             log.error(msg, operating_system, choice)
-            return {}
+            return None
 
         for mod in profile_dict[operating_system]:
             modules_selected[mod.__modname__] = mod
@@ -1902,11 +1902,11 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         args.volatile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
     )
 
+    if (profile_modules or volatile_modules) is None:
+        return files
+
     modules_selected.update(profile_modules)
     modules_selected.update(volatile_modules)
-
-    if not (profile_modules or volatile_modules):
-        return files
 
     log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
@@ -2180,12 +2180,19 @@ class VolatileProfile:
 
 
 VOLATILE = {
-    "default": {"windows": VolatileProfile.DEFAULT},
+    "default": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": [],
+        "bsd": [],
+        "esxi": [],
+        "osx": [],
+    },
     "extensive": {
         "windows": VolatileProfile.DEFAULT,
         "linux": VolatileProfile.EXTENSIVE,
         "bsd": VolatileProfile.EXTENSIVE,
         "esxi": VolatileProfile.EXTENSIVE,
+        "osx": [],
     },
     "none": None,
 }
