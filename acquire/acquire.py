@@ -1813,6 +1813,21 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
+def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str):
+    modules_selected = dict()
+
+    if choice and choice != "none":
+        profile_dict = profile[choice]
+        if operating_system not in profile_dict:
+            log.error(msg, operating_system, choice)
+            return {}
+
+        for mod in profile_dict[operating_system]:
+            modules_selected[mod.__modname__] = mod
+
+    return modules_selected
+
+
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
     output_ts = output_ts or get_utc_now_str()
@@ -1880,13 +1895,18 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         profile = "default"
         log.info("")
 
-    if profile and profile != "none":
-        if target.os not in PROFILES[profile]:
-            log.error("No collection set for OS %s with profile %s", target.os, profile)
-            return files
+    profile_modules = _add_modules_for_profile(
+        profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
+    )
+    volatile_modules = _add_modules_for_profile(
+        args.volatile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+    )
 
-        for mod in PROFILES[profile][target.os]:
-            modules_selected[mod.__modname__] = mod
+    modules_selected.update(profile_modules)
+    modules_selected.update(volatile_modules)
+
+    if not (profile_modules or volatile_modules):
+        return files
 
     log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
@@ -2144,8 +2164,35 @@ PROFILES = {
 }
 
 
+class VolatileProfile:
+    DEFAULT = [
+        Netstat,
+        WinProcesses,
+        WinProcEnv,
+        WinArpCache,
+        WinRDPSessions,
+        WinDnsClientCache,
+    ]
+    EXTENSIVE = [
+        Proc,
+        Sys,
+    ]
+
+
+VOLATILE = {
+    "default": {"windows": VolatileProfile.DEFAULT},
+    "extensive": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": VolatileProfile.EXTENSIVE,
+        "bsd": VolatileProfile.EXTENSIVE,
+        "esxi": VolatileProfile.EXTENSIVE,
+    },
+    "none": None,
+}
+
+
 def main() -> None:
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
     try:
