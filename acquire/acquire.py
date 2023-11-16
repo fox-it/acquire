@@ -662,19 +662,46 @@ class Recents(Module):
     ]
 
 
+def recyclebin_filter(path: fsutil.TargetPath) -> bool:
+    return bool(path.stat().st_size >= (10 * 1024 * 1024))  # 10MB
+
+
 @register_module("--recyclebin")
+@module_arg(
+    "--large-files",
+    action="store_true",
+    help="Collect files larger than 10MB in the Recycle Bin",
+    default=False,
+)
+@module_arg(
+    "--no-data-files",
+    action="store_true",
+    help="Skip collection of data files in the Recycle Bin",
+    default=False,
+)
 class RecycleBin(Module):
-    DESC = "recycle bin metadata"
+    DESC = "recycle bin metadata and data files"
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring recycle bin metadata from %s (%s)", fs, mountpoints)
+        large_files_filter = None if cli_args.large_files else recyclebin_filter
 
-            patterns = ["$Recycle.bin/**/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
-            for pattern in patterns:
-                for entry in fs.path().glob(pattern):
-                    collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+        if large_files_filter:
+            log.info("Skipping files in Recycle Bin that are larger than 10MB.")
+
+        patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
+
+        if not cli_args.no_data_files:
+            patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
+
+        with collector.file_filter(large_files_filter):
+            for fs, name, mountpoints in iter_ntfs_filesystems(target):
+                log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
+
+                for pattern in patterns:
+                    for entry in fs.path().glob(pattern):
+                        if entry.is_file():
+                            collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
 @register_module("--drivers")
