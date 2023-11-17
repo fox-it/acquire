@@ -1,0 +1,180 @@
+name: Build PyOxidizer Binary
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  build-linux-gnu:
+    name: Build Linux (GNU)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pyoxidizer/
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: linux-cache
+
+      - name: Install dependencies
+        run: /opt/python/cp39-cp39/bin/pip install pyoxidizer dissect.target
+
+      - name: Build binary
+        run: |
+          mkdir -p build/lib/dissect/target/plugins
+          /opt/python/cp39-cp39/bin/target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
+          /opt/python/cp39-cp39/bin/pyoxidizer build --release --target-triple x86_64-unknown-linux-gnu --var flavor standalone
+          strip build/x86_64-unknown-linux-gnu/release/install/acquire
+
+      - name: Verify binary
+        run: build/x86_64-unknown-linux-gnu/release/install/acquire --version
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: acquire-linux
+          path: build/x86_64-unknown-linux-gnu/release/install/*
+
+  build-linux-musl:
+    name: Build Linux (musl)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    env:
+      musl_version: 1.2.4
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pyoxidizer/
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: linux-musl-cache
+
+      - name: Setup musl
+        run: |
+          curl -L https://www.musl-libc.org/releases/musl-${{ env.musl_version }}.tar.gz | tar -xzf -
+          cd musl-*
+          ./configure --exec-prefix=/usr/local
+          make
+          make install
+
+      - name: Install forked PyOxidizer
+        run: cargo install --git https://github.com/Schamper/pyoxidizer pyoxidizer --force --locked
+
+      - name: Install dependencies
+        run: /opt/python/cp39-cp39/bin/pip install dissect.target
+
+      - name: Build binary
+        run: |
+          mkdir -p build/lib/dissect/target/plugins
+          /opt/python/cp39-cp39/bin/target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
+          pyoxidizer build --release --target-triple x86_64-unknown-linux-musl --var flavor standalone
+          strip build/x86_64-unknown-linux-musl/release/install/acquire
+
+      - name: Verify binary
+        run: build/x86_64-unknown-linux-musl/release/install/acquire --version
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: acquire-linux-musl
+          path: build/x86_64-unknown-linux-musl/release/install/*
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~\AppData\Local\pyoxidizer\
+            ~\.cargo\bin\
+            ~\.cargo\registry\index\
+            ~\.cargo\registry\cache\
+            ~\.cargo\git\db\
+          key: windows-cache
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pyoxidizer dissect.target
+
+      - name: Build binary
+        run: |
+          mkdir -p build/lib/dissect/target/plugins
+          target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
+          pyoxidizer build --release --target-triple x86_64-pc-windows-msvc --var flavor standalone_static
+          strip build/x86_64-pc-windows-msvc/release/install/acquire.exe
+
+      - name: Verify binary
+        run: build/x86_64-pc-windows-msvc/release/install/acquire.exe --version
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: acquire-windows
+          path: build/x86_64-pc-windows-msvc/release/install/*
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/Library/Caches/pyoxidizer/
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: macos-cache
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pyoxidizer dissect.target
+
+      - name: Build binary
+        run: |
+          mkdir -p build/lib/dissect/target/plugins
+          target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
+          pyoxidizer build --release --target-triple x86_64-apple-darwin --var flavor standalone
+          pyoxidizer build --release --target-triple aarch64-apple-darwin --var flavor standalone
+
+          mkdir -p build/universal2-apple-darwin/release/install
+          cp -r build/x86_64-apple-darwin/release/install/* build/universal2-apple-darwin/release/install/
+          lipo -create build/x86_64-apple-darwin/release/install/acquire build/aarch64-apple-darwin/release/install/acquire -output build/universal2-apple-darwin/release/install/acquire
+          strip build/universal2-apple-darwin/release/install/acquire
+
+      - name: Verify binary
+        run: build/universal2-apple-darwin/release/install/acquire --version
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: acquire-macos
+          path: build/universal2-apple-darwin/release/install/*
