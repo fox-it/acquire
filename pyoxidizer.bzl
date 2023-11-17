@@ -39,6 +39,9 @@ def make_exe():
         "minio",
     ]
 
+    # If you want to build acquire from the local source directory, uncomment this and remove "acquire" from pip_args
+    # exe.add_python_resources(exe.read_package_root(CWD, ["acquire"]))
+
     # Lie about our platform to get cross-compilation to work (msgpack fails to download otherwise)
     if BUILD_TARGET_TRIPLE == "x86_64-pc-windows-msvc":
         pip_args += ["--platform", "win_amd64"]
