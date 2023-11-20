@@ -27,9 +27,8 @@ jobs:
             ~/.cargo/git/db/
           key: linux-cache
 
-      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: /opt/python/cp39-cp39/bin/pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
+        run: /opt/python/cp39-cp39/bin/pip install pyoxidizer dissect
 
       - name: Build binary
         run: |
@@ -84,9 +83,8 @@ jobs:
       - name: Install forked PyOxidizer
         run: cargo install --git https://github.com/Schamper/pyoxidizer pyoxidizer --force --locked
 
-      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: /opt/python/cp39-cp39/bin/pip install acquire==${{ github.event.inputs.tag }}
+        run: /opt/python/cp39-cp39/bin/pip install dissect
 
       - name: Build binary
         run: |
@@ -123,9 +121,8 @@ jobs:
         with:
           python-version: '3.9'
 
-      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
+        run: pip install pyoxidizer dissect
 
       - name: Build binary
         run: |
@@ -162,9 +159,8 @@ jobs:
         with:
           python-version: '3.9'
 
-      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
+        run: pip install pyoxidizer dissect
 
       - name: Build binary
         run: |
