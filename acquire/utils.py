@@ -36,7 +36,7 @@ class StrEnum(str, Enum):
     """Sortable and serializible string-based enum"""
 
 
-def _create_profile_information(profiles: dict):
+def _create_profile_information(profiles: dict) -> str:
     desc = ""
 
     profile_names = (name for name in profiles.keys() if name != "none")
@@ -62,8 +62,10 @@ def _create_profile_information(profiles: dict):
 
 
 def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> argparse.ArgumentParser:
-    desc = _create_profile_information(profiles)
-    desc += _create_profile_information(volatile)
+    module_profiles = "Module:\n" + textwrap.indent(_create_profile_information(profiles), "  ")
+    volatile_profiles = "Volatile:\n" + textwrap.indent(_create_profile_information(volatile), "  ")
+
+    desc = module_profiles + volatile_profiles
 
     parser = argparse.ArgumentParser(
         prog="acquire",
