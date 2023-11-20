@@ -1,9 +1,10 @@
 name: Build PyOxidizer Binary
 on:
-  push:
-    tags:
-      - '*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build
+        required: true
 
 jobs:
   build-linux-gnu:
@@ -12,6 +13,8 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
+      # We use older versions of the checkout and cache actions, those work with the LIBC version of this container
+      # We also can't use the setup-python action for this reason - it depends on a newer LIBC
       - uses: actions/checkout@v3
 
       - uses: actions/cache@v3
@@ -24,14 +27,15 @@ jobs:
             ~/.cargo/git/db/
           key: linux-cache
 
+      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: /opt/python/cp39-cp39/bin/pip install pyoxidizer dissect.target
+        run: /opt/python/cp39-cp39/bin/pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
 
       - name: Build binary
         run: |
           mkdir -p build/lib/dissect/target/plugins
           /opt/python/cp39-cp39/bin/target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
-          /opt/python/cp39-cp39/bin/pyoxidizer build --release --target-triple x86_64-unknown-linux-gnu --var flavor standalone
+          /opt/python/cp39-cp39/bin/pyoxidizer build --release --target-triple x86_64-unknown-linux-gnu --var flavor standalone --var version ${{ github.event.inputs.tag }}
           strip build/x86_64-unknown-linux-gnu/release/install/acquire
 
       - name: Verify binary
@@ -50,6 +54,8 @@ jobs:
       musl_version: 1.2.4
 
     steps:
+      # We use older versions of the checkout and cache actions, those work with the LIBC version of this container
+      # We also can't use the setup-python action for this reason - it depends on a newer LIBC
       - uses: actions/checkout@v3
 
       - name: Setup Rust
@@ -78,14 +84,15 @@ jobs:
       - name: Install forked PyOxidizer
         run: cargo install --git https://github.com/Schamper/pyoxidizer pyoxidizer --force --locked
 
+      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: /opt/python/cp39-cp39/bin/pip install dissect.target
+        run: /opt/python/cp39-cp39/bin/pip install acquire==${{ github.event.inputs.tag }}
 
       - name: Build binary
         run: |
           mkdir -p build/lib/dissect/target/plugins
           /opt/python/cp39-cp39/bin/target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
-          pyoxidizer build --release --target-triple x86_64-unknown-linux-musl --var flavor standalone
+          pyoxidizer build --release --target-triple x86_64-unknown-linux-musl --var flavor standalone --var version ${{ github.event.inputs.tag }}
           strip build/x86_64-unknown-linux-musl/release/install/acquire
 
       - name: Verify binary
@@ -116,14 +123,15 @@ jobs:
         with:
           python-version: '3.9'
 
+      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: pip install pyoxidizer dissect.target
+        run: pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
 
       - name: Build binary
         run: |
           mkdir -p build/lib/dissect/target/plugins
           target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
-          pyoxidizer build --release --target-triple x86_64-pc-windows-msvc --var flavor standalone_static
+          pyoxidizer build --release --target-triple x86_64-pc-windows-msvc --var flavor standalone_static --var version ${{ github.event.inputs.tag }}
           strip build/x86_64-pc-windows-msvc/release/install/acquire.exe
 
       - name: Verify binary
@@ -154,15 +162,16 @@ jobs:
         with:
           python-version: '3.9'
 
+      # We need target-query to build the plugin list, let acquire determine which version to pull in
       - name: Install dependencies
-        run: pip install pyoxidizer dissect.target
+        run: pip install pyoxidizer acquire==${{ github.event.inputs.tag }}
 
       - name: Build binary
         run: |
           mkdir -p build/lib/dissect/target/plugins
           target-build-pluginlist > build/lib/dissect/target/plugins/_pluginlist.py
-          pyoxidizer build --release --target-triple x86_64-apple-darwin --var flavor standalone
-          pyoxidizer build --release --target-triple aarch64-apple-darwin --var flavor standalone
+          pyoxidizer build --release --target-triple x86_64-apple-darwin --var flavor standalone --var version ${{ github.event.inputs.tag }}
+          pyoxidizer build --release --target-triple aarch64-apple-darwin --var flavor standalone --var version ${{ github.event.inputs.tag }}
 
           mkdir -p build/universal2-apple-darwin/release/install
           cp -r build/x86_64-apple-darwin/release/install/* build/universal2-apple-darwin/release/install/

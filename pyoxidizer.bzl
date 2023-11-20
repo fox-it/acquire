@@ -20,7 +20,7 @@ def make_exe():
 
     # The default dependency list of acquire doesn't include enough, and full includes some that are hard to package
     pip_args = [
-        "acquire",
+        "acquire==" + VARS["version"],
         "dissect.cstruct",
         "dissect.eventlog",
         "dissect.evidence",
