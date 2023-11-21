@@ -1813,6 +1813,21 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
+def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
+    modules_selected = dict()
+
+    if choice and choice != "none":
+        profile_dict = profile[choice]
+        if operating_system not in profile_dict:
+            log.error(msg, operating_system, choice)
+            return None
+
+        for mod in profile_dict[operating_system]:
+            modules_selected[mod.__modname__] = mod
+
+    return modules_selected
+
+
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
     output_ts = output_ts or get_utc_now_str()
@@ -1880,13 +1895,18 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         profile = "default"
         log.info("")
 
-    if profile and profile != "none":
-        if target.os not in PROFILES[profile]:
-            log.error("No collection set for OS %s with profile %s", target.os, profile)
-            return files
+    profile_modules = _add_modules_for_profile(
+        profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
+    )
+    volatile_modules = _add_modules_for_profile(
+        args.volatile_profile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+    )
 
-        for mod in PROFILES[profile][target.os]:
-            modules_selected[mod.__modname__] = mod
+    if (profile_modules or volatile_modules) is None:
+        return files
+
+    modules_selected.update(profile_modules)
+    modules_selected.update(volatile_modules)
 
     log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
@@ -2021,171 +2041,165 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         log.exception("")
 
 
+class WindowsProfile:
+    MINIMAL = [
+        NTFS,
+        EventLogs,
+        Registry,
+        Tasks,
+        PowerShell,
+        Prefetch,
+        Appcompat,
+        PCA,
+        Misc,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        ETL,
+        Recents,
+        RecycleBin,
+        Drivers,
+        Syscache,
+        WBEM,
+        AV,
+        BITS,
+        DHCP,
+        DNS,
+        ActiveDirectory,
+        RemoteAccess,
+        ActivitiesCache,
+    ]
+    FULL = [
+        *DEFAULT,
+        History,
+        NTDS,
+        QuarantinedFiles,
+        WindowsNotifications,
+        SSH,
+        IIS,
+    ]
+
+
+class LinuxProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        WebHosting,
+    ]
+
+
+class BsdProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+        BSD,
+    ]
+    DEFAULT = MINIMAL
+    FULL = MINIMAL
+
+
+class ESXiProfile:
+    MINIMAL = [
+        Bootbanks,
+        ESXi,
+        SSH,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        VMFS,
+    ]
+    FULL = DEFAULT
+
+
+class OSXProfile:
+    MINIMAL = [
+        Etc,
+        Home,
+        Var,
+        OSX,
+        OSXApplicationsInfo,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        SSH,
+    ]
+
+
 PROFILES = {
     "full": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            ActivitiesCache,
-            BITS,
-            DHCP,
-            DNS,
-            History,
-            Misc,
-            NTDS,
-            ActiveDirectory,
-            QuarantinedFiles,
-            RemoteAccess,
-            WindowsNotifications,
-            SSH,
-            IIS,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            History,
-            SSH,
-            Var,
-            WebHosting,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            SSH,
-            Home,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-            History,
-            SSH,
-        ],
+        "windows": WindowsProfile.FULL,
+        "linux": LinuxProfile.FULL,
+        "bsd": BsdProfile.FULL,
+        "esxi": ESXiProfile.FULL,
+        "osx": OSXProfile.FULL,
     },
     "default": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            BITS,
-            DHCP,
-            DNS,
-            Misc,
-            ActiveDirectory,
-            RemoteAccess,
-            ActivitiesCache,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.DEFAULT,
+        "linux": LinuxProfile.DEFAULT,
+        "bsd": BsdProfile.DEFAULT,
+        "esxi": ESXiProfile.DEFAULT,
+        "osx": OSXProfile.DEFAULT,
     },
     "minimal": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Misc,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.MINIMAL,
+        "linux": LinuxProfile.MINIMAL,
+        "bsd": BsdProfile.MINIMAL,
+        "esxi": ESXiProfile.MINIMAL,
+        "osx": OSXProfile.MINIMAL,
+    },
+    "none": None,
+}
+
+
+class VolatileProfile:
+    DEFAULT = [
+        Netstat,
+        WinProcesses,
+        WinProcEnv,
+        WinArpCache,
+        WinRDPSessions,
+        WinDnsClientCache,
+    ]
+    EXTENSIVE = [
+        Proc,
+        Sys,
+    ]
+
+
+VOLATILE = {
+    "default": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": [],
+        "bsd": [],
+        "esxi": [],
+        "osx": [],
+    },
+    "extensive": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": VolatileProfile.EXTENSIVE,
+        "bsd": VolatileProfile.EXTENSIVE,
+        "esxi": VolatileProfile.EXTENSIVE,
+        "osx": [],
     },
     "none": None,
 }
 
 
 def main() -> None:
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
     try:
