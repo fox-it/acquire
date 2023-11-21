@@ -2249,7 +2249,7 @@ def main() -> None:
             "address": args.targetd_ip,
             "port": args.targetd_port,
             "cacert_str": args.targetd_cacert,
-            "service": args.targetd_func == "service",
+            "service": args.targetd_func == "agent",
             "cacert": None,
         }
         start_client(args, presets=config)
