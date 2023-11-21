@@ -1899,7 +1899,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
     )
     volatile_modules = _add_modules_for_profile(
-        args.volatile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+        args.volatile_profile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
     )
 
     if (profile_modules or volatile_modules) is None:
