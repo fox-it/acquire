@@ -1795,6 +1795,8 @@ def acquire_target(target: Target, *args, **kwargs) -> list[str]:
 
 def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
+    # debug logs contain references to flow objects and will give errors
+    logging.getLogger().setLevel(logging.CRITICAL)
     if not len(target.hostname()):
         log.error("Unable to initialize targetd.")
         return files
@@ -2247,6 +2249,7 @@ def main() -> None:
             "address": args.targetd_ip,
             "port": args.targetd_port,
             "cacert_str": args.targetd_cacert,
+            "service": args.targetd_func == "agent",
             "cacert": None,
         }
         start_client(args, presets=config)

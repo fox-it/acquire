@@ -33,7 +33,7 @@ class DelayedFileHandler(logging.FileHandler):
         if self._record_cache:
             for record in self._record_cache:
                 logging.FileHandler.emit(self, record)
-            self._record_cache = None
+            self._record_cache = []
 
     def emit(self, record):
         if not self.opened:
