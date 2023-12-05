@@ -194,9 +194,9 @@ def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem
 
         uuid = mount[len("/vmfs/volumes/") :]  # strip /vmfs/volumes/
         name = None
-        if fs.__fstype__ == "fat":
+        if fs.__type__ == "fat":
             name = fs.volume.name
-        elif fs.__fstype__ == "vmfs":
+        elif fs.__type__ == "vmfs":
             name = fs.vmfs.label
 
         yield uuid, name, fs
@@ -1597,7 +1597,7 @@ class VMFS(Module):
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for uuid, name, fs in iter_esxi_filesystems(target):
-            if not fs.__fstype__ == "vmfs":
+            if not fs.__type__ == "vmfs":
                 continue
 
             log.info("Acquiring /vmfs/volumes/%s (%s)", uuid, name)
