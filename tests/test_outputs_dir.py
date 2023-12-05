@@ -52,7 +52,7 @@ def test_dir_output_write_entry(mock_fs: VirtualFilesystem, dir_output: Director
     file = files[0]
 
     # Convert a os seperated file to the entry name.
-    file_path = f"/{normalize(str(file.relative_to(dir_output.path)), alt_separator=os.sep)}"
+    file_path = f"/{normalize(str(file.relative_to(path)), alt_separator=os.sep)}"
     assert file_path == entry_name
 
     if entry.is_dir():
