@@ -1,5 +1,4 @@
 import errno
-import platform
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -329,10 +328,6 @@ def collect_report(
     return collector.report
 
 
-@pytest.mark.skipif(
-    platform.system() == "Windows",
-    reason="No files are collected on Windows. Needs to be fixed.",
-)
 @pytest.mark.parametrize(
     "function_name, collection_point, expected_results, create_paths",
     [

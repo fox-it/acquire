@@ -370,7 +370,6 @@ def test_check_and_set_acquire_args_cagent():
         ),
     ],
 )
-@pytest.mark.skipif(platform.system() == "Windows", reason="Compares Posix Paths. Needs to be fixed.")
 def test_utils_normalize_path(
     mock_target: Target,
     path: pathlib.Path,
@@ -379,6 +378,12 @@ def test_utils_normalize_path(
     case_sensitive: bool,
     os: str,
 ) -> None:
-    with patch.object(mock_target, "os", new=os):
-        with patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
-            assert normalize_path(mock_target, path, resolve=resolve) == norm_path
+    with patch.object(mock_target, "os", new=os), patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
+        resolved_path = normalize_path(mock_target, path, resolve=resolve)
+
+        if platform.system() == "Windows":
+            # A resolved path on windows adds a C:\ prefix. So we check if it ends with our expected
+            # path string
+            assert resolved_path.endswith(norm_path)
+        else:
+            assert resolved_path == norm_path
