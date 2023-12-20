@@ -328,8 +328,12 @@ class NTFS(Module):
                 journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
                 i += 1
 
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Extend/$Usnjrnl:$J")
+
             collector.output.write(
-                f"{collector.base}/{name}/$Extend/$Usnjrnl:$J",
+                outpath,
                 journal,
                 size=journal.size - journal.tell(),
                 entry=entry,
@@ -352,8 +356,13 @@ class NTFS(Module):
             secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
             sds = entry.open()
+
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Secure:$SDS")
+
             collector.output.write(
-                f"{collector.base}/{name}/$Secure:$SDS",
+                outpath,
                 sds,
                 size=sds.size,
                 entry=entry,
