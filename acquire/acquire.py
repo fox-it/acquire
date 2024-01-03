@@ -2095,6 +2095,7 @@ class WindowsProfile:
         Appcompat,
         PCA,
         Misc,
+        Startup,
     ]
     DEFAULT = [
         *MINIMAL,
