@@ -1452,7 +1452,7 @@ class Home(Module):
         # Catches most shell related configuration files
         ("glob", ".*[akz]sh*", from_user_home),
         ("glob", "*/.*[akz]sh*", from_user_home),
-        # Added to catch any shell related configuration file not caught with the above regex
+        # Added to catch any shell related configuration file not caught with the above glob
         ("glob", ".*history", from_user_home),
         ("glob", "*/.*history", from_user_home),
         ("glob", ".*rc", from_user_home),
