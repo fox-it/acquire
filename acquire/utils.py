@@ -36,25 +36,36 @@ class StrEnum(str, Enum):
     """Sortable and serializible string-based enum"""
 
 
-def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentParser:
+def _create_profile_information(profiles: dict) -> str:
     desc = ""
 
     profile_names = (name for name in profiles.keys() if name != "none")
-
     for name in profile_names:
+        profile_dict = profiles[name]
         desc += f"{name} profile:\n"
-        minindent = max([len(os_) for os_ in profiles[name].keys()])
-        descfmt = f"  {{:{minindent}s}}: {{}}\n"
-        for os_ in profiles[name].keys():
-            indent = 4 + len(os_)
-            modlist = textwrap.wrap(", ".join([mod.__modname__ for mod in profiles[name][os_]]), 50)
 
+        minindent = max([len(os_) for os_ in profile_dict.keys()])
+        descfmt = f"  {{:{minindent}s}}: {{}}\n"
+
+        for os_, modlist in profile_dict.items():
+            if not modlist:
+                continue
+            indent = 4 + len(os_)
+            modlist = textwrap.wrap(", ".join([mod.__modname__ for mod in modlist]), 50)
             moddesc = modlist.pop(0)
             for ml in modlist:
                 moddesc += "\n" + (" " * indent) + ml
-
             desc += descfmt.format(os_, moddesc)
         desc += "\n"
+
+    return desc
+
+
+def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> argparse.ArgumentParser:
+    module_profiles = "Module:\n" + textwrap.indent(_create_profile_information(profiles), "  ")
+    volatile_profiles = "Volatile:\n" + textwrap.indent(_create_profile_information(volatile), "  ")
+
+    desc = module_profiles + volatile_profiles
 
     parser = argparse.ArgumentParser(
         prog="acquire",
@@ -101,6 +112,7 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
     parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
+    parser.add_argument("--volatile-profile", choices=volatile.keys(), default="none", help="volatile profile")
 
     parser.add_argument("-f", "--file", action="append", help="acquire file")
     parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
