@@ -594,6 +594,8 @@ class Tasks(Module):
         ("dir", "sysvol/windows/syswow64/tasks"),
         ("dir", "sysvol/windows/sysvol/domain/policies"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        # Task Scheduler Service transaction log
+        ("file", "sysvol/SchedLgU.txt"),
     ]
 
 
@@ -659,6 +661,15 @@ class Recents(Module):
         ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
         ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
+    ]
+
+
+@register_module("--startup")
+class Startup(Module):
+    DESC = "Windows Startup folder"
+    SPEC = [
+        ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
+        ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
     ]
 
 
@@ -1612,7 +1623,7 @@ class VMFS(Module):
 class ActivitiesCache(Module):
     DESC = "user's activities caches"
     SPEC = [
-        ("glob", "AppData/Local/ConnectedDevicesPlatform/*/ActivitiesCache.db", from_user_home),
+        ("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),
     ]
 
 
