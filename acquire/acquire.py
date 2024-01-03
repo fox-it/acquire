@@ -1460,10 +1460,31 @@ def private_key_filter(path: fsutil.TargetPath) -> bool:
 @register_module("--home")
 class Home(Module):
     SPEC = [
+        # Catches most shell related configuration files
         ("glob", ".*[akz]sh*", from_user_home),
-        ("dir", ".config", from_user_home),
         ("glob", "*/.*[akz]sh*", from_user_home),
+        # Added to catch any shell related configuration file not caught with the above glob
+        ("glob", ".*history", from_user_home),
+        ("glob", "*/.*history", from_user_home),
+        ("glob", ".*rc", from_user_home),
+        ("glob", "*/.*rc", from_user_home),
+        ("glob", ".*_logout", from_user_home),
+        ("glob", "*/.*_logout", from_user_home),
+        # Miscellaneous configuration files
+        ("dir", ".config", from_user_home),
         ("glob", "*/.config", from_user_home),
+        ("file", ".wget-hsts", from_user_home),
+        ("glob", "*/.wget-hsts", from_user_home),
+        ("file", ".gitconfig", from_user_home),
+        ("glob", "*/.gitconfig", from_user_home),
+        ("file", ".selected_editor", from_user_home),
+        ("glob", "*/.selected_editor", from_user_home),
+        ("file", ".viminfo", from_user_home),
+        ("glob", "*/.viminfo", from_user_home),
+        ("file", ".lesshist", from_user_home),
+        ("glob", "*/.lesshist", from_user_home),
+        ("file", ".profile", from_user_home),
+        ("glob", "*/.profile", from_user_home),
         # OS-X home (aka /Users)
         ("glob", ".bash_sessions/*", from_user_home),
         ("glob", "Library/LaunchAgents/*", from_user_home),
