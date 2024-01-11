@@ -24,6 +24,7 @@ from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
+from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
@@ -167,7 +168,10 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         else:
             mountpoints = "No mounts"
 
-        if not isinstance(fs, ntfs.NtfsFilesystem):
+        # The attr check is needed to correctly collect fake NTFS filesystems
+        # where the MFT etc. are added to a VirtualFilesystem. This happens for
+        # instance when the target is an acquired tar target.
+        if not isinstance(fs, ntfs.NtfsFilesystem) and not hasattr(fs, "ntfs"):
             log.warning("Skipping %s (%s) - not an NTFS filesystem", fs, mountpoints)
             continue
 
@@ -179,12 +183,6 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
             name = f"vol-{fs.ntfs.serial:x}"
 
         yield fs, name, mountpoints
-
-
-def mount_all_ntfs_filesystems(target: Target) -> None:
-    for fs, name, _ in iter_ntfs_filesystems(target):
-        if name not in target.fs.mounts:
-            target.fs.mount(name, fs)
 
 
 def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
@@ -323,10 +321,13 @@ class NTFS(Module):
             entry = usnjrnl_path.get()
             journal = entry.open()
 
-            i = 0
-            while journal.runlist[i][0] is None:
-                journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
-                i += 1
+            # If the filesystem is a virtual NTFS filesystem, journal will be
+            # plain BinaryIO, not a RunlistStream.
+            if isinstance(journal, RunlistStream):
+                i = 0
+                while journal.runlist[i][0] is None:
+                    journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
+                    i += 1
 
             # Use the same method to construct the output path as is used in
             # collector.collect_file()
@@ -1914,10 +1915,6 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
     log.info("Hostname: %s", hostname)
     log.info("OS: %s", version)
     log.info("")
-
-    # Prepare targets if necessary
-    if target.os == "windows":
-        mount_all_ntfs_filesystems(target)
 
     print_acquire_warning(target)
 
