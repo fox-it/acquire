@@ -937,7 +937,7 @@ class Misc(Module):
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
         ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
-        ("glob", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows/Windows*"),
+        ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
     ]
 
 
