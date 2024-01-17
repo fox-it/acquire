@@ -202,6 +202,13 @@ class Collector:
         self.bound_module_name = None
         self.filter = lambda _: False
 
+        self._sysvol_drive = None
+        if target.os == "windows":
+            self._sysvol_drive = next(
+                (mnt for mnt, fs in target.fs.mounts.items() if fs is target.fs.mounts["sysvol"] and mnt != "sysvol"),
+                None,
+            )
+
         self.output.init(self.target)
 
     def __enter__(self) -> Collector:
@@ -239,6 +246,9 @@ class Collector:
     def _output_path(self, path: Path, base: Optional[str] = None) -> str:
         base = base or self.base
         outpath = str(path)
+
+        if self._sysvol_drive and outpath.startswith(("sysvol/", "/sysvol/")):
+            outpath = outpath.replace("sysvol", self._sysvol_drive, 1)
 
         if base:
             # Make sure that `outpath` is not an abolute path, since

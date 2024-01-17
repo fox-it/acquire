@@ -13,23 +13,22 @@ from dissect.target.exceptions import (
 from dissect.target.filesystem import VirtualFilesystem
 
 from acquire.collector import CollectionReport, Collector, Outcome
+from acquire.outputs.base import Output
 
 
-def test_collector() -> None:
-    target = Target("local")
-
+def test_collector(mock_target: Target) -> None:
     with patch("acquire.collector.log", autospec=True) as mock_log:
         fs_1 = VirtualFilesystem()
         fs_1.map_file("$MFT", None)
-        target.fs.mount("C:", fs_1)
-        target.filesystems.add(fs_1)
+        mock_target.fs.mount("C:", fs_1)
+        mock_target.filesystems.add(fs_1)
 
         fs_2 = VirtualFilesystem()
         fs_2.map_file("$MFT", None)
-        target.fs.mount("D:", fs_2)
-        target.filesystems.add(fs_2)
+        mock_target.fs.mount("D:", fs_2)
+        mock_target.filesystems.add(fs_2)
 
-        collector = Collector(target, Mock())
+        collector = Collector(mock_target, Mock())
 
         collector.collect_dir("C:", module_name="test")
         collector.collect_dir("D:", module_name="test")
@@ -38,7 +37,7 @@ def test_collector() -> None:
 
 
 @pytest.fixture
-def mock_collector(mock_target) -> Collector:
+def mock_collector(mock_target: Target) -> Collector:
     with patch("acquire.outputs.base.Output", autospec=True) as mock_output:
         collector = Collector(mock_target, mock_output)
         return collector
@@ -262,7 +261,9 @@ def test_collector_collect_path_no_file_type(mock_target: Target, mock_collector
         ),
     ],
 )
-def test_collector_collect_path_with_exception(mock_target, mock_collector, report_func, exception, log_msg) -> None:
+def test_collector_collect_path_with_exception(
+    mock_target: Target, mock_collector: Collector, report_func: str, exception: type[Exception], log_msg: str
+) -> None:
     path = mock_target.fs.path("/foo/bar/non-existing-file")
     with (
         patch("acquire.collector.log", autospec=True) as mock_log,
@@ -365,7 +366,7 @@ def test_collector_report_succeeded(
     collection_point: str,
     expected_results: int,
     create_paths: list[str],
-):
+) -> None:
     create_temp_files(tmp_path, create_paths)
     fs = mock_target.filesystems[0]
     fs.map_dir("/", tmp_path)
@@ -374,3 +375,18 @@ def test_collector_report_succeeded(
     report = collect_report(mock_collector, function_name, collection_point)
     successful_outputs = list(value for value in report.registry if value.outcome == Outcome.SUCCESS)
     assert len(successful_outputs) == expected_results
+
+
+def test_collector_sysvol_map() -> None:
+    vfs = VirtualFilesystem()
+
+    mock_target = Mock()
+    mock_target.os = "windows"
+    mock_target.fs.mounts = {"sysvol": vfs, "y:": vfs}
+
+    mock_output = Mock(spec=Output)
+
+    collector = Collector(mock_target, mock_output)
+
+    assert collector._sysvol_drive == "y:"
+    assert collector._output_path("sysvol/some/path") == "fs/y:/some/path"
