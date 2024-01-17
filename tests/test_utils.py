@@ -296,77 +296,95 @@ def test_check_and_set_acquire_args_cagent():
 
 
 @pytest.mark.parametrize(
-    "path, resolve, norm_path, case_sensitive, os",
+    "path, resolve, lower_case, case_sensitive, os, result",
     [
         (
             pathlib.Path("/foo/bar"),
             False,
-            "/foo/bar",
+            True,
             True,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.Path("/foo/BAR"),
             False,
-            "/foo/bar",
+            True,
             False,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.Path("/foo/BAR"),
             False,
+            True,
+            True,
+            "dummy",
             "/foo/BAR",
-            True,
-            "dummy",
         ),
         (
             pathlib.Path("/foo/../bar"),
             False,
-            "/foo/../bar",
+            True,
             True,
             "dummy",
+            "/foo/../bar",
         ),
         (
             pathlib.Path("/foo/../foo/bar"),
             True,
-            "/foo/bar",
+            True,
             True,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("c:\\foo\\bar"),
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "sysvol/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("C:\\foo\\bar"),
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "sysvol/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\C:\\foo\\bar"),
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "sysvol/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\c:\\foo\\bar"),
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "sysvol/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("D:\\foo\\bar"),
             False,
-            "d:/foo/bar",
+            True,
             False,
             "windows",
+            "d:/foo/bar",
+        ),
+        (
+            pathlib.PureWindowsPath("D:\\Foo\\BAR"),
+            False,
+            False,
+            False,
+            "windows",
+            "D:/Foo/BAR",
         ),
     ],
 )
@@ -374,16 +392,17 @@ def test_utils_normalize_path(
     mock_target: Target,
     path: pathlib.Path,
     resolve: bool,
-    norm_path: str,
+    lower_case: bool,
     case_sensitive: bool,
     os: str,
+    result: str,
 ) -> None:
     with patch.object(mock_target, "os", new=os), patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
-        resolved_path = normalize_path(mock_target, path, resolve=resolve)
+        resolved_path = normalize_path(mock_target, path, resolve=resolve, lower_case=lower_case)
 
         if platform.system() == "Windows":
             # A resolved path on windows adds a C:\ prefix. So we check if it ends with our expected
             # path string
-            assert resolved_path.endswith(norm_path)
+            assert resolved_path.endswith(result)
         else:
-            assert resolved_path == norm_path
+            assert resolved_path == result

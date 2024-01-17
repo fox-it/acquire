@@ -99,11 +99,11 @@ logging.raiseExceptions = False
 
 def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     misc_dirs = {
-        ("windows/serviceprofiles/localservice", False),
-        ("windows/serviceprofiles/networkservice", False),
-        ("windows/system32/config/systemprofile", False),
-        ("users", True),
-        ("documents and settings", True),
+        ("Windows/ServiceProfiles/LocalService", False),
+        ("Windows/ServiceProfiles/NetworkService", False),
+        ("Windows/System32/config/systemprofile", False),
+        ("Users", True),
+        ("Documents and Settings", True),
     }
 
     for fs in target.fs.path().iterdir():
@@ -146,7 +146,7 @@ MISC_MAPPING = {
 def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
         for user_details in target.user_details.all_with_home():
-            yield normalize_path(target, user_details.home_path.joinpath(path))
+            yield normalize_path(target, user_details.home_path.joinpath(path), lower_case=False)
     except Exception as e:
         log.warning("Error occurred when requesting all user homes")
         log.debug("", exc_info=e)

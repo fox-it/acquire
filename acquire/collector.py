@@ -74,8 +74,14 @@ def serialize_path(path: Any) -> str:
 
     # Naive way to serialize TargetPath filesystem's metadata is
     # to rely on uniqueness of `path._fs` object
-    fs_id = id(path._fs)
-    return f"{path._fs.__type__}:{fs_id}:{path}"
+    fs = path._fs
+    fs_id = id(fs)
+    fs_type = fs.__type__
+    path = str(path)
+    if not fs.case_sensitive:
+        path = path.lower()
+
+    return f"{fs_type}:{fs_id}:{path}"
 
 
 @dataclass
