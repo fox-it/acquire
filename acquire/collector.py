@@ -30,7 +30,12 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.utils import StrEnum, get_formatted_exception, normalize_path
+from acquire.utils import (
+    StrEnum,
+    get_formatted_exception,
+    normalize_path,
+    normalize_sysvol,
+)
 
 if TYPE_CHECKING:
     from acquire.outputs.base import Output
@@ -247,8 +252,8 @@ class Collector:
         base = base or self.base
         outpath = str(path)
 
-        if self._sysvol_drive and outpath.startswith(("sysvol/", "/sysvol/")):
-            outpath = outpath.replace("sysvol", self._sysvol_drive, 1)
+        if self._sysvol_drive:
+            outpath = normalize_sysvol(outpath, self._sysvol_drive)
 
         if base:
             # Make sure that `outpath` is not an abolute path, since
@@ -435,7 +440,7 @@ class Collector:
         if not isinstance(path, fsutil.TargetPath):
             path = self.target.fs.path(path)
 
-        if self.skip_list and normalize_path(self.target, path) in self.skip_list:
+        if self.skip_list and normalize_path(self.target, path, sysvol=self._sysvol_drive) in self.skip_list:
             self.report.add_path_failed(module_name, path)
             log.error("- Skipping collection of %s, path is on the skip list", path)
             return
