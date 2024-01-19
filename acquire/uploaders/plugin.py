@@ -2,6 +2,8 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
+from acquire.guis import gui
+
 log = logging.getLogger(__name__)
 
 __all__ = [
@@ -41,6 +43,9 @@ def upload_files_using_uploader(
     paths = [Path(path) if isinstance(path, str) else path for path in paths]
     client = uploader.prepare_client(paths, proxies)
 
+    counter = 0
+    gui.GUI().progress = 55
+
     for path in paths:
         for retry in range(MAX_RETRIES):
             if retry == MAX_RETRIES - 1:
@@ -56,5 +61,8 @@ def upload_files_using_uploader(
             except Exception:
                 log.error(*error_log)
                 log.exception("")
+
+        counter += 1
+        gui.GUI().progress = 55 + (counter / len(paths) * 40)
 
     uploader.finish(client)

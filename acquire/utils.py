@@ -108,6 +108,14 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         action="store_true",
         help="encrypt output (if supported by the output type)",
     )
+    parser.add_argument(
+        "--gui",
+        nargs="?",
+        const="always",
+        default="never",
+        action="store",
+        help="Enable GUI (if available for your platform)",
+    )
     parser.add_argument("--public-key", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
     parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
