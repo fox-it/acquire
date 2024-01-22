@@ -1879,6 +1879,7 @@ def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, 
 
 
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+    acquire_gui = gui.GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -2039,7 +2040,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
                 log.error("Error while running module %s", name, exc_info=True)
                 modules_failed[mod.__name__] = get_formatted_exception()
 
-            gui.GUI().progress = (gui.GUI().shard / len(modules_selected)) * count
+            acquire_gui.progress = (acquire_gui.shard / len(modules_selected)) * count
             count += 1
 
             log.info("")
@@ -2089,6 +2090,7 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
+        gui.GUI().message("Upload failed.")
         log.exception("")
 
 
@@ -2251,7 +2253,6 @@ VOLATILE = {
 
 
 def main() -> None:
-    CONFIG = {"arguments": ["--auto-upload"]}
     parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
@@ -2283,10 +2284,9 @@ def main() -> None:
         flavour = platform.system()
 
     acquire_gui = gui.GUI(flavour=flavour, upload_available=args.auto_upload)
-    args.output, args.auto_upload, args.cancel = acquire_gui.wait_for_start(args)
+    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
 
-    # We use the pseudo argument to act upon cancel signal
-    if args.cancel:
+    if cancel:
         parser.exit(0)
     # At this stage, in GUI mode, the GUI will be locked, user cannot close window.
 
@@ -2384,6 +2384,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     log.info("")
 
     files = []
+    acquire_gui = gui.GUI()
 
     counter = 0
     progress_limit = 50 if args.auto_upload else 90
@@ -2394,20 +2395,20 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     if (args.children and not args.skip_parent) or not args.children:
         total_targets += 1
         counter += 1
-        gui.GUI().shard = (progress_limit / total_targets) * counter
+        acquire_gui.shard = (progress_limit / total_targets) * counter
         try:
             files.extend(acquire_target(target, args, args.start_time))
 
         except Exception:
             log.exception("Failed to acquire target")
-            gui.GUI().message("Failed to acquire target")
-            gui.GUI().wait_for_quit()
+            acquire_gui.message("Failed to acquire target")
+            acquire_gui.wait_for_quit()
             raise
 
     if args.children:
         for child in target.list_children():
             counter += 1
-            gui.GUI().shard = (100 / total_targets) * counter
+            acquire_gui.shard = (100 / total_targets) * counter
             try:
                 child_target = load_child(target, child.path)
             except Exception:
@@ -2420,7 +2421,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
                 files.extend(child_files)
             except Exception:
                 log.exception("Failed to acquire child target")
-                gui.GUI().message("Failed to acquire child target")
+                acquire_gui.message("Failed to acquire child target")
                 continue
 
     files = sort_files(files)
@@ -2433,15 +2434,15 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
         log.info("")
         try:
             upload_files(files, args.upload_plugin)
-            gui.GUI().finish()
-            gui.GUI().wait_for_quit()
+            acquire_gui.finish()
+            acquire_gui.wait_for_quit()
         except Exception:
             log.exception("Failed to upload files")
-            gui.GUI().message("Failed to upload files")
-            gui.GUI().wait_for_quit()
+            acquire_gui.message("Failed to upload files")
+            acquire_gui.wait_for_quit()
     else:
-        gui.GUI().finish()
-        gui.GUI().wait_for_quit()
+        acquire_gui.finish()
+        acquire_gui.wait_for_quit()
 
 
 def sort_files(files: list[Union[str, Path]]) -> list[Path]:

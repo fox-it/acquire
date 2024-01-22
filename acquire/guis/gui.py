@@ -93,7 +93,7 @@ class StubGUI(GUI):
         pass
 
     def wait_for_start(self, args) -> (str, bool, bool):
-        return args.output, args.auto_upload, args.cancel
+        return args.output, args.auto_upload, False
 
     def wait_for_quit(self) -> None:
         pass

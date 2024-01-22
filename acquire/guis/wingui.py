@@ -42,61 +42,48 @@ def HIWORD(dword):
 
 LRESULT = c_int64
 HCURSOR = c_void_p
-
 WNDPROC = WINFUNCTYPE(LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 BFFCALLBACK = WINFUNCTYPE(c_int, w.HWND, w.UINT, w.LPARAM, w.LPARAM)
-
-
 CW_USEDEFAULT = -2147483648
 IDI_APPLICATION = w.LPCWSTR(32512)
-
 CS_HREDRAW = 2
 CS_VREDRAW = 1
-
 IDC_ARROW = w.LPCWSTR(32512)
 WHITE_BRUSH = 0
-
 SW_SHOWNORMAL = 1
-
 WM_DESTROY = 2
 WM_PAINT = 15
 WM_COMMAND = 273
 WM_ENABLE = 10
-
+WM_USER = 0x0400
+WM_CLOSE = 16
 DT_SINGLELINE = 32
 DT_CENTER = 1
 DT_VCENTER = 4
-
 WS_CHILD = 0x40000000
 WS_VISIBLE = 0x10000000
 WS_BORDER = 0x00800000
 WS_OVERLAPPEDWINDOW = 13565952
 WS_DISABLED = 0x08000000
-
 BS_PUSHBUTTON = 0
 BS_CHECKBOX = 2
 BS_AUTOCHECKBOX = 3
 BS_CENTER = 300
-
-
 ES_PASSWORD = 32
 ES_WANTRETURN = 4096
 EM_SETPASSWORDCHAR = 204
-
-WM_USER = 0x0400
 PBM_SETRANGE = WM_USER + 1
 PBM_SETPOS = WM_USER + 2
 PBM_DELTAPOS = WM_USER + 3
 PBM_SETSTEP = WM_USER + 4
 PBM_STEPIT = WM_USER + 5
 PBM_SETRANGE32 = WM_USER + 6
-
 PBS_SMOOTH = 0x01
-WM_CLOSE = 16
-
 BN_CLICKED = 0
-
 BM_SETCHECK = 241
+WHITE_BRUSH = 0
+WM_CTLCOLORSTATIC = 312
+SS_LEFT = 0
 
 
 class WNDCLASSW(Structure):
@@ -125,84 +112,11 @@ class PAINTSTRUCT(Structure):
     ]
 
 
-def RECT(top: int, left: int, right: int, bottom: int) -> w.RECT:
-    rectangle = w.RECT()
-    rectangle.top = top
-    rectangle.left = left
-    rectangle.right = right
-    rectangle.bottom = bottom
-    return rectangle
-
-
-kernel32 = WinDLL("kernel32", use_last_error=True)
-kernel32.GetModuleHandleW.argtypes = (w.LPCWSTR,)
-kernel32.GetModuleHandleW.restype = w.HMODULE
-kernel32.GetModuleHandleW._winerror = _winerror
-
-user32 = WinDLL("user32", use_last_error=True)
-user32.CreateWindowExW.argtypes = (
-    w.DWORD,
-    w.LPCWSTR,
-    w.LPCWSTR,
-    w.DWORD,
-    c_int,
-    c_int,
-    c_int,
-    c_int,
-    w.HWND,
-    w.HMENU,
-    w.HINSTANCE,
-    w.LPVOID,
-)
-user32.CreateWindowExW.restype = w.HWND
-user32.CreateWindowExW._winerror = _winerror
-
-user32.SetWindowTextA.argtypes = (
-    w.HWND,
-    w.LPCSTR,
-)
-user32.SetWindowTextA.restype = w.BOOL
-user32.SetWindowTextA._winerror = _winerror
-
-
-user32.EnableWindow.argtypes = (
-    w.HWND,
-    w.BOOL,
-)
-user32.EnableWindow.restype = w.BOOL
-user32.EnableWindow._winerror = _winerror
-
-user32.DestroyWindow.argtypes = (w.HWND,)
-user32.DestroyWindow.restype = w.BOOL
-user32.DestroyWindow._winerror = _winerror
-
-gdi32 = WinDLL("gdi32", use_last_error=True)
-gdi32.GetStockObject.argtypes = (c_int,)
-gdi32.GetStockObject.restype = w.HGDIOBJ
-
-ole32 = WinDLL("ole32", use_last_error=True)
-shell32 = WinDLL("shell32", use_last_error=True)
-
-comctl32 = WinDLL("comctl32", use_last_error=True)
-
-
 class INITCOMMONCONTROLSEX(Structure):
     _fields_ = [
         ("dwSize", w.DWORD),
         ("dwICC", w.DWORD),
     ]
-
-
-comctl32.InitCommonControlsEx.argtypes = (POINTER(INITCOMMONCONTROLSEX),)
-comctl32.InitCommonControlsEx.restype = w.BOOL
-
-user32.DefWindowProcW.argtypes = (
-    w.HWND,
-    w.UINT,
-    w.WPARAM,
-    w.LPARAM,
-)
-user32.DefWindowProcW.restype = LRESULT
 
 
 class BROWSEINFOA(Structure):
@@ -231,27 +145,70 @@ class ITEMIDLIST(Structure):
     ]
 
 
-# Initialise OLE32 for advanced controls
+kernel32 = WinDLL("kernel32", use_last_error=True)
+kernel32.GetModuleHandleW.argtypes = (w.LPCWSTR,)
+kernel32.GetModuleHandleW.restype = w.HMODULE
+kernel32.GetModuleHandleW._winerror = _winerror
+user32 = WinDLL("user32", use_last_error=True)
+user32.CreateWindowExW.argtypes = (
+    w.DWORD,
+    w.LPCWSTR,
+    w.LPCWSTR,
+    w.DWORD,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+    w.HWND,
+    w.HMENU,
+    w.HINSTANCE,
+    w.LPVOID,
+)
+user32.CreateWindowExW.restype = w.HWND
+user32.CreateWindowExW._winerror = _winerror
+user32.SetWindowTextA.argtypes = (
+    w.HWND,
+    w.LPCSTR,
+)
+user32.SetWindowTextA.restype = w.BOOL
+user32.SetWindowTextA._winerror = _winerror
+user32.EnableWindow.argtypes = (
+    w.HWND,
+    w.BOOL,
+)
+user32.EnableWindow.restype = w.BOOL
+user32.EnableWindow._winerror = _winerror
+user32.DestroyWindow.argtypes = (w.HWND,)
+user32.DestroyWindow.restype = w.BOOL
+user32.DestroyWindow._winerror = _winerror
+gdi32 = WinDLL("gdi32", use_last_error=True)
+gdi32.GetStockObject.argtypes = (c_int,)
+gdi32.GetStockObject.restype = w.HGDIOBJ
+ole32 = WinDLL("ole32", use_last_error=True)
+shell32 = WinDLL("shell32", use_last_error=True)
+comctl32 = WinDLL("comctl32", use_last_error=True)
+comctl32.InitCommonControlsEx.argtypes = (POINTER(INITCOMMONCONTROLSEX),)
+comctl32.InitCommonControlsEx.restype = w.BOOL
+user32.DefWindowProcW.argtypes = (
+    w.HWND,
+    w.UINT,
+    w.WPARAM,
+    w.LPARAM,
+)
+user32.DefWindowProcW.restype = LRESULT
 ole32.CoInitialize.argtypes = (w.LPVOID,)
 ole32.CoInitialize.restype = HRESULT
 ole32.CoTaskMemFree.argtypes = (w.LPVOID,)
 ole32.CoTaskMemFree.restype = None
-
-
 shell32.SHBrowseForFolderA.argtypes = (POINTER(BROWSEINFOA),)
 shell32.SHBrowseForFolderA.restype = POINTER(ITEMIDLIST)
 shell32.SHBrowseForFolderA._winerror = _winerror
-
 shell32.SHGetPathFromIDList.argtypes = (POINTER(ITEMIDLIST), w.LPCSTR)
 shell32.SHGetPathFromIDList.restype = w.BOOL
 shell32.SHGetPathFromIDList._winerror = _winerror
-
-
 SendMessage = user32.SendMessageA
 SendMessage.argtypes = (w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 SendMessage.restype = c_void_p
-
-
 user32.MessageBoxA.argtypes = (
     w.HWND,
     w.LPCSTR,
@@ -312,7 +269,7 @@ class WinGUI(GUI):
     def message(self, message: str):
         if self._closed:
             return
-        user32.MessageBoxA(self.hwnd, message.encode("ascii"), b"Acquire", 0)
+        user32.MessageBoxA(self.hwnd, message.encode("ascii"), b"Acquire", 0x00040000)
 
     def choose_folder(self):
         if self._closed:
@@ -387,7 +344,7 @@ class WinGUI(GUI):
                 0, "Button", None, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 20, 250, 16, 16, hwnd, 0, 0, 0
             )
             cls.upload_label = user32.CreateWindowExW(
-                0, "static", "upload", WS_CHILD | WS_VISIBLE, 60, 250, 100, 32, hwnd, 0, 0, 0
+                0, "static", "upload", WS_CHILD | WS_VISIBLE | SS_LEFT, 50, 250, 100, 32, hwnd, 0, 0, 0
             )
             GUI.auto_upload = True
             SendMessage(cls.checkbox, BM_SETCHECK, 1, 0)
@@ -407,10 +364,10 @@ class WinGUI(GUI):
             0,
         )
         cls.label = user32.CreateWindowExW(
-            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 20, 400, 32, hwnd, 0, 0, 0
+            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 20, 400, 20, hwnd, 0, 0, 0
         )
         cls.choose_folder_button = user32.CreateWindowExW(
-            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER, 450, 20, 100, 32, hwnd, 0, 0, 0
+            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER, 450, 20, 100, 20, hwnd, 0, 0, 0
         )
 
         cls.start_button = user32.CreateWindowExW(
@@ -447,11 +404,15 @@ class WinGUI(GUI):
             if _instance.ready:
                 user32.MessageBoxA(hwnd, b"We are in the middle of acquiring this host, please wait.", b"Acquire", 0)
                 return 0
-            answer = user32.MessageBoxA(hwnd, b"Are you sure you want to quit?", b"Acquire", 1)
+            answer = user32.MessageBoxA(hwnd, b"Are you sure you want to quit?", b"Acquire", 0x01 | 0x030)
             if answer == 1:
                 _instance._closed = True
                 user32.DestroyWindow(hwnd)
             return 0
+
+        if message == WM_CTLCOLORSTATIC and lParam == _instance.upload_label:
+            return gdi32.GetStockObject(WHITE_BRUSH)
+
         if message == WM_DESTROY:
             user32.PostQuitMessage(0)
             return 0

@@ -44,7 +44,8 @@ def upload_files_using_uploader(
     client = uploader.prepare_client(paths, proxies)
 
     counter = 0
-    gui.GUI().progress = 55
+    plugin_gui = gui.GUI()
+    plugin_gui.progress = 55
 
     for path in paths:
         for retry in range(MAX_RETRIES):
@@ -63,6 +64,6 @@ def upload_files_using_uploader(
                 log.exception("")
 
         counter += 1
-        gui.GUI().progress = 55 + (counter / len(paths) * 40)
+        plugin_gui.progress = 55 + (counter / len(paths) * 40)
 
     uploader.finish(client)
