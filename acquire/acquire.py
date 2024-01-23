@@ -606,6 +606,9 @@ class Tasks(Module):
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         # Task Scheduler Service transaction log
         ("file", "sysvol/SchedLgU.txt"),
+        ("file", "sysvol/windows/SchedLgU.txt"),
+        ("file", "sysvol/windows/tasks/SchedLgU.txt"),
+        ("file", "sysvol/winnt/tasks/SchedLgU.txt"),
     ]
 
 
