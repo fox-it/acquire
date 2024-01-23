@@ -420,8 +420,10 @@ def test_utils_normalize_path(
     os: str,
     result: str,
 ) -> None:
-    with patch.object(mock_target, "os", new=os), patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
-        resolved_path = normalize_path(mock_target, path, sysvol=sysvol, resolve=resolve, lower_case=lower_case)
+    with patch.object(mock_target, "os", new=os), patch.object(
+        mock_target.fs, "_case_sensitive", new=case_sensitive
+    ), patch.dict(mock_target.props, {"sysvol_drive": sysvol}):
+        resolved_path = normalize_path(mock_target, path, resolve=resolve, lower_case=lower_case)
 
         if platform.system() == "Windows":
             # A resolved path on windows adds a C:\ prefix. So we check if it ends with our expected

@@ -383,10 +383,10 @@ def test_collector_sysvol_map() -> None:
     mock_target = Mock()
     mock_target.os = "windows"
     mock_target.fs.mounts = {"sysvol": vfs, "y:": vfs}
+    mock_target.props = {"sysvol_drive": "y:"}
 
     mock_output = Mock(spec=Output)
 
     collector = Collector(mock_target, mock_output)
 
-    assert collector._sysvol_drive == "y:"
     assert collector._output_path("sysvol/some/path") == "fs/y:/some/path"

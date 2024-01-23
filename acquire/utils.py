@@ -369,24 +369,22 @@ def persist_execution_report(path: Path, report_data: dict) -> Path:
 
 
 DEVICE_SUBST = re.compile(r"^(/\?\?/)")
-SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/)")
+SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/)", flags=re.IGNORECASE)
 
 
-def normalize_path(
-    target: Target, path: Path, *, sysvol: Optional[str] = None, resolve: bool = False, lower_case: bool = True
-) -> str:
+def normalize_path(target: Target, path: Path, *, resolve: bool = False, lower_case: bool = True) -> str:
     if resolve:
         path = path.resolve()
 
     path = path.as_posix()
 
-    if not target.fs.case_sensitive and lower_case:
-        path = path.lower()
-
     if target.os == "windows":
         path = DEVICE_SUBST.sub("", path)
-        if sysvol:
-            path = normalize_sysvol(path, sysvol)
+        if sysvol_drive := target.props.get("sysvol_drive"):
+            path = normalize_sysvol(path, sysvol_drive)
+
+    if not target.fs.case_sensitive and lower_case:
+        path = path.lower()
 
     return path
 

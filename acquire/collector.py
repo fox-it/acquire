@@ -207,13 +207,6 @@ class Collector:
         self.bound_module_name = None
         self.filter = lambda _: False
 
-        self._sysvol_drive = None
-        if target.os == "windows":
-            self._sysvol_drive = next(
-                (mnt for mnt, fs in target.fs.mounts.items() if fs is target.fs.mounts["sysvol"] and mnt != "sysvol"),
-                None,
-            )
-
         self.output.init(self.target)
 
     def __enter__(self) -> Collector:
@@ -252,8 +245,8 @@ class Collector:
         base = base or self.base
         outpath = str(path)
 
-        if self._sysvol_drive:
-            outpath = normalize_sysvol(outpath, self._sysvol_drive)
+        if sysvol_drive := self.target.props.get("sysvol_drive"):
+            outpath = normalize_sysvol(outpath, sysvol_drive)
 
         if base:
             # Make sure that `outpath` is not an abolute path, since
@@ -440,7 +433,7 @@ class Collector:
         if not isinstance(path, fsutil.TargetPath):
             path = self.target.fs.path(path)
 
-        if self.skip_list and normalize_path(self.target, path, sysvol=self._sysvol_drive) in self.skip_list:
+        if self.skip_list and normalize_path(self.target, path) in self.skip_list:
             self.report.add_path_failed(module_name, path)
             log.error("- Skipping collection of %s, path is on the skip list", path)
             return
