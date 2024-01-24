@@ -114,7 +114,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         const="always",
         default="never",
         action="store",
-        help="Enable GUI (if available for your platform)",
+        help="launch with a GUI (if available for your platform)",
     )
     parser.add_argument("--public-key", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
