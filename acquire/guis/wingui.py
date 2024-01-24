@@ -261,11 +261,11 @@ class WinGUI(GUI):
     quitting = False
 
     @property
-    def progress(self):
+    def progress(self) -> int:
         return self._progress
 
     @progress.setter
-    def progress(self, progress):
+    def progress(self, progress: int) -> None:
         if self._closed:
             return
 
@@ -288,12 +288,12 @@ class WinGUI(GUI):
         time.sleep(1)  # give user some time to observe 100%
         self.message("Operation complete, application will close now.")
 
-    def message(self, message: str):
+    def message(self, message: str) -> None:
         if self._closed:
             return
         user32.MessageBoxA(self.hwnd, message.encode("ascii"), b"Acquire", 0x00040000)
 
-    def choose_folder(self):
+    def choose_folder(self) -> None:
         if self._closed:
             return
 
@@ -318,7 +318,7 @@ class WinGUI(GUI):
         # Caller is responsible for freeing this memory.
         ole32.CoTaskMemFree(choice)
 
-    def show(self) -> str:
+    def show(self) -> None:
         if self._closed:
             return
 
@@ -423,7 +423,6 @@ class WinGUI(GUI):
             user32.DispatchMessageW(byref(msg))
             if self.quitting:
                 break
-        return str(self.result)
 
     def _message(self, hwnd: w.HWND, message: w.UINT, wParam: w.WPARAM, lParam: w.LPARAM) -> w.LRESULT:
         if message == WM_COMMAND:

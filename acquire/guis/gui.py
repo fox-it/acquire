@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from argparse import Namespace
 from threading import Thread
 
 log = logging.getLogger("gui")
@@ -19,25 +20,7 @@ class GUI:
     auto_upload = None
     upload_available = False
 
-    @classmethod
-    def gui(cls):
-        """Returns the instance of the GUI"""
-        return cls._instance
-
-    @property
-    def shard(self):
-        """Returns the shard of the progress bar"""
-        return self._shard
-
-    @shard.setter
-    def shard(self, shard: int) -> None:
-        """Sets the shard of the progress bar"""
-        # Use this to 'refine' progress bar (i.e. assign a shard)
-        if shard > 100 or shard < 1:
-            raise ValueError("Shards have to be between 0-100")
-        self._shard = shard
-
-    def __new__(cls, flavour=None, upload_available=False):
+    def __new__(cls, flavour: str = None, upload_available: bool = False):
         # singleton+factory pattern
         if cls._instance is None:
             if flavour == "Windows":
@@ -58,7 +41,25 @@ class GUI:
             GUI._instance.upload_available = upload_available
         return GUI._instance
 
-    def wait_for_start(self, args) -> (str, bool, bool):
+    @classmethod
+    def gui(cls) -> GUI:
+        """Returns the instance of the GUI"""
+        return cls._instance
+
+    @property
+    def shard(self) -> int:
+        """Returns the shard of the progress bar"""
+        return self._shard
+
+    @shard.setter
+    def shard(self, shard: int) -> None:
+        """Sets the shard of the progress bar"""
+        # Use this to 'refine' progress bar (i.e. assign a shard)
+        if shard > 100 or shard < 1:
+            raise ValueError("Shards have to be between 0-100")
+        self._shard = shard
+
+    def wait_for_start(self, args: Namespace) -> (str, bool, bool):
         """Starts GUI thread and waits for start button to be clicked."""
         log.info("Opening GUI window and starting GUI thread...")
 
@@ -82,17 +83,17 @@ class GUI:
         GUI.thread.join()
         self._closed = True
 
-    def show(self, args):
+    def show(self) -> None:
         raise NotImplementedError
 
 
 class StubGUI(GUI):
     """Minimal GUI implementation."""
 
-    def message(message: str):
+    def message(message: str) -> None:
         pass
 
-    def wait_for_start(self, args) -> (str, bool, bool):
+    def wait_for_start(self, args: Namespace) -> (str, bool, bool):
         return args.output, args.auto_upload, False
 
     def wait_for_quit(self) -> None:
