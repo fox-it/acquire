@@ -57,6 +57,7 @@ WM_COMMAND = 273
 WM_ENABLE = 10
 WM_USER = 0x0400
 WM_CLOSE = 16
+WM_SETFONT = 0x0030
 DT_SINGLELINE = 32
 DT_CENTER = 1
 DT_VCENTER = 4
@@ -69,6 +70,7 @@ BS_PUSHBUTTON = 0
 BS_CHECKBOX = 2
 BS_AUTOCHECKBOX = 3
 BS_CENTER = 300
+BS_FLAT = 0x8000
 ES_PASSWORD = 32
 ES_WANTRETURN = 4096
 EM_SETPASSWORDCHAR = 204
@@ -184,6 +186,25 @@ user32.DestroyWindow._winerror = _winerror
 gdi32 = WinDLL("gdi32", use_last_error=True)
 gdi32.GetStockObject.argtypes = (c_int,)
 gdi32.GetStockObject.restype = w.HGDIOBJ
+
+gdi32.CreateFontA.argtypes = (
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.DWORD,
+    w.LPCSTR,
+)
+gdi32.CreateFontA.restype = w.HFONT
+
 ole32 = WinDLL("ole32", use_last_error=True)
 shell32 = WinDLL("shell32", use_last_error=True)
 comctl32 = WinDLL("comctl32", use_last_error=True)
@@ -338,6 +359,8 @@ class WinGUI(GUI):
         if not controls_loaded:
             raise Exception("Unable to load GUI controls")
 
+        hFont = gdi32.CreateFontA(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b"Segoe UI")
+
         if self.upload_available:
             self.checkbox = user32.CreateWindowExW(
                 0, "Button", None, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 20, 250, 16, 16, hwnd, 0, 0, 0
@@ -345,6 +368,8 @@ class WinGUI(GUI):
             self.upload_label = user32.CreateWindowExW(
                 0, "static", "upload", WS_CHILD | WS_VISIBLE | SS_LEFT, 50, 250, 100, 32, hwnd, 0, 0, 0
             )
+            if hFont:
+                SendMessage(self.upload_label, WM_SETFONT, hFont, 1)
             GUI.auto_upload = True
             SendMessage(self.checkbox, BM_SETCHECK, 1, 0)
 
@@ -362,18 +387,36 @@ class WinGUI(GUI):
             0,
             0,
         )
+
         self.info = user32.CreateWindowExW(
             0, "static", "Acquire output folder:", WS_CHILD | WS_VISIBLE, 20, 20, 200, 20, hwnd, 0, 0, 0
         )
         self.label = user32.CreateWindowExW(
-            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 400, 20, hwnd, 0, 0, 0
+            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 400, 25, hwnd, 0, 0, 0
         )
         self.choose_folder_button = user32.CreateWindowExW(
-            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER, 450, 40, 100, 20, hwnd, 0, 0, 0
+            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER | BS_FLAT, 450, 35, 100, 32, hwnd, 0, 0, 0
         )
         self.start_button = user32.CreateWindowExW(
-            0, "Button", "start", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_DISABLED, 250, 100, 100, 32, hwnd, 0, 0, 0
+            0,
+            "Button",
+            "start",
+            WS_CHILD | WS_VISIBLE | WS_BORDER | WS_DISABLED | BS_FLAT,
+            250,
+            100,
+            100,
+            32,
+            hwnd,
+            0,
+            0,
+            0,
         )
+        if hFont:
+            SendMessage(self.info, WM_SETFONT, hFont, 1)
+            SendMessage(self.start_button, WM_SETFONT, hFont, 1)
+            SendMessage(self.choose_folder_button, WM_SETFONT, hFont, 1)
+            SendMessage(self.label, WM_SETFONT, hFont, 1)
+
         msg = w.MSG()
         while user32.GetMessageW(byref(msg), None, 0, 0) != 0:
             user32.TranslateMessage(byref(msg))
