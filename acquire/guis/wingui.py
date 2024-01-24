@@ -231,6 +231,7 @@ class WinGUI(GUI):
     checkbox = None
     reveal_text = None
     label = None
+    info = None
     upload_label = None
     progress_bar = None
     image = None
@@ -275,9 +276,8 @@ class WinGUI(GUI):
         if self._closed:
             return
 
-        cls = GUI._instance
         browseinfo = BROWSEINFOA()
-        browseinfo.hwndOwner = cls.hwnd
+        browseinfo.hwndOwner = self.hwnd
         browseinfo.pidlRoot = None
         browseinfo.pszDisplayName = cast(create_string_buffer(b"", size=1000), w.LPSTR)
         browseinfo.lpszTitle = cast(create_string_buffer(b"Acquire"), w.LPCSTR)
@@ -291,8 +291,8 @@ class WinGUI(GUI):
         pathstr = string_at(path).decode("utf-8")
         if pathstr != "":
             self.folder = Path(pathstr)
-            user32.SetWindowTextA(cls.label, string_at(path))
-            user32.EnableWindow(cls.start_button, True)
+            user32.SetWindowTextA(self.label, string_at(path))
+            user32.EnableWindow(self.start_button, True)
 
         # Caller is responsible for freeing this memory.
         ole32.CoTaskMemFree(choice)
@@ -301,7 +301,6 @@ class WinGUI(GUI):
         if self._closed:
             return
 
-        cls = self._instance
         wndclass = WNDCLASSW()
         wndclass.style = CS_HREDRAW | CS_VREDRAW
         wndclass.lpfnWndProc = WNDPROC(_winmessage)
@@ -327,7 +326,7 @@ class WinGUI(GUI):
             wndclass.hInstance,
             None,
         )
-        cls.hwnd
+
         user32.ShowWindow(hwnd, SW_SHOWNORMAL)
         user32.UpdateWindow(hwnd)
         ole32.CoInitialize(None)
@@ -340,16 +339,16 @@ class WinGUI(GUI):
             raise Exception("Unable to load GUI controls")
 
         if self.upload_available:
-            cls.checkbox = user32.CreateWindowExW(
+            self.checkbox = user32.CreateWindowExW(
                 0, "Button", None, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 20, 250, 16, 16, hwnd, 0, 0, 0
             )
-            cls.upload_label = user32.CreateWindowExW(
+            self.upload_label = user32.CreateWindowExW(
                 0, "static", "upload", WS_CHILD | WS_VISIBLE | SS_LEFT, 50, 250, 100, 32, hwnd, 0, 0, 0
             )
             GUI.auto_upload = True
-            SendMessage(cls.checkbox, BM_SETCHECK, 1, 0)
+            SendMessage(self.checkbox, BM_SETCHECK, 1, 0)
 
-        cls.progress_bar = user32.CreateWindowExW(
+        self.progress_bar = user32.CreateWindowExW(
             0,
             "msctls_progress32",
             None,
@@ -363,14 +362,16 @@ class WinGUI(GUI):
             0,
             0,
         )
-        cls.label = user32.CreateWindowExW(
-            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 20, 400, 20, hwnd, 0, 0, 0
+        self.info = user32.CreateWindowExW(
+            0, "static", "Acquire output folder:", WS_CHILD | WS_VISIBLE, 20, 20, 200, 20, hwnd, 0, 0, 0
         )
-        cls.choose_folder_button = user32.CreateWindowExW(
-            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER, 450, 20, 100, 20, hwnd, 0, 0, 0
+        self.label = user32.CreateWindowExW(
+            0, "static", "no path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 400, 20, hwnd, 0, 0, 0
         )
-
-        cls.start_button = user32.CreateWindowExW(
+        self.choose_folder_button = user32.CreateWindowExW(
+            0, "Button", "choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER, 450, 40, 100, 20, hwnd, 0, 0, 0
+        )
+        self.start_button = user32.CreateWindowExW(
             0, "Button", "start", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_DISABLED, 250, 100, 100, 32, hwnd, 0, 0, 0
         )
         msg = w.MSG()
@@ -379,38 +380,35 @@ class WinGUI(GUI):
             user32.DispatchMessageW(byref(msg))
             if self.quitting:
                 break
-        return str(cls.result)
+        return str(self.result)
 
     def _message(self, hwnd: w.HWND, message: w.UINT, wParam: w.WPARAM, lParam: w.LPARAM) -> w.LRESULT:
-        _instance = self
         if message == WM_COMMAND:
-            if lParam == _instance.choose_folder_button:
+            if lParam == self.choose_folder_button:
                 event = HIWORD(wParam)
                 if event == BN_CLICKED:
-                    _instance.choose_folder()
-            elif lParam == _instance.start_button:
-                # SendMessage(_instance.start_button, WM_ENABLE, 0,0)
-                user32.EnableWindow(_instance.start_button, False)
-                user32.EnableWindow(_instance.choose_folder_button, False)
-                if _instance.checkbox:
-                    user32.EnableWindow(_instance.checkbox, False)
-                _instance.ready = True
-                _instance.progress = 1  # make it visible to the user that we are starting
-            elif lParam == _instance.checkbox:
-                _instance.auto_upload = not _instance.auto_upload
+                    self.choose_folder()
+            elif lParam == self.start_button:
+                user32.EnableWindow(self.start_button, False)
+                user32.EnableWindow(self.choose_folder_button, False)
+                if self.checkbox:
+                    user32.EnableWindow(self.checkbox, False)
+                self.ready = True
+                self.progress = 1  # make it visible to the user that we are starting
+            elif lParam == self.checkbox:
+                self.auto_upload = not self.auto_upload
             return 0
-
         if message == WM_CLOSE:
-            if _instance.ready:
+            if self.ready:
                 user32.MessageBoxA(hwnd, b"We are in the middle of acquiring this host, please wait.", b"Acquire", 0)
                 return 0
             answer = user32.MessageBoxA(hwnd, b"Are you sure you want to quit?", b"Acquire", 0x01 | 0x030)
             if answer == 1:
-                _instance._closed = True
+                self._closed = True
                 user32.DestroyWindow(hwnd)
             return 0
 
-        if message == WM_CTLCOLORSTATIC and lParam == _instance.upload_label:
+        if message == WM_CTLCOLORSTATIC and lParam in [self.upload_label, self.info]:
             return gdi32.GetStockObject(WHITE_BRUSH)
 
         if message == WM_DESTROY:
