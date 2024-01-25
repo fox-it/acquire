@@ -2288,7 +2288,7 @@ def main() -> None:
 
     if cancel:
         parser.exit(0)
-    # At this stage, in GUI mode, the GUI will be locked, user cannot close window.
+    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
 
     plugins_to_load = [("cloud", MinIO)]
     upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
