@@ -2280,7 +2280,7 @@ def main() -> None:
 
     # start GUI if requested through CLI / config
     flavour = "CLI"
-    if args.gui == "always" or (args.gui == "depends" and os.environ.get("KEYSOURCE") == "PROMPT" and sys.argc < 3):
+    if args.gui == "always" or (args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "PROMPT" and sys.argc < 3):
         flavour = platform.system()
 
     acquire_gui = gui.GUI(flavour=flavour, upload_available=args.auto_upload)
