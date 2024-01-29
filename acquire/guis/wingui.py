@@ -357,7 +357,7 @@ class WinGUI(GUI):
         controls_loaded = comctl32.InitCommonControlsEx(byref(control_list))
 
         if not controls_loaded:
-            raise Exception("Unable to load GUI controls")
+            raise AcquireGUIError("Unable to load GUI controls")
 
         hFont = gdi32.CreateFontA(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b"Segoe UI")
 

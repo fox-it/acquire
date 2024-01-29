@@ -7,6 +7,8 @@ from threading import Thread
 
 log = logging.getLogger("gui")
 
+class AcquireGUIError(RuntimeError):
+    pass
 
 class GUI:
     _instance = None
@@ -56,7 +58,7 @@ class GUI:
         """Sets the shard of the progress bar"""
         # Use this to 'refine' progress bar (i.e. assign a shard)
         if shard > 100 or shard < 1:
-            raise ValueError("Shards have to be between 0-100")
+            raise AcquireGUIError("Shards have to be between 0-100")
         self._shard = shard
 
     def wait_for_start(self, args: Namespace) -> (str, bool, bool):
