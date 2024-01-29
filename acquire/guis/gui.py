@@ -63,10 +63,10 @@ class GUI:
         """Starts GUI thread and waits for start button to be clicked."""
         log.info("Opening GUI window and starting GUI thread...")
 
-        def guit() -> None:
+        def gui_thread() -> None:
             self.show()
 
-        GUI.thread = Thread(target=guit)
+        GUI.thread = Thread(target=gui_thread)
         GUI.thread.start()
         while not self.ready and not self._closed:
             time.sleep(1)
