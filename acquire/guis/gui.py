@@ -7,8 +7,10 @@ from threading import Thread
 
 log = logging.getLogger("gui")
 
+
 class AcquireGUIError(RuntimeError):
     pass
+
 
 class GUI:
     _instance = None
