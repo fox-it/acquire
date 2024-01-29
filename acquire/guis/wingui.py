@@ -23,7 +23,7 @@ from ctypes import wintypes as w
 from pathlib import Path
 from typing import Any
 
-from acquire.guis.gui import GUI
+from acquire.guis.gui import GUI, AcquireGUIError
 
 
 def _winerror(result: int, *args) -> Any:
