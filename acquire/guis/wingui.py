@@ -310,7 +310,7 @@ class WinGUI(GUI):
         path = create_string_buffer(b"", size=1000)
         shell32.SHGetPathFromIDList(choice, path)
         pathstr = string_at(path).decode("utf-8")
-        if pathstr != "":
+        if not pathstr:
             self.folder = Path(pathstr)
             user32.SetWindowTextA(self.label, string_at(path))
             user32.EnableWindow(self.start_button, True)
