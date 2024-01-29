@@ -275,13 +275,13 @@ class WinGUI(GUI):
         self._progress = progress
         SendMessage(self._instance.progress_bar, PBM_SETPOS, int(self._progress), 0)
 
-    def quit(self):
+    def quit(self) -> None:
         if self._closed:
             return
         self.quitting = True
         user32.DestroyWindow(self.hwnd)
 
-    def finish(self):
+    def finish(self) -> None:
         if self._closed:
             return
         self.progress = 100
