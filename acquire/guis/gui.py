@@ -83,6 +83,10 @@ class GUI:
         GUI.thread.join()
         self._closed = True
 
+    def show(self) -> None:
+        """Subclass needs to implement this."""
+        raise NotImplementedError
+
 
 class StubGUI(GUI):
     """Minimal GUI implementation."""
