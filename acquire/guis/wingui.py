@@ -32,11 +32,11 @@ def _winerror(result: int, *args) -> Any:
     return result
 
 
-def LOWORD(dword):
+def LOWORD(dword: w.DWORD) -> w.DWORD:
     return dword & 0x0000FFFF
 
 
-def HIWORD(dword):
+def HIWORD(dword: w.DWORD) -> w.DWORD:
     return dword >> 16
 
 
