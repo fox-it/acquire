@@ -72,7 +72,7 @@ class GUI:
             time.sleep(1)
         return self.folder, self.auto_upload, self._closed
 
-    def message(message: str) -> None:
+    def message(self, message: str) -> None:
         """Starts GUI thread and waits for start button to be clicked."""
         raise NotImplementedError
 
@@ -83,14 +83,11 @@ class GUI:
         GUI.thread.join()
         self._closed = True
 
-    def show(self) -> None:
-        raise NotImplementedError
-
 
 class StubGUI(GUI):
     """Minimal GUI implementation."""
 
-    def message(message: str) -> None:
+    def message(self, message: str) -> None:
         pass
 
     def wait_for_start(self, args: Namespace) -> (str, bool, bool):
