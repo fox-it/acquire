@@ -91,6 +91,10 @@ class GUI:
         """Subclass needs to implement this."""
         raise NotImplementedError
 
+    def finish(self) -> None:
+        """Finishes the progressbar and closes the GUI."""
+        raise NotImplementedError
+
 
 class StubGUI(GUI):
     """Minimal GUI implementation."""
@@ -102,4 +106,7 @@ class StubGUI(GUI):
         return args.output, args.auto_upload, False
 
     def wait_for_quit(self) -> None:
+        pass
+
+    def finish(self) -> None:
         pass
