@@ -52,7 +52,7 @@ class GUI:
 
     @property
     def shard(self) -> int:
-        """Returns the shard of the progress bar"""
+        """Returns the shard of the progress bar."""
         return self._shard
 
     @shard.setter
