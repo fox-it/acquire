@@ -8,7 +8,7 @@ from threading import Thread
 log = logging.getLogger("gui")
 
 
-class AcquireGUIError(RuntimeError):
+class GUIError(RuntimeError):
     pass
 
 
