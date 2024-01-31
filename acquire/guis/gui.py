@@ -47,7 +47,7 @@ class GUI:
 
     @classmethod
     def gui(cls) -> GUI:
-        """Returns the instance of the GUI"""
+        """Returns the instance of the GUI."""
         return cls._instance
 
     @property
