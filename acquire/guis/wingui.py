@@ -240,7 +240,7 @@ user32.MessageBoxA.restype = c_int
 user32.MessageBoxA._winerror = _winerror
 
 
-class WinGUI(GUI):
+class Win32(GUI):
     result = ""
     pass_shown = False
     gui_display_text = ""
