@@ -57,7 +57,7 @@ class GUI:
 
     @shard.setter
     def shard(self, shard: int) -> None:
-        """Sets the shard of the progress bar"""
+        """Sets the shard of the progress bar."""
         # Use this to 'refine' progress bar (i.e. assign a shard)
         if shard > 100 or shard < 1:
             raise AcquireGUIError("Shards have to be between 0-100")
