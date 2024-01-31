@@ -2281,7 +2281,7 @@ def main() -> None:
     # start GUI if requested through CLI / config
     flavour = "cli"
     if args.gui == "always" or (
-        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "PROMPT" and len(sys.argv) == 1
+        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
     ):
         flavour = platform.system()
 
