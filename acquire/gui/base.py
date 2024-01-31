@@ -29,9 +29,9 @@ class GUI:
         if cls._instance is None:
             if flavour == "Windows":
                 # create a basic Win32 GUI
-                from acquire.guis.wingui import WinGUI
+                from acquire.gui.win32 import Win32
 
-                cls = WinGUI
+                cls = Win32
                 log.info("Creating win32 gui instance")
             else:
                 # Use the NULL-pattern here, to avoid many IFs
@@ -60,10 +60,10 @@ class GUI:
         """Sets the shard of the progress bar."""
         # Use this to 'refine' progress bar (i.e. assign a shard)
         if shard > 100 or shard < 1:
-            raise AcquireGUIError("Shards have to be between 0-100")
+            raise GUIError("Shards have to be between 0-100")
         self._shard = shard
 
-    def wait_for_start(self, args: Namespace) -> (str, bool, bool):
+    def wait_for_start(self, args: Namespace) -> tuple(str, bool, bool):
         """Starts GUI thread and waits for start button to be clicked."""
         log.info("Opening GUI window and starting GUI thread...")
 
@@ -82,7 +82,6 @@ class GUI:
 
     def wait_for_quit(self) -> None:
         """Closes the GUI and waits for the thread to join."""
-        log.info("Closing GUI windows and joining GUI thread...")
         GUI._instance.quit()
         GUI.thread.join()
         self._closed = True
@@ -102,7 +101,7 @@ class StubGUI(GUI):
     def message(self, message: str) -> None:
         pass
 
-    def wait_for_start(self, args: Namespace) -> (str, bool, bool):
+    def wait_for_start(self, args: Namespace) -> tuple(str, bool, bool):
         return args.output, args.auto_upload, False
 
     def wait_for_quit(self) -> None:

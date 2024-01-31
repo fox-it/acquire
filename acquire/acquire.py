@@ -30,7 +30,7 @@ from dissect.util.stream import RunlistStream
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
-from acquire.guis import gui
+from acquire.gui import GUI
 from acquire.hashes import (
     HashFunc,
     collect_hashes,
@@ -1879,7 +1879,7 @@ def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, 
 
 
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
-    acquire_gui = gui.GUI()
+    acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -2090,7 +2090,7 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
-        gui.GUI().message("Upload failed.")
+        GUI().message("Upload failed.")
         log.exception("")
 
 
@@ -2285,7 +2285,7 @@ def main() -> None:
     ):
         flavour = platform.system()
 
-    acquire_gui = gui.GUI(flavour=flavour, upload_available=args.auto_upload)
+    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
     args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
 
     if cancel:
@@ -2386,7 +2386,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     log.info("")
 
     files = []
-    acquire_gui = gui.GUI()
+    acquire_gui = GUI()
 
     counter = 0
     progress_limit = 50 if args.auto_upload else 90

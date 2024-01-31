@@ -23,7 +23,7 @@ from ctypes import wintypes as w
 from pathlib import Path
 from typing import Any
 
-from acquire.guis.gui import GUI, AcquireGUIError
+from acquire.gui import GUI, GUIError
 
 
 def _winerror(result: int, *args) -> Any:
@@ -357,7 +357,7 @@ class Win32(GUI):
         controls_loaded = comctl32.InitCommonControlsEx(byref(control_list))
 
         if not controls_loaded:
-            raise AcquireGUIError("Unable to load GUI controls")
+            raise GUIError("Unable to load GUI controls")
 
         hFont = gdi32.CreateFontA(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b"Segoe UI")
 

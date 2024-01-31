@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-from acquire.guis import gui
+import acquire.gui
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def upload_files_using_uploader(
     client = uploader.prepare_client(paths, proxies)
 
     counter = 0
-    upload_gui = gui.GUI()
+    upload_gui = GUI()
     upload_gui.progress = 55
 
     for path in paths:
