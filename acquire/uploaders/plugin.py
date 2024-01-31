@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-import acquire.gui
+from acquire.gui import GUI
 
 log = logging.getLogger(__name__)
 
