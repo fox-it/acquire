@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 import platform
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,7 @@ from acquire.utils import (
     check_and_set_log_args,
     create_argument_parser,
     normalize_path,
+    normalize_sysvol,
 )
 
 
@@ -296,10 +298,11 @@ def test_check_and_set_acquire_args_cagent():
 
 
 @pytest.mark.parametrize(
-    "path, resolve, lower_case, case_sensitive, os, result",
+    "path, sysvol, resolve, lower_case, case_sensitive, os, result",
     [
         (
             pathlib.Path("/foo/bar"),
+            None,
             False,
             True,
             True,
@@ -308,6 +311,7 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.Path("/foo/BAR"),
+            None,
             False,
             True,
             False,
@@ -316,6 +320,7 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.Path("/foo/BAR"),
+            None,
             False,
             True,
             True,
@@ -324,6 +329,7 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.Path("/foo/../bar"),
+            None,
             False,
             True,
             True,
@@ -332,6 +338,7 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.Path("/foo/../foo/bar"),
+            None,
             True,
             True,
             True,
@@ -340,38 +347,43 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.PureWindowsPath("c:\\foo\\bar"),
+            "c:",
             False,
             True,
             False,
             "windows",
-            "sysvol/foo/bar",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("C:\\foo\\bar"),
+            "c:",
             False,
             True,
             False,
             "windows",
-            "sysvol/foo/bar",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\C:\\foo\\bar"),
+            "c:",
             False,
             True,
             False,
             "windows",
-            "sysvol/foo/bar",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\c:\\foo\\bar"),
+            "c:",
             False,
             True,
             False,
             "windows",
-            "sysvol/foo/bar",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("D:\\foo\\bar"),
+            "c:",
             False,
             True,
             False,
@@ -380,24 +392,37 @@ def test_check_and_set_acquire_args_cagent():
         ),
         (
             pathlib.PureWindowsPath("D:\\Foo\\BAR"),
+            "c:",
             False,
             False,
             False,
             "windows",
             "D:/Foo/BAR",
         ),
+        (
+            pathlib.PureWindowsPath("sysvol\\foo\\bar"),
+            "c:",
+            False,
+            False,
+            False,
+            "windows",
+            "c:/foo/bar",
+        ),
     ],
 )
 def test_utils_normalize_path(
     mock_target: Target,
     path: pathlib.Path,
+    sysvol: Optional[str],
     resolve: bool,
     lower_case: bool,
     case_sensitive: bool,
     os: str,
     result: str,
 ) -> None:
-    with patch.object(mock_target, "os", new=os), patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
+    with patch.object(mock_target, "os", new=os), patch.object(
+        mock_target.fs, "_case_sensitive", new=case_sensitive
+    ), patch.dict(mock_target.props, {"sysvol_drive": sysvol}):
         resolved_path = normalize_path(mock_target, path, resolve=resolve, lower_case=lower_case)
 
         if platform.system() == "Windows":
@@ -406,3 +431,14 @@ def test_utils_normalize_path(
             assert resolved_path.endswith(result)
         else:
             assert resolved_path == result
+
+
+@pytest.mark.parametrize(
+    "path, sysvol, result",
+    [
+        ("sysvol/foo/bar", "c:", "c:/foo/bar"),
+        ("/sysvol/foo/bar", "c:", "c:/foo/bar"),
+    ],
+)
+def test_normalize_sysvol(path: str, sysvol: str, result: str) -> None:
+    assert normalize_sysvol(path, sysvol) == result
