@@ -92,7 +92,7 @@ class GUI:
         raise NotImplementedError
 
     def finish(self) -> None:
-        """Finishes the progressbar and closes the GUI."""
+        """Finishes the progress bar and closes the GUI."""
         raise NotImplementedError
 
 
