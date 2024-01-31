@@ -22,8 +22,9 @@ from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
-from dissect.target.plugins.apps.webservers import iis
+from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
+from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
@@ -98,11 +99,11 @@ logging.raiseExceptions = False
 
 def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     misc_dirs = {
-        ("windows/serviceprofiles/localservice", False),
-        ("windows/serviceprofiles/networkservice", False),
-        ("windows/system32/config/systemprofile", False),
-        ("users", True),
-        ("documents and settings", True),
+        ("Windows/ServiceProfiles/LocalService", False),
+        ("Windows/ServiceProfiles/NetworkService", False),
+        ("Windows/System32/config/systemprofile", False),
+        ("Users", True),
+        ("Documents and Settings", True),
     }
 
     for fs in target.fs.path().iterdir():
@@ -143,8 +144,12 @@ MISC_MAPPING = {
 
 
 def from_user_home(target: Target, path: str) -> Iterator[str]:
-    for user_details in target.user_details.all_with_home():
-        yield str(user_details.home_path.joinpath(path))
+    try:
+        for user_details in target.user_details.all_with_home():
+            yield normalize_path(target, user_details.home_path.joinpath(path), lower_case=False)
+    except Exception as e:
+        log.warning("Error occurred when requesting all user homes")
+        log.debug("", exc_info=e)
 
     misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
     for user_dir in misc_user_homes(target):
@@ -163,7 +168,10 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         else:
             mountpoints = "No mounts"
 
-        if not isinstance(fs, ntfs.NtfsFilesystem):
+        # The attr check is needed to correctly collect fake NTFS filesystems
+        # where the MFT etc. are added to a VirtualFilesystem. This happens for
+        # instance when the target is an acquired tar target.
+        if not isinstance(fs, ntfs.NtfsFilesystem) and not hasattr(fs, "ntfs"):
             log.warning("Skipping %s (%s) - not an NTFS filesystem", fs, mountpoints)
             continue
 
@@ -177,12 +185,6 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         yield fs, name, mountpoints
 
 
-def mount_all_ntfs_filesystems(target: Target) -> None:
-    for fs, name, _ in iter_ntfs_filesystems(target):
-        if name not in target.fs.mounts:
-            target.fs.mount(name, fs)
-
-
 def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
@@ -190,9 +192,9 @@ def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem
 
         uuid = mount[len("/vmfs/volumes/") :]  # strip /vmfs/volumes/
         name = None
-        if fs.__fstype__ == "fat":
+        if fs.__type__ == "fat":
             name = fs.volume.name
-        elif fs.__fstype__ == "vmfs":
+        elif fs.__type__ == "vmfs":
             name = fs.vmfs.label
 
         yield uuid, name, fs
@@ -319,13 +321,20 @@ class NTFS(Module):
             entry = usnjrnl_path.get()
             journal = entry.open()
 
-            i = 0
-            while journal.runlist[i][0] is None:
-                journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
-                i += 1
+            # If the filesystem is a virtual NTFS filesystem, journal will be
+            # plain BinaryIO, not a RunlistStream.
+            if isinstance(journal, RunlistStream):
+                i = 0
+                while journal.runlist[i][0] is None:
+                    journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
+                    i += 1
+
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Extend/$Usnjrnl:$J")
 
             collector.output.write(
-                f"{collector.base}/{name}/$Extend/$Usnjrnl:$J",
+                outpath,
                 journal,
                 size=journal.size - journal.tell(),
                 entry=entry,
@@ -348,8 +357,13 @@ class NTFS(Module):
             secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
             sds = entry.open()
+
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Secure:$SDS")
+
             collector.output.write(
-                f"{collector.base}/{name}/$Secure:$SDS",
+                outpath,
                 sds,
                 size=sds.size,
                 entry=entry,
@@ -590,6 +604,11 @@ class Tasks(Module):
         ("dir", "sysvol/windows/syswow64/tasks"),
         ("dir", "sysvol/windows/sysvol/domain/policies"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        # Task Scheduler Service transaction log
+        ("file", "sysvol/SchedLgU.txt"),
+        ("file", "sysvol/windows/SchedLgU.txt"),
+        ("file", "sysvol/windows/tasks/SchedLgU.txt"),
+        ("file", "sysvol/winnt/tasks/SchedLgU.txt"),
     ]
 
 
@@ -658,19 +677,55 @@ class Recents(Module):
     ]
 
 
+@register_module("--startup")
+class Startup(Module):
+    DESC = "Windows Startup folder"
+    SPEC = [
+        ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
+        ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
+    ]
+
+
+def recyclebin_filter(path: fsutil.TargetPath) -> bool:
+    return bool(path.stat().st_size >= (10 * 1024 * 1024))  # 10MB
+
+
 @register_module("--recyclebin")
+@module_arg(
+    "--large-files",
+    action="store_true",
+    help="Collect files larger than 10MB in the Recycle Bin",
+    default=False,
+)
+@module_arg(
+    "--no-data-files",
+    action="store_true",
+    help="Skip collection of data files in the Recycle Bin",
+    default=False,
+)
 class RecycleBin(Module):
-    DESC = "recycle bin metadata"
+    DESC = "recycle bin metadata and data files"
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring recycle bin metadata from %s (%s)", fs, mountpoints)
+        large_files_filter = None if cli_args.large_files else recyclebin_filter
 
-            patterns = ["$Recycle.bin/**/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
-            for pattern in patterns:
-                for entry in fs.path().glob(pattern):
-                    collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+        if large_files_filter:
+            log.info("Skipping files in Recycle Bin that are larger than 10MB.")
+
+        patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
+
+        if not cli_args.no_data_files:
+            patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
+
+        with collector.file_filter(large_files_filter):
+            for fs, name, mountpoints in iter_ntfs_filesystems(target):
+                log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
+
+                for pattern in patterns:
+                    for entry in fs.path().glob(pattern):
+                        if entry.is_file():
+                            collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
 
 
 @register_module("--drivers")
@@ -885,6 +940,7 @@ class Misc(Module):
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
         ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
+        ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
     ]
 
 
@@ -1397,6 +1453,7 @@ class Boot(Module):
         ("glob", "/boot/efi*"),
         ("glob", "/boot/grub*"),
         ("glob", "/boot/init*"),
+        ("glob", "/boot/system*"),
     ]
 
 
@@ -1408,10 +1465,31 @@ def private_key_filter(path: fsutil.TargetPath) -> bool:
 @register_module("--home")
 class Home(Module):
     SPEC = [
+        # Catches most shell related configuration files
         ("glob", ".*[akz]sh*", from_user_home),
-        ("dir", ".config", from_user_home),
         ("glob", "*/.*[akz]sh*", from_user_home),
+        # Added to catch any shell related configuration file not caught with the above glob
+        ("glob", ".*history", from_user_home),
+        ("glob", "*/.*history", from_user_home),
+        ("glob", ".*rc", from_user_home),
+        ("glob", "*/.*rc", from_user_home),
+        ("glob", ".*_logout", from_user_home),
+        ("glob", "*/.*_logout", from_user_home),
+        # Miscellaneous configuration files
+        ("dir", ".config", from_user_home),
         ("glob", "*/.config", from_user_home),
+        ("file", ".wget-hsts", from_user_home),
+        ("glob", "*/.wget-hsts", from_user_home),
+        ("file", ".gitconfig", from_user_home),
+        ("glob", "*/.gitconfig", from_user_home),
+        ("file", ".selected_editor", from_user_home),
+        ("glob", "*/.selected_editor", from_user_home),
+        ("file", ".viminfo", from_user_home),
+        ("glob", "*/.viminfo", from_user_home),
+        ("file", ".lesshist", from_user_home),
+        ("glob", "*/.lesshist", from_user_home),
+        ("file", ".profile", from_user_home),
+        ("glob", "*/.profile", from_user_home),
         # OS-X home (aka /Users)
         ("glob", ".bash_sessions/*", from_user_home),
         ("glob", "Library/LaunchAgents/*", from_user_home),
@@ -1565,7 +1643,7 @@ class VMFS(Module):
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for uuid, name, fs in iter_esxi_filesystems(target):
-            if not fs.__fstype__ == "vmfs":
+            if not fs.__type__ == "vmfs":
                 continue
 
             log.info("Acquiring /vmfs/volumes/%s (%s)", uuid, name)
@@ -1580,7 +1658,7 @@ class VMFS(Module):
 class ActivitiesCache(Module):
     DESC = "user's activities caches"
     SPEC = [
-        ("glob", "AppData/Local/ConnectedDevicesPlatform/*/ActivitiesCache.db", from_user_home),
+        ("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),
     ]
 
 
@@ -1763,6 +1841,8 @@ def acquire_target(target: Target, *args, **kwargs) -> list[str]:
 
 def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
+    # debug logs contain references to flow objects and will give errors
+    logging.getLogger().setLevel(logging.CRITICAL)
     if not len(target.hostname()):
         log.error("Unable to initialize targetd.")
         return files
@@ -1779,6 +1859,21 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     for stream in targetd.streams:
         files.append(stream.out_file)
     return files
+
+
+def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
+    modules_selected = dict()
+
+    if choice and choice != "none":
+        profile_dict = profile[choice]
+        if operating_system not in profile_dict:
+            log.error(msg, operating_system, choice)
+            return None
+
+        for mod in profile_dict[operating_system]:
+            modules_selected[mod.__modname__] = mod
+
+    return modules_selected
 
 
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
@@ -1825,10 +1920,6 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
     log.info("OS: %s", version)
     log.info("")
 
-    # Prepare targets if necessary
-    if target.os == "windows":
-        mount_all_ntfs_filesystems(target)
-
     print_acquire_warning(target)
 
     modules_selected = {}
@@ -1848,13 +1939,18 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         profile = "default"
         log.info("")
 
-    if profile and profile != "none":
-        if target.os not in PROFILES[profile]:
-            log.error("No collection set for OS %s with profile %s", target.os, profile)
-            return files
+    profile_modules = _add_modules_for_profile(
+        profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
+    )
+    volatile_modules = _add_modules_for_profile(
+        args.volatile_profile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+    )
 
-        for mod in PROFILES[profile][target.os]:
-            modules_selected[mod.__modname__] = mod
+    if (profile_modules or volatile_modules) is None:
+        return files
+
+    modules_selected.update(profile_modules)
+    modules_selected.update(volatile_modules)
 
     log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
@@ -1989,171 +2085,166 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         log.exception("")
 
 
+class WindowsProfile:
+    MINIMAL = [
+        NTFS,
+        EventLogs,
+        Registry,
+        Tasks,
+        PowerShell,
+        Prefetch,
+        Appcompat,
+        PCA,
+        Misc,
+        Startup,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        ETL,
+        Recents,
+        RecycleBin,
+        Drivers,
+        Syscache,
+        WBEM,
+        AV,
+        BITS,
+        DHCP,
+        DNS,
+        ActiveDirectory,
+        RemoteAccess,
+        ActivitiesCache,
+    ]
+    FULL = [
+        *DEFAULT,
+        History,
+        NTDS,
+        QuarantinedFiles,
+        WindowsNotifications,
+        SSH,
+        IIS,
+    ]
+
+
+class LinuxProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        WebHosting,
+    ]
+
+
+class BsdProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+        BSD,
+    ]
+    DEFAULT = MINIMAL
+    FULL = MINIMAL
+
+
+class ESXiProfile:
+    MINIMAL = [
+        Bootbanks,
+        ESXi,
+        SSH,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        VMFS,
+    ]
+    FULL = DEFAULT
+
+
+class OSXProfile:
+    MINIMAL = [
+        Etc,
+        Home,
+        Var,
+        OSX,
+        OSXApplicationsInfo,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        SSH,
+    ]
+
+
 PROFILES = {
     "full": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            ActivitiesCache,
-            BITS,
-            DHCP,
-            DNS,
-            History,
-            Misc,
-            NTDS,
-            ActiveDirectory,
-            QuarantinedFiles,
-            RemoteAccess,
-            WindowsNotifications,
-            SSH,
-            IIS,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            History,
-            SSH,
-            Var,
-            WebHosting,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            SSH,
-            Home,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-            History,
-            SSH,
-        ],
+        "windows": WindowsProfile.FULL,
+        "linux": LinuxProfile.FULL,
+        "bsd": BsdProfile.FULL,
+        "esxi": ESXiProfile.FULL,
+        "osx": OSXProfile.FULL,
     },
     "default": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            BITS,
-            DHCP,
-            DNS,
-            Misc,
-            ActiveDirectory,
-            RemoteAccess,
-            ActivitiesCache,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.DEFAULT,
+        "linux": LinuxProfile.DEFAULT,
+        "bsd": BsdProfile.DEFAULT,
+        "esxi": ESXiProfile.DEFAULT,
+        "osx": OSXProfile.DEFAULT,
     },
     "minimal": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Misc,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.MINIMAL,
+        "linux": LinuxProfile.MINIMAL,
+        "bsd": BsdProfile.MINIMAL,
+        "esxi": ESXiProfile.MINIMAL,
+        "osx": OSXProfile.MINIMAL,
+    },
+    "none": None,
+}
+
+
+class VolatileProfile:
+    DEFAULT = [
+        Netstat,
+        WinProcesses,
+        WinProcEnv,
+        WinArpCache,
+        WinRDPSessions,
+        WinDnsClientCache,
+    ]
+    EXTENSIVE = [
+        Proc,
+        Sys,
+    ]
+
+
+VOLATILE = {
+    "default": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": [],
+        "bsd": [],
+        "esxi": [],
+        "osx": [],
+    },
+    "extensive": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": VolatileProfile.EXTENSIVE,
+        "bsd": VolatileProfile.EXTENSIVE,
+        "esxi": VolatileProfile.EXTENSIVE,
+        "osx": [],
     },
     "none": None,
 }
 
 
 def main() -> None:
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
     try:
@@ -2186,6 +2277,26 @@ def main() -> None:
     except ValueError as err:
         log.exception(err)
         parser.exit(1)
+
+    if args.targetd:
+        from targetd.tools.targetd import start_client
+
+        # set @auto hostname to real hostname
+        if args.targetd_hostname == "@auto":
+            args.targetd_hostname = f"/host/{Target.open('local').hostname}"
+
+        config = {
+            "function": args.targetd_func,
+            "topics": [args.targetd_hostname, args.targetd_groupname, args.targetd_globalname],
+            "link": args.targetd_link,
+            "address": args.targetd_ip,
+            "port": args.targetd_port,
+            "cacert_str": args.targetd_cacert,
+            "service": args.targetd_func == "agent",
+            "cacert": None,
+        }
+        start_client(args, presets=config)
+        return
 
     if args.upload:
         try:
@@ -2249,11 +2360,13 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
 
     log.info("")
 
-    try:
-        files = acquire_target(target, args, args.start_time)
-    except Exception:
-        log.exception("Failed to acquire target")
-        raise
+    files = []
+    if (args.children and not args.skip_parent) or not args.children:
+        try:
+            files.extend(acquire_target(target, args, args.start_time))
+        except Exception:
+            log.exception("Failed to acquire target")
+            raise
 
     if args.children:
         for child in target.list_children():

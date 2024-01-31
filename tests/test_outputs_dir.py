@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 
 import pytest
 from dissect.target.filesystem import VirtualFilesystem
+from dissect.target.helpers.fsutil import normalize
 
 from acquire.outputs import DirectoryOutput
 
@@ -48,7 +50,10 @@ def test_dir_output_write_entry(mock_fs: VirtualFilesystem, dir_output: Director
     assert len(files) == 1
 
     file = files[0]
-    assert str(file)[len(str(path)) :] == entry_name
+
+    # Convert a os seperated file to the entry name.
+    file_path = f"/{normalize(str(file.relative_to(path)), alt_separator=os.sep)}"
+    assert file_path == entry_name
 
     if entry.is_dir():
         assert file.is_dir()
