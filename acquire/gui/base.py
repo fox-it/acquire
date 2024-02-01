@@ -58,7 +58,6 @@ class GUI:
 
     def wait_for_start(self, args: Namespace) -> tuple(str, bool, bool):
         """Starts GUI thread and waits for start button to be clicked."""
-        log.info("Opening GUI window and starting GUI thread...")
 
         def gui_thread() -> None:
             self.show()
