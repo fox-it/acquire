@@ -2410,7 +2410,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     if (args.children and not args.skip_parent) or not args.children:
         total_targets += 1
         counter += 1
-        acquire_gui.shard = (progress_limit / total_targets) * counter
+        acquire_gui.shard = (progress_limit // total_targets) * counter
         try:
             files.extend(acquire_target(target, args, args.start_time))
 
