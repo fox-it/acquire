@@ -95,7 +95,7 @@ class GUI:
         raise NotImplementedError
 
 
-class StubGUI(GUI):
+class Stub(GUI):
     """Minimal GUI implementation."""
 
     def message(self, message: str) -> None:
