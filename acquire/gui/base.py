@@ -33,10 +33,6 @@ class GUI:
 
                 cls = Win32
                 log.info("Creating win32 gui instance")
-            else:
-                # Use the NULL-pattern here, to avoid many IFs
-                cls = StubGUI
-                log.info("Creating stub gui instance")
 
             if flavour is None:
                 log.warning("GUI has been initialised with invalid flavour, possible logic flaw.")
