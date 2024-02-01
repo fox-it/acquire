@@ -27,6 +27,7 @@ class GUI:
     def __new__(cls, flavour: str = None, upload_available: bool = False):
         # singleton+factory pattern
         if cls._instance is None:
+            cls = Stub
             if flavour == "Windows":
                 # create a basic Win32 GUI
                 from acquire.gui.win32 import Win32
