@@ -2279,7 +2279,7 @@ def main() -> None:
     log.info("")
 
     # start GUI if requested through CLI / config
-    flavour = "cli"
+    flavour = None
     if args.gui == "always" or (
         args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
     ):
