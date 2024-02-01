@@ -31,13 +31,7 @@ class GUI:
             if flavour == "Windows":
                 # create a basic Win32 GUI
                 from acquire.gui.win32 import Win32
-
                 cls = Win32
-                log.info("Creating win32 gui instance")
-
-            if flavour is None:
-                log.warning("GUI has been initialised with invalid flavour, possible logic flaw.")
-
             GUI._instance = super(GUI, cls).__new__(cls)
             GUI._instance.upload_available = upload_available
         return GUI._instance
