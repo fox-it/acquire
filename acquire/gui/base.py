@@ -4,6 +4,7 @@ import logging
 import time
 from argparse import Namespace
 from threading import Thread
+from typing import Optional
 
 log = logging.getLogger("gui")
 
@@ -28,9 +29,10 @@ class GUI:
         # singleton+factory pattern
         if cls._instance is None:
             cls = Stub
-            if flavour == "Windows":
+            if str(flavour).lower() == "windows":
                 # create a basic Win32 GUI
                 from acquire.gui.win32 import Win32
+
                 cls = Win32
             GUI._instance = super(GUI, cls).__new__(cls)
             GUI._instance.upload_available = upload_available
