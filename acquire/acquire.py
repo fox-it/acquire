@@ -2040,7 +2040,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
                 log.error("Error while running module %s", name, exc_info=True)
                 modules_failed[mod.__name__] = get_formatted_exception()
 
-            acquire_gui.progress = (acquire_gui.shard / len(modules_selected)) * count
+            acquire_gui.progress = (acquire_gui.shard // len(modules_selected)) * count
             count += 1
 
             log.info("")
