@@ -91,7 +91,7 @@ class Stub(GUI):
     def message(self, message: str) -> None:
         pass
 
-    def wait_for_start(self, args: Namespace) -> tuple(str, bool, bool):
+    def wait_for_start(self, args: Namespace) -> tuple[str, bool, bool]:
         return args.output, args.auto_upload, False
 
     def wait_for_quit(self) -> None:
