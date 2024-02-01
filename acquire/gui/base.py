@@ -24,7 +24,7 @@ class GUI:
     auto_upload = None
     upload_available = False
 
-    def __new__(cls, flavour: str = None, upload_available: bool = False):
+    def __new__(cls, flavour: Optional[str] = None, upload_available: bool = False):
         # singleton+factory pattern
         if cls._instance is None:
             cls = Stub
