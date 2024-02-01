@@ -400,7 +400,7 @@ class Win32(GUI):
         self.start_button = user32.CreateWindowExW(
             0,
             "Button",
-            "start",
+            "Start",
             WS_CHILD | WS_VISIBLE | WS_BORDER | WS_DISABLED | BS_FLAT,
             250,
             100,
