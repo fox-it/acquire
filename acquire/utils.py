@@ -112,7 +112,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         "--gui",
         nargs="?",
         const="always",
-        default="never",
+        default="depends",
         action="store",
         help="launch with a GUI (if available for your platform)",
     )
