@@ -6,8 +6,6 @@ from argparse import Namespace
 from threading import Thread
 from typing import Optional
 
-log = logging.getLogger("gui")
-
 
 class GUIError(RuntimeError):
     pass
