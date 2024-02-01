@@ -54,7 +54,7 @@ class GUI:
             raise GUIError("Shards have to be between 0-100")
         self._shard = shard
 
-    def wait_for_start(self, args: Namespace) -> tuple(str, bool, bool):
+    def wait_for_start(self, args: Namespace) -> tuple[str, bool, bool]:
         """Starts GUI thread and waits for start button to be clicked."""
 
         def gui_thread() -> None:
