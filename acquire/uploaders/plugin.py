@@ -64,6 +64,6 @@ def upload_files_using_uploader(
                 log.exception("")
 
         counter += 1
-        upload_gui.progress = 55 + (counter / len(paths) * 40)
+        upload_gui.progress = 55 + (counter // len(paths) * 40)
 
     uploader.finish(client)
