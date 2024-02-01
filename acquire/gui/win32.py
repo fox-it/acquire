@@ -366,7 +366,7 @@ class Win32(GUI):
                 0, "Button", None, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 20, 250, 16, 16, hwnd, 0, 0, 0
             )
             self.upload_label = user32.CreateWindowExW(
-                0, "static", "upload", WS_CHILD | WS_VISIBLE | SS_LEFT, 50, 250, 100, 32, hwnd, 0, 0, 0
+                0, "static", "Upload", WS_CHILD | WS_VISIBLE | SS_LEFT, 50, 250, 100, 32, hwnd, 0, 0, 0
             )
             if hFont:
                 SendMessage(self.upload_label, WM_SETFONT, hFont, 1)
