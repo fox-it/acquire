@@ -2423,7 +2423,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     if args.children:
         for child in target.list_children():
             counter += 1
-            acquire_gui.shard = (100 / total_targets) * counter
+            acquire_gui.shard = (100 // total_targets) * counter
             try:
                 child_target = load_child(target, child.path)
             except Exception:
