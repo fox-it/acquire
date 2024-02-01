@@ -59,13 +59,13 @@ from acquire.utils import (
 
 try:
     from acquire.version import version
-except ImportError:
+except (AttributeError, ImportError):
     version = "0.0.dev"
 
 try:
     # Injected by pystandalone builder
     from acquire.config import CONFIG
-except ImportError:
+except (AttributeError, ImportError):
     CONFIG = defaultdict(lambda: None)
 
 

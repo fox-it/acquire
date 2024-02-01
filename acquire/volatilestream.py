@@ -10,7 +10,7 @@ try:
     from fcntl import F_SETFL, fcntl
 
     HAS_FCNTL = True
-except ImportError:
+except (AttributeError, ImportError):
     HAS_FCNTL = False
 
 

@@ -44,7 +44,7 @@ try:
         TimeRemainingColumn(),
         transient=True,
     )
-except ImportError:
+except (AttributeError, ImportError):
     progress = None
 
 from acquire.crypt import (

@@ -37,7 +37,7 @@ class MinIO(UploaderPlugin):
         try:
             import urllib3
             from minio import Minio
-        except ImportError:
+        except (AttributeError, ImportError):
             raise RuntimeError("Minio upload module is not available")
 
         http_client = urllib3.proxy_from_url(proxies["http"]) if proxies else None

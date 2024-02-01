@@ -10,7 +10,7 @@ try:
     from Crypto.Random import get_random_bytes
 
     HAS_PYCRYPTODOME = True
-except ImportError:
+except (AttributeError, ImportError):
     HAS_PYCRYPTODOME = False
 
 
