@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import time
 from argparse import Namespace
 from threading import Thread
