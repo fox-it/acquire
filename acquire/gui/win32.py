@@ -395,7 +395,7 @@ class Win32(GUI):
             0, "static", "No path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 400, 25, hwnd, 0, 0, 0
         )
         self.choose_folder_button = user32.CreateWindowExW(
-            0, "Button", "Choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER | BS_FLAT, 450, 35, 100, 32, hwnd, 0, 0, 0
+            0, "Button", "Choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER | BS_FLAT, 450, 35, 120, 32, hwnd, 0, 0, 0
         )
         self.start_button = user32.CreateWindowExW(
             0,
