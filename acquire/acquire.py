@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from dissect.util.stream import RunlistStream
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
+from acquire.gui import GUI
 from acquire.hashes import (
     HashFunc,
     collect_hashes,
@@ -1890,6 +1892,7 @@ def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, 
 
 
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+    acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -2040,6 +2043,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
 
         # Run modules (sort first based on execution order)
         modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
+        count = 0
         for name, mod in modules_selected:
             try:
                 mod.run(target, args, collector)
@@ -2048,6 +2052,10 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
             except Exception:
                 log.error("Error while running module %s", name, exc_info=True)
                 modules_failed[mod.__name__] = get_formatted_exception()
+
+            acquire_gui.progress = (acquire_gui.shard // len(modules_selected)) * count
+            count += 1
+
             log.info("")
 
         collection_report = collector.report
@@ -2095,6 +2103,7 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
+        GUI().message("Upload failed.")
         log.exception("")
 
 
@@ -2282,6 +2291,20 @@ def main() -> None:
     log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
     log.info("")
 
+    # start GUI if requested through CLI / config
+    flavour = None
+    if args.gui == "always" or (
+        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
+    ):
+        flavour = platform.system()
+
+    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
+    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+
+    if cancel:
+        parser.exit(0)
+    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
+
     plugins_to_load = [("cloud", MinIO)]
     upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
 
@@ -2341,6 +2364,8 @@ def main() -> None:
     except Exception:
         if not is_user_admin():
             log.error("Failed to load target, try re-running as administrator/root.")
+            acquire_gui.message("This application must be run as administrator.")
+            acquire_gui.wait_for_quit()
             parser.exit(1)
         log.exception("Failed to load target")
         raise
@@ -2374,15 +2399,31 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     log.info("")
 
     files = []
+    acquire_gui = GUI()
+
+    counter = 0
+    progress_limit = 50 if args.auto_upload else 90
+    total_targets = 0
+    if args.children:
+        total_targets += len(target.list_children())
+
     if (args.children and not args.skip_parent) or not args.children:
+        total_targets += 1
+        counter += 1
+        acquire_gui.shard = (progress_limit // total_targets) * counter
         try:
             files.extend(acquire_target(target, args, args.start_time))
+
         except Exception:
             log.exception("Failed to acquire target")
+            acquire_gui.message("Failed to acquire target")
+            acquire_gui.wait_for_quit()
             raise
 
     if args.children:
         for child in target.list_children():
+            counter += 1
+            acquire_gui.shard = (100 // total_targets) * counter
             try:
                 child_target = load_child(target, child.path)
             except Exception:
@@ -2395,6 +2436,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
                 files.extend(child_files)
             except Exception:
                 log.exception("Failed to acquire child target")
+                acquire_gui.message("Failed to acquire child target")
                 continue
 
     files = sort_files(files)
@@ -2407,8 +2449,15 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
         log.info("")
         try:
             upload_files(files, args.upload_plugin)
+            acquire_gui.finish()
+            acquire_gui.wait_for_quit()
         except Exception:
             log.exception("Failed to upload files")
+            acquire_gui.message("Failed to upload files")
+            acquire_gui.wait_for_quit()
+    else:
+        acquire_gui.finish()
+        acquire_gui.wait_for_quit()
 
 
 def sort_files(files: list[Union[str, Path]]) -> list[Path]:
