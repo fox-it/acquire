@@ -13,7 +13,8 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+from itertools import product
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
@@ -1095,281 +1096,77 @@ class QuarantinedFiles(Module):
 @register_module("--history")
 class History(Module):
     DESC = "browser history from IE, Edge, Firefox, and Chrome"
+    DIR_COMBINATIONS = namedtuple("DirCombinations", ["root_dirs", "dir_extensions", "history_files"])
+    COMMON_DIR_COMBINATIONS = [
+        DIR_COMBINATIONS(
+            [
+                # Chromium - RHEL/Ubuntu - DNF/apt
+                ".config/chromium",
+                # Chrome - RHEL/Ubuntu - DNF
+                ".config/google-chrome",
+                # Edge - RHEL/Ubuntu - DNF/apt
+                ".config/microsoft-edge",
+                # Chrome - RHEL/Ubuntu - Flatpak
+                ".var/app/com.google.Chrome/config/google-chrome",
+                # Edge - RHEL/Ubuntu - Flatpak
+                ".var/app/com.microsoft.Edge/config/microsoft-edge",
+                # Chromium - RHEL/Ubuntu - Flatpak
+                ".var/app/org.chromium.Chromium/config/chromium",
+                # Chrome
+                "AppData/Local/Google/Chrom*/User Data",
+                # Edge
+                "AppData/Local/Microsoft/Edge/User Data",
+                "Library/Application Support/Microsoft Edge",
+                "Local Settings/Application Data/Microsoft/Edge/User Data",
+                # Chrome - Legacy
+                "Library/Application Support/Chromium",
+                "Library/Application Support/Google/Chrome",
+                "Local Settings/Application Data/Google/Chrom*/User Data",
+                # Chromium - RHEL/Ubuntu - snap
+                "snap/chromium/common/chromium",
+            ],
+            ["*", "Snapshots/*/*"],
+            [
+                "Archived History",
+                "Bookmarks",
+                "Cookies*",
+                "Current Session",
+                "Current Tabs",
+                "Extension Cookies",
+                "Favicons",
+                "History",
+                "Last Session",
+                "Last Tabs",
+                "Login Data",
+                "Login Data For Account",
+                "Shortcuts",
+                "Snapshots",
+                "Top Sites",
+                "Web Data",
+            ],
+        ),
+    ]
 
     SPEC = [
         # IE
+        ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
+        ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/WebCache/*.dat", from_user_home),
+        # IE - index.dat
         ("file", "Cookies/index.dat", from_user_home),
         ("file", "Local Settings/History/History.IE5/index.dat", from_user_home),
         ("glob", "Local Settings/History/History.IE5/MSHist*/index.dat", from_user_home),
         ("file", "Local Settings/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
         ("file", "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat", from_user_home),
-        ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        ("glob", "AppData/Local/Microsoft/Windows/WebCache/*.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
-        # Chrome
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Bookmarks", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Favicons", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data For Account", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
-        # Chrome - Legacy
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Session", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Tabs", from_user_home),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Bookmarks",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Favicons",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data For Account",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Shortcuts",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Top Sites",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
-            from_user_home,
-        ),
-        # Chrome - Legacy
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Tabs",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Archived History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Session",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
-            from_user_home,
-        ),
-        ("glob", "Library/Application Support/Google/Chrome/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/History", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Login Data For Account", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Web Data", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/History", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Login Data For Account", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Web Data", from_user_home),
-        # Chrome - Legacy
-        ("glob", "Library/Application Support/Google/Chrome/*/Current Session", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Current Tabs", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Archived History", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Last Session", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Last Tabs", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Current Session", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Current Tabs", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Archived History", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Last Session", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Last Tabs", from_user_home),
-        # Chrome - RHEL/Ubuntu - DNF
-        ("glob", ".config/google-chrome/*/Bookmarks", from_user_home),
-        ("glob", ".config/google-chrome/*/Favicons", from_user_home),
-        ("glob", ".config/google-chrome/*/History", from_user_home),
-        ("glob", ".config/google-chrome/*/Login Data", from_user_home),
-        ("glob", ".config/google-chrome/*/Login Data For Account", from_user_home),
-        ("glob", ".config/google-chrome/*/Shortcuts", from_user_home),
-        ("glob", ".config/google-chrome/*/Top Sites", from_user_home),
-        ("glob", ".config/google-chrome/*/Web Data", from_user_home),
-        # Chrome - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Favicons", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/History", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Top Sites", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - DNF/apt
-        ("glob", ".config/chromium/*/Bookmarks", from_user_home),
-        ("glob", ".config/chromium/*/Favicons", from_user_home),
-        ("glob", ".config/chromium/*/History", from_user_home),
-        ("glob", ".config/chromium/*/Login Data", from_user_home),
-        ("glob", ".config/chromium/*/Login Data For Account", from_user_home),
-        ("glob", ".config/chromium/*/Shortcuts", from_user_home),
-        ("glob", ".config/chromium/*/Top Sites", from_user_home),
-        ("glob", ".config/chromium/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Favicons", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/History", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Top Sites", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - snap
-        ("glob", "snap/chromium/common/chromium/*/Bookmarks", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Favicons", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/History", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Login Data", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Login Data For Account", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Shortcuts", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Top Sites", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Web Data", from_user_home),
-        # Edge
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Favicons", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/History", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Login Data", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Media History", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Shortcuts", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Top Sites", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Web Data", from_user_home),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Bookmarks",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Extension Cookies",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Favicons",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Login Data",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Media History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Shortcuts",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Top Sites",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
-            from_user_home,
-        ),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Extension Cookies", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/History", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Media History", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Web Data", from_user_home),
-        # Edge - RHEL/Ubuntu - DNF/apt
-        ("glob", ".config/microsoft-edge/*/Bookmarks", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Favicons", from_user_home),
-        ("glob", ".config/microsoft-edge/*/History", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Login Data", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Login Data For Account", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Shortcuts", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Top Sites", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Web Data", from_user_home),
-        # Edge - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Favicons", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/History", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Top Sites", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Web Data", from_user_home),
         # Firefox - Windows
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
@@ -1377,11 +1174,11 @@ class History(Module):
         # Firefox - macOS
         ("glob", "/Users/*/Library/Application Support/Firefox/Profiles/*/*.sqlite*"),
         # Firefox - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - DNF/apt
-        ("glob", ".mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", ".mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - snap
-        ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Safari - macOS
         ("file", "Library/Safari/Bookmarks.plist", from_user_home),
         ("file", "Library/Safari/Downloads.plist", from_user_home),
@@ -1390,6 +1187,18 @@ class History(Module):
         ("file", "Library/Safari/LastSession.plist", from_user_home),
         ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
     ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        for root_dirs, extension_dirs, history_files in cls.COMMON_DIR_COMBINATIONS:
+            for root_dir, extension_dir, history_file in product(root_dirs, extension_dirs, history_files):
+                full_path = f"{root_dir}/{extension_dir}/{history_file}"
+                search_type = "glob" if "*" in full_path else "file"
+
+                spec.add((search_type, full_path, from_user_home))
+
+        return spec
 
 
 @register_module("--remoteaccess")
