@@ -1139,6 +1139,7 @@ class History(Module):
                 "Last Tabs",
                 "Login Data",
                 "Login Data For Account",
+                "Media History",
                 "Shortcuts",
                 "Snapshots",
                 "Top Sites",
