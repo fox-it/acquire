@@ -1124,12 +1124,20 @@ class History(Module):
                 "Local Settings/Application Data/Google/Chrom*/User Data",
                 # Chromium - RHEL/Ubuntu - snap
                 "snap/chromium/common/chromium",
+                # Brave - Windows
+                "AppData/Local/BraveSoftware/Brave-Browser/User Data",
+                "AppData/Roaming/BraveSoftware/Brave-Browser/User Data",
+                # Brave - Linux
+                ".config/BraveSoftware",
+                # Brave - MacOS
+                "Library/Application Support/BraveSoftware",
             ],
             ["*", "Snapshots/*/*"],
             [
                 "Archived History",
                 "Bookmarks",
                 "Cookies*",
+                "Network",
                 "Current Session",
                 "Current Tabs",
                 "Extension Cookies",
