@@ -120,7 +120,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
     parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
-    parser.add_argument("--volatile-profile", choices=volatile.keys(), default="none", help="volatile profile")
+    parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
     parser.add_argument("-f", "--file", action="append", help="acquire file")
     parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
