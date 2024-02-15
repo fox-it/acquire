@@ -2079,6 +2079,21 @@ def main() -> None:
     parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
 
+    # start GUI if requested through CLI / config
+    flavour = None
+    if args.gui == "always" or (
+        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
+    ):
+        flavour = platform.system()
+
+    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
+    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+
+    if cancel:
+        parser.exit(0)
+
+    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
+
     try:
         check_and_set_log_args(args)
     except ValueError as err:
@@ -2100,20 +2115,6 @@ def main() -> None:
     log.info("Arguments: %s", " ".join(sys.argv[1:]))
     log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
     log.info("")
-
-    # start GUI if requested through CLI / config
-    flavour = None
-    if args.gui == "always" or (
-        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
-    ):
-        flavour = platform.system()
-
-    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
-    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
-
-    if cancel:
-        parser.exit(0)
-    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
 
     plugins_to_load = [("cloud", MinIO)]
     upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
