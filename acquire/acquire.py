@@ -1125,12 +1125,12 @@ class History(Module):
                 # Chromium - RHEL/Ubuntu - snap
                 "snap/chromium/common/chromium",
                 # Brave - Windows
-                "AppData/Local/BraveSoftware/Brave-Browser/User Data/Default",
-                "AppData/Roaming/BraveSoftware/Brave-Browser/User Data/Default",
+                "AppData/Local/BraveSoftware/Brave-Browser/User Data",
+                "AppData/Roaming/BraveSoftware/Brave-Browser/User Data",
                 # Brave - Linux
-                ".config/BraveSoftware/Default",
+                ".config/BraveSoftware",
                 # Brave - MacOS
-                "Library/Application Support/BraveSoftware/Default",
+                "Library/Application Support/BraveSoftware",
             ],
             ["*", "Snapshots/*/*"],
             [
