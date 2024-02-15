@@ -2193,7 +2193,7 @@ def main() -> None:
         log.exception("Failed to load target")
         raise
 
-    if target.os == "esxi":
+    if target.os == "esxi" and target.name == "local":
         # Loader found that we are running on an esxi host
         # Perform operations to "enhance" memory
         with esxi_memory_context_manager():
