@@ -1007,7 +1007,6 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
         ("dir", "sysvol/ProgramData/Mcafee/VirusScan"),
-        ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/MSC/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
         ("dir", "sysvol/ProgramData/McAfee/Agent/logs"),
