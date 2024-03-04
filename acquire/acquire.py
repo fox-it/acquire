@@ -2227,7 +2227,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     progress_limit = 50 if args.auto_upload else 90
     total_targets = 0
     if args.children:
-        total_targets += len(target.list_children())
+        total_targets += len(list(target.list_children()))
 
     if (args.children and not args.skip_parent) or not args.children:
         total_targets += 1
