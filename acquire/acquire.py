@@ -6,13 +6,15 @@ import itertools
 import json
 import logging
 import os
+import platform
 import shutil
 import subprocess
 import sys
 import time
 import urllib.parse
 import urllib.request
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+from itertools import product
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
@@ -24,10 +26,12 @@ from dissect.target.loaders.remote import RemoteStreamConnection
 from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
+from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
+from acquire.gui import GUI
 from acquire.hashes import (
     HashFunc,
     collect_hashes,
@@ -93,11 +97,11 @@ logging.raiseExceptions = False
 
 def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     misc_dirs = {
-        ("windows/serviceprofiles/localservice", False),
-        ("windows/serviceprofiles/networkservice", False),
-        ("windows/system32/config/systemprofile", False),
-        ("users", True),
-        ("documents and settings", True),
+        ("Windows/ServiceProfiles/LocalService", False),
+        ("Windows/ServiceProfiles/NetworkService", False),
+        ("Windows/System32/config/systemprofile", False),
+        ("Users", True),
+        ("Documents and Settings", True),
     }
 
     for fs in target.fs.path().iterdir():
@@ -140,7 +144,7 @@ MISC_MAPPING = {
 def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
         for user_details in target.user_details.all_with_home():
-            yield normalize_path(target, user_details.home_path.joinpath(path))
+            yield normalize_path(target, user_details.home_path.joinpath(path), lower_case=False)
     except Exception as e:
         log.warning("Error occurred when requesting all user homes")
         log.debug("", exc_info=e)
@@ -162,7 +166,10 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         else:
             mountpoints = "No mounts"
 
-        if not isinstance(fs, ntfs.NtfsFilesystem):
+        # The attr check is needed to correctly collect fake NTFS filesystems
+        # where the MFT etc. are added to a VirtualFilesystem. This happens for
+        # instance when the target is an acquired tar target.
+        if not isinstance(fs, ntfs.NtfsFilesystem) and not hasattr(fs, "ntfs"):
             log.warning("Skipping %s (%s) - not an NTFS filesystem", fs, mountpoints)
             continue
 
@@ -176,12 +183,6 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         yield fs, name, mountpoints
 
 
-def mount_all_ntfs_filesystems(target: Target) -> None:
-    for fs, name, _ in iter_ntfs_filesystems(target):
-        if name not in target.fs.mounts:
-            target.fs.mount(name, fs)
-
-
 def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
@@ -189,9 +190,9 @@ def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem
 
         uuid = mount[len("/vmfs/volumes/") :]  # strip /vmfs/volumes/
         name = None
-        if fs.__fstype__ == "fat":
+        if fs.__type__ == "fat":
             name = fs.volume.name
-        elif fs.__fstype__ == "vmfs":
+        elif fs.__type__ == "vmfs":
             name = fs.vmfs.label
 
         yield uuid, name, fs
@@ -318,13 +319,20 @@ class NTFS(Module):
             entry = usnjrnl_path.get()
             journal = entry.open()
 
-            i = 0
-            while journal.runlist[i][0] is None:
-                journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
-                i += 1
+            # If the filesystem is a virtual NTFS filesystem, journal will be
+            # plain BinaryIO, not a RunlistStream.
+            if isinstance(journal, RunlistStream):
+                i = 0
+                while journal.runlist[i][0] is None:
+                    journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
+                    i += 1
+
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Extend/$Usnjrnl:$J")
 
             collector.output.write(
-                f"{collector.base}/{name}/$Extend/$Usnjrnl:$J",
+                outpath,
                 journal,
                 size=journal.size - journal.tell(),
                 entry=entry,
@@ -347,8 +355,13 @@ class NTFS(Module):
             secure_path = fs.path("$Secure:$SDS")
             entry = secure_path.get()
             sds = entry.open()
+
+            # Use the same method to construct the output path as is used in
+            # collector.collect_file()
+            outpath = collector._output_path(f"{name}/$Secure:$SDS")
+
             collector.output.write(
-                f"{collector.base}/{name}/$Secure:$SDS",
+                outpath,
                 sds,
                 size=sds.size,
                 entry=entry,
@@ -589,6 +602,11 @@ class Tasks(Module):
         ("dir", "sysvol/windows/syswow64/tasks"),
         ("dir", "sysvol/windows/sysvol/domain/policies"),
         ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        # Task Scheduler Service transaction log
+        ("file", "sysvol/SchedLgU.txt"),
+        ("file", "sysvol/windows/SchedLgU.txt"),
+        ("file", "sysvol/windows/tasks/SchedLgU.txt"),
+        ("file", "sysvol/winnt/tasks/SchedLgU.txt"),
     ]
 
 
@@ -654,6 +672,15 @@ class Recents(Module):
         ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
         ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
+    ]
+
+
+@register_module("--startup")
+class Startup(Module):
+    DESC = "Windows Startup folder"
+    SPEC = [
+        ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
+        ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
     ]
 
 
@@ -911,6 +938,7 @@ class Misc(Module):
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
         ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
+        ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
     ]
 
 
@@ -974,8 +1002,20 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
         ("dir", "sysvol/ProgramData/Mcafee/VirusScan"),
-        ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("dir", "sysvol/ProgramData/McAfee/MSC/Logs"),
+        ("dir", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
+        ("dir", "sysvol/ProgramData/McAfee/Agent/logs"),
+        ("dir", "sysvol/ProgramData/McAfee/datreputation/Logs"),
+        ("dir", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs"),
+        ("dir", "sysvol/Program Files (x86)/McAfee/DLP/WCF Service/Log"),
+        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Apache2/Logs"),
+        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events"),
+        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug"),
+        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Server/Logs"),
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
@@ -1050,281 +1090,86 @@ class QuarantinedFiles(Module):
 @register_module("--history")
 class History(Module):
     DESC = "browser history from IE, Edge, Firefox, and Chrome"
+    DIR_COMBINATIONS = namedtuple("DirCombinations", ["root_dirs", "dir_extensions", "history_files"])
+    COMMON_DIR_COMBINATIONS = [
+        DIR_COMBINATIONS(
+            [
+                # Chromium - RHEL/Ubuntu - DNF/apt
+                ".config/chromium",
+                # Chrome - RHEL/Ubuntu - DNF
+                ".config/google-chrome",
+                # Edge - RHEL/Ubuntu - DNF/apt
+                ".config/microsoft-edge",
+                # Chrome - RHEL/Ubuntu - Flatpak
+                ".var/app/com.google.Chrome/config/google-chrome",
+                # Edge - RHEL/Ubuntu - Flatpak
+                ".var/app/com.microsoft.Edge/config/microsoft-edge",
+                # Chromium - RHEL/Ubuntu - Flatpak
+                ".var/app/org.chromium.Chromium/config/chromium",
+                # Chrome
+                "AppData/Local/Google/Chrom*/User Data",
+                # Edge
+                "AppData/Local/Microsoft/Edge/User Data",
+                "Library/Application Support/Microsoft Edge",
+                "Local Settings/Application Data/Microsoft/Edge/User Data",
+                # Chrome - Legacy
+                "Library/Application Support/Chromium",
+                "Library/Application Support/Google/Chrome",
+                "Local Settings/Application Data/Google/Chrom*/User Data",
+                # Chromium - RHEL/Ubuntu - snap
+                "snap/chromium/common/chromium",
+                # Brave - Windows
+                "AppData/Local/BraveSoftware/Brave-Browser/User Data",
+                "AppData/Roaming/BraveSoftware/Brave-Browser/User Data",
+                # Brave - Linux
+                ".config/BraveSoftware",
+                # Brave - MacOS
+                "Library/Application Support/BraveSoftware",
+            ],
+            ["*", "Snapshots/*/*"],
+            [
+                "Archived History",
+                "Bookmarks",
+                "Cookies*",
+                "Network",
+                "Current Session",
+                "Current Tabs",
+                "Extension Cookies",
+                "Favicons",
+                "History",
+                "Last Session",
+                "Last Tabs",
+                "Login Data",
+                "Login Data For Account",
+                "Media History",
+                "Shortcuts",
+                "Snapshots",
+                "Top Sites",
+                "Web Data",
+            ],
+        ),
+    ]
 
     SPEC = [
         # IE
+        ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
+        ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/WebCache/*.dat", from_user_home),
+        # IE - index.dat
         ("file", "Cookies/index.dat", from_user_home),
         ("file", "Local Settings/History/History.IE5/index.dat", from_user_home),
         ("glob", "Local Settings/History/History.IE5/MSHist*/index.dat", from_user_home),
         ("file", "Local Settings/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
         ("file", "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat", from_user_home),
-        ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        ("glob", "AppData/Local/Microsoft/Windows/WebCache/*.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
-        # Chrome
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Bookmarks", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Favicons", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/History", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Login Data For Account", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Shortcuts", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Top Sites", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Web Data", from_user_home),
-        # Chrome - Legacy
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Session", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Current Tabs", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Archived History", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Session", from_user_home),
-        ("glob", "AppData/Local/Google/Chrom*/User Data/*/Last Tabs", from_user_home),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Bookmarks",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Favicons",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Login Data For Account",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Shortcuts",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Top Sites",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Web Data",
-            from_user_home,
-        ),
-        # Chrome - Legacy
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Session",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Current Tabs",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Archived History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Session",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Google/Chrom*/User Data/*/Last Tabs",
-            from_user_home,
-        ),
-        ("glob", "Library/Application Support/Google/Chrome/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/History", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Login Data For Account", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Web Data", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/History", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Login Data For Account", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Web Data", from_user_home),
-        # Chrome - Legacy
-        ("glob", "Library/Application Support/Google/Chrome/*/Current Session", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Current Tabs", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Archived History", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Last Session", from_user_home),
-        ("glob", "Library/Application Support/Google/Chrome/*/Last Tabs", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Current Session", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Current Tabs", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Archived History", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Last Session", from_user_home),
-        ("glob", "Library/Application Support/Chromium/*/Last Tabs", from_user_home),
-        # Chrome - RHEL/Ubuntu - DNF
-        ("glob", ".config/google-chrome/*/Bookmarks", from_user_home),
-        ("glob", ".config/google-chrome/*/Favicons", from_user_home),
-        ("glob", ".config/google-chrome/*/History", from_user_home),
-        ("glob", ".config/google-chrome/*/Login Data", from_user_home),
-        ("glob", ".config/google-chrome/*/Login Data For Account", from_user_home),
-        ("glob", ".config/google-chrome/*/Shortcuts", from_user_home),
-        ("glob", ".config/google-chrome/*/Top Sites", from_user_home),
-        ("glob", ".config/google-chrome/*/Web Data", from_user_home),
-        # Chrome - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Favicons", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/History", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Top Sites", from_user_home),
-        ("glob", ".var/app/com.google.Chrome/config/google-chrome/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - DNF/apt
-        ("glob", ".config/chromium/*/Bookmarks", from_user_home),
-        ("glob", ".config/chromium/*/Favicons", from_user_home),
-        ("glob", ".config/chromium/*/History", from_user_home),
-        ("glob", ".config/chromium/*/Login Data", from_user_home),
-        ("glob", ".config/chromium/*/Login Data For Account", from_user_home),
-        ("glob", ".config/chromium/*/Shortcuts", from_user_home),
-        ("glob", ".config/chromium/*/Top Sites", from_user_home),
-        ("glob", ".config/chromium/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Favicons", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/History", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Top Sites", from_user_home),
-        ("glob", ".var/app/org.chromium.Chromium/config/chromium/*/Web Data", from_user_home),
-        # Chromium - RHEL/Ubuntu - snap
-        ("glob", "snap/chromium/common/chromium/*/Bookmarks", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Favicons", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/History", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Login Data", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Login Data For Account", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Shortcuts", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Top Sites", from_user_home),
-        ("glob", "snap/chromium/common/chromium/*/Web Data", from_user_home),
-        # Edge
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Bookmarks", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Extension Cookies", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Favicons", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/History", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Login Data", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Media History", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Shortcuts", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Top Sites", from_user_home),
-        ("glob", "AppData/Local/Microsoft/Edge/User Data/*/Web Data", from_user_home),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Bookmarks",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Extension Cookies",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Favicons",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Login Data",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Media History",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Shortcuts",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Top Sites",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Edge/User Data/*/Web Data",
-            from_user_home,
-        ),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Bookmarks", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Extension Cookies", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Favicons", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/History", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Login Data", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Media History", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Shortcuts", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Top Sites", from_user_home),
-        ("glob", "Library/Application Support/Microsoft Edge/*/Web Data", from_user_home),
-        # Edge - RHEL/Ubuntu - DNF/apt
-        ("glob", ".config/microsoft-edge/*/Bookmarks", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Favicons", from_user_home),
-        ("glob", ".config/microsoft-edge/*/History", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Login Data", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Login Data For Account", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Shortcuts", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Top Sites", from_user_home),
-        ("glob", ".config/microsoft-edge/*/Web Data", from_user_home),
-        # Edge - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Bookmarks", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Favicons", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/History", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Login Data For Account", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Shortcuts", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Top Sites", from_user_home),
-        ("glob", ".var/app/com.microsoft.Edge/config/microsoft-edge/*/Web Data", from_user_home),
         # Firefox - Windows
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
@@ -1332,11 +1177,11 @@ class History(Module):
         # Firefox - macOS
         ("glob", "/Users/*/Library/Application Support/Firefox/Profiles/*/*.sqlite*"),
         # Firefox - RHEL/Ubuntu - Flatpak
-        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - DNF/apt
-        ("glob", ".mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", ".mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - snap
-        ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite", from_user_home),
+        ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Safari - macOS
         ("file", "Library/Safari/Bookmarks.plist", from_user_home),
         ("file", "Library/Safari/Downloads.plist", from_user_home),
@@ -1345,6 +1190,18 @@ class History(Module):
         ("file", "Library/Safari/LastSession.plist", from_user_home),
         ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
     ]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        for root_dirs, extension_dirs, history_files in cls.COMMON_DIR_COMBINATIONS:
+            for root_dir, extension_dir, history_file in product(root_dirs, extension_dirs, history_files):
+                full_path = f"{root_dir}/{extension_dir}/{history_file}"
+                search_type = "glob" if "*" in full_path else "file"
+
+                spec.add((search_type, full_path, from_user_home))
+
+        return spec
 
 
 @register_module("--remoteaccess")
@@ -1435,10 +1292,31 @@ def private_key_filter(path: fsutil.TargetPath) -> bool:
 @register_module("--home")
 class Home(Module):
     SPEC = [
+        # Catches most shell related configuration files
         ("glob", ".*[akz]sh*", from_user_home),
-        ("dir", ".config", from_user_home),
         ("glob", "*/.*[akz]sh*", from_user_home),
+        # Added to catch any shell related configuration file not caught with the above glob
+        ("glob", ".*history", from_user_home),
+        ("glob", "*/.*history", from_user_home),
+        ("glob", ".*rc", from_user_home),
+        ("glob", "*/.*rc", from_user_home),
+        ("glob", ".*_logout", from_user_home),
+        ("glob", "*/.*_logout", from_user_home),
+        # Miscellaneous configuration files
+        ("dir", ".config", from_user_home),
         ("glob", "*/.config", from_user_home),
+        ("file", ".wget-hsts", from_user_home),
+        ("glob", "*/.wget-hsts", from_user_home),
+        ("file", ".gitconfig", from_user_home),
+        ("glob", "*/.gitconfig", from_user_home),
+        ("file", ".selected_editor", from_user_home),
+        ("glob", "*/.selected_editor", from_user_home),
+        ("file", ".viminfo", from_user_home),
+        ("glob", "*/.viminfo", from_user_home),
+        ("file", ".lesshist", from_user_home),
+        ("glob", "*/.lesshist", from_user_home),
+        ("file", ".profile", from_user_home),
+        ("glob", "*/.profile", from_user_home),
         # OS-X home (aka /Users)
         ("glob", ".bash_sessions/*", from_user_home),
         ("glob", "Library/LaunchAgents/*", from_user_home),
@@ -1592,7 +1470,7 @@ class VMFS(Module):
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for uuid, name, fs in iter_esxi_filesystems(target):
-            if not fs.__fstype__ == "vmfs":
+            if not fs.__type__ == "vmfs":
                 continue
 
             log.info("Acquiring /vmfs/volumes/%s (%s)", uuid, name)
@@ -1607,7 +1485,7 @@ class VMFS(Module):
 class ActivitiesCache(Module):
     DESC = "user's activities caches"
     SPEC = [
-        ("glob", "AppData/Local/ConnectedDevicesPlatform/*/ActivitiesCache.db", from_user_home),
+        ("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),
     ]
 
 
@@ -1790,6 +1668,8 @@ def acquire_target(target: Target, *args, **kwargs) -> list[str]:
 
 def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     files = []
+    # debug logs contain references to flow objects and will give errors
+    logging.getLogger().setLevel(logging.CRITICAL)
     if not len(target.hostname()):
         log.error("Unable to initialize targetd.")
         return files
@@ -1808,7 +1688,23 @@ def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: 
     return files
 
 
+def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
+    modules_selected = dict()
+
+    if choice and choice != "none":
+        profile_dict = profile[choice]
+        if operating_system not in profile_dict:
+            log.error(msg, operating_system, choice)
+            return None
+
+        for mod in profile_dict[operating_system]:
+            modules_selected[mod.__modname__] = mod
+
+    return modules_selected
+
+
 def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+    acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
@@ -1852,10 +1748,6 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
     log.info("OS: %s", version)
     log.info("")
 
-    # Prepare targets if necessary
-    if target.os == "windows":
-        mount_all_ntfs_filesystems(target)
-
     print_acquire_warning(target)
 
     modules_selected = {}
@@ -1875,13 +1767,22 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         profile = "default"
         log.info("")
 
-    if profile and profile != "none":
-        if target.os not in PROFILES[profile]:
-            log.error("No collection set for OS %s with profile %s", target.os, profile)
-            return files
+    profile_modules = _add_modules_for_profile(
+        profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
+    )
 
-        for mod in PROFILES[profile][target.os]:
-            modules_selected[mod.__modname__] = mod
+    if not (volatile_profile := args.volatile_profile):
+        volatile_profile = "none"
+
+    volatile_modules = _add_modules_for_profile(
+        volatile_profile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+    )
+
+    if (profile_modules or volatile_modules) is None:
+        return files
+
+    modules_selected.update(profile_modules)
+    modules_selected.update(volatile_modules)
 
     log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
@@ -1958,6 +1859,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
 
         # Run modules (sort first based on execution order)
         modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
+        count = 0
         for name, mod in modules_selected:
             try:
                 mod.run(target, args, collector)
@@ -1966,6 +1868,10 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
             except Exception:
                 log.error("Error while running module %s", name, exc_info=True)
                 modules_failed[mod.__name__] = get_formatted_exception()
+
+            acquire_gui.progress = (acquire_gui.shard // len(modules_selected)) * count
+            count += 1
+
             log.info("")
 
         collection_report = collector.report
@@ -2013,175 +1919,186 @@ def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: boo
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
         log.error("Upload %s FAILED. See log file for details.", paths)
+        GUI().message("Upload failed.")
         log.exception("")
+
+
+class WindowsProfile:
+    MINIMAL = [
+        NTFS,
+        EventLogs,
+        Registry,
+        Tasks,
+        PowerShell,
+        Prefetch,
+        Appcompat,
+        PCA,
+        Misc,
+        Startup,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        ETL,
+        Recents,
+        RecycleBin,
+        Drivers,
+        Syscache,
+        WBEM,
+        AV,
+        BITS,
+        DHCP,
+        DNS,
+        ActiveDirectory,
+        RemoteAccess,
+        ActivitiesCache,
+    ]
+    FULL = [
+        *DEFAULT,
+        History,
+        NTDS,
+        QuarantinedFiles,
+        WindowsNotifications,
+        SSH,
+        IIS,
+    ]
+
+
+class LinuxProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        WebHosting,
+    ]
+
+
+class BsdProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+        BSD,
+    ]
+    DEFAULT = MINIMAL
+    FULL = MINIMAL
+
+
+class ESXiProfile:
+    MINIMAL = [
+        Bootbanks,
+        ESXi,
+        SSH,
+    ]
+    DEFAULT = [
+        *MINIMAL,
+        VMFS,
+    ]
+    FULL = DEFAULT
+
+
+class OSXProfile:
+    MINIMAL = [
+        Etc,
+        Home,
+        Var,
+        OSX,
+        OSXApplicationsInfo,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        SSH,
+    ]
 
 
 PROFILES = {
     "full": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            ActivitiesCache,
-            BITS,
-            DHCP,
-            DNS,
-            History,
-            Misc,
-            NTDS,
-            ActiveDirectory,
-            QuarantinedFiles,
-            RemoteAccess,
-            WindowsNotifications,
-            SSH,
-            IIS,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            History,
-            SSH,
-            Var,
-            WebHosting,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            SSH,
-            Home,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-            History,
-            SSH,
-        ],
+        "windows": WindowsProfile.FULL,
+        "linux": LinuxProfile.FULL,
+        "bsd": BsdProfile.FULL,
+        "esxi": ESXiProfile.FULL,
+        "osx": OSXProfile.FULL,
     },
     "default": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            ETL,
-            Recents,
-            RecycleBin,
-            Drivers,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Syscache,
-            WBEM,
-            AV,
-            BITS,
-            DHCP,
-            DNS,
-            Misc,
-            ActiveDirectory,
-            RemoteAccess,
-            ActivitiesCache,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            VMFS,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.DEFAULT,
+        "linux": LinuxProfile.DEFAULT,
+        "bsd": BsdProfile.DEFAULT,
+        "esxi": ESXiProfile.DEFAULT,
+        "osx": OSXProfile.DEFAULT,
     },
     "minimal": {
-        "windows": [
-            NTFS,
-            EventLogs,
-            Registry,
-            Tasks,
-            PowerShell,
-            Prefetch,
-            Appcompat,
-            PCA,
-            Misc,
-        ],
-        "linux": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-        ],
-        "bsd": [
-            Etc,
-            Boot,
-            Home,
-            SSH,
-            Var,
-            BSD,
-        ],
-        "esxi": [
-            Bootbanks,
-            ESXi,
-            SSH,
-        ],
-        "osx": [
-            Etc,
-            Home,
-            Var,
-            OSX,
-            OSXApplicationsInfo,
-        ],
+        "windows": WindowsProfile.MINIMAL,
+        "linux": LinuxProfile.MINIMAL,
+        "bsd": BsdProfile.MINIMAL,
+        "esxi": ESXiProfile.MINIMAL,
+        "osx": OSXProfile.MINIMAL,
+    },
+    "none": None,
+}
+
+
+class VolatileProfile:
+    DEFAULT = [
+        Netstat,
+        WinProcesses,
+        WinProcEnv,
+        WinArpCache,
+        WinRDPSessions,
+        WinDnsClientCache,
+    ]
+    EXTENSIVE = [
+        Proc,
+        Sys,
+    ]
+
+
+VOLATILE = {
+    "default": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": [],
+        "bsd": [],
+        "esxi": [],
+        "osx": [],
+    },
+    "extensive": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": VolatileProfile.EXTENSIVE,
+        "bsd": VolatileProfile.EXTENSIVE,
+        "esxi": VolatileProfile.EXTENSIVE,
+        "osx": [],
     },
     "none": None,
 }
 
 
 def main() -> None:
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args = parse_acquire_args(parser, config=CONFIG)
+
+    # start GUI if requested through CLI / config
+    flavour = None
+    if args.gui == "always" or (
+        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
+    ):
+        flavour = platform.system()
+
+    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
+    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+
+    if cancel:
+        parser.exit(0)
+
+    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
 
     try:
         check_and_set_log_args(args)
@@ -2228,6 +2145,7 @@ def main() -> None:
             "address": args.targetd_ip,
             "port": args.targetd_port,
             "cacert_str": args.targetd_cacert,
+            "service": args.targetd_func == "agent",
             "cacert": None,
         }
         start_client(args, presets=config)
@@ -2263,11 +2181,13 @@ def main() -> None:
     except Exception:
         if not is_user_admin():
             log.error("Failed to load target, try re-running as administrator/root.")
+            acquire_gui.message("This application must be run as administrator.")
+            acquire_gui.wait_for_quit()
             parser.exit(1)
         log.exception("Failed to load target")
         raise
 
-    if target.os == "esxi":
+    if target.os == "esxi" and target.name == "local":
         # Loader found that we are running on an esxi host
         # Perform operations to "enhance" memory
         with esxi_memory_context_manager():
@@ -2296,15 +2216,31 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
     log.info("")
 
     files = []
+    acquire_gui = GUI()
+
+    counter = 0
+    progress_limit = 50 if args.auto_upload else 90
+    total_targets = 0
+    if args.children:
+        total_targets += len(list(target.list_children()))
+
     if (args.children and not args.skip_parent) or not args.children:
+        total_targets += 1
+        counter += 1
+        acquire_gui.shard = (progress_limit // total_targets) * counter
         try:
             files.extend(acquire_target(target, args, args.start_time))
+
         except Exception:
             log.exception("Failed to acquire target")
+            acquire_gui.message("Failed to acquire target")
+            acquire_gui.wait_for_quit()
             raise
 
     if args.children:
         for child in target.list_children():
+            counter += 1
+            acquire_gui.shard = (100 // total_targets) * counter
             try:
                 child_target = load_child(target, child.path)
             except Exception:
@@ -2317,6 +2253,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
                 files.extend(child_files)
             except Exception:
                 log.exception("Failed to acquire child target")
+                acquire_gui.message("Failed to acquire child target")
                 continue
 
     files = sort_files(files)
@@ -2329,8 +2266,15 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
         log.info("")
         try:
             upload_files(files, args.upload_plugin)
+            acquire_gui.finish()
+            acquire_gui.wait_for_quit()
         except Exception:
             log.exception("Failed to upload files")
+            acquire_gui.message("Failed to upload files")
+            acquire_gui.wait_for_quit()
+    else:
+        acquire_gui.finish()
+        acquire_gui.wait_for_quit()
 
 
 def sort_files(files: list[Union[str, Path]]) -> list[Path]:

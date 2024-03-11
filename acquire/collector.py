@@ -30,7 +30,12 @@ from dissect.target.exceptions import (
 )
 from dissect.target.helpers import fsutil
 
-from acquire.utils import StrEnum, get_formatted_exception, normalize_path
+from acquire.utils import (
+    StrEnum,
+    get_formatted_exception,
+    normalize_path,
+    normalize_sysvol,
+)
 
 if TYPE_CHECKING:
     from acquire.outputs.base import Output
@@ -74,8 +79,14 @@ def serialize_path(path: Any) -> str:
 
     # Naive way to serialize TargetPath filesystem's metadata is
     # to rely on uniqueness of `path._fs` object
-    fs_id = id(path._fs)
-    return f"{path._fs.__fstype__}:{fs_id}:{path}"
+    fs = path._fs
+    fs_id = id(fs)
+    fs_type = fs.__type__
+    path = str(path)
+    if not fs.case_sensitive:
+        path = path.lower()
+
+    return f"{fs_type}:{fs_id}:{path}"
 
 
 @dataclass
@@ -233,6 +244,9 @@ class Collector:
     def _output_path(self, path: Path, base: Optional[str] = None) -> str:
         base = base or self.base
         outpath = str(path)
+
+        if sysvol_drive := self.target.props.get("sysvol_drive"):
+            outpath = normalize_sysvol(outpath, sysvol_drive)
 
         if base:
             # Make sure that `outpath` is not an abolute path, since

@@ -41,25 +41,36 @@ class StrEnum(str, Enum):
     """Sortable and serializible string-based enum"""
 
 
-def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentParser:
+def _create_profile_information(profiles: dict) -> str:
     desc = ""
 
     profile_names = (name for name in profiles.keys() if name != "none")
-
     for name in profile_names:
+        profile_dict = profiles[name]
         desc += f"{name} profile:\n"
-        minindent = max([len(os_) for os_ in profiles[name].keys()])
-        descfmt = f"  {{:{minindent}s}}: {{}}\n"
-        for os_ in profiles[name].keys():
-            indent = 4 + len(os_)
-            modlist = textwrap.wrap(", ".join([mod.__modname__ for mod in profiles[name][os_]]), 50)
 
+        minindent = max([len(os_) for os_ in profile_dict.keys()])
+        descfmt = f"  {{:{minindent}s}}: {{}}\n"
+
+        for os_, modlist in profile_dict.items():
+            if not modlist:
+                continue
+            indent = 4 + len(os_)
+            modlist = textwrap.wrap(", ".join([mod.__modname__ for mod in modlist]), 50)
             moddesc = modlist.pop(0)
             for ml in modlist:
                 moddesc += "\n" + (" " * indent) + ml
-
             desc += descfmt.format(os_, moddesc)
         desc += "\n"
+
+    return desc
+
+
+def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> argparse.ArgumentParser:
+    module_profiles = "Module:\n" + textwrap.indent(_create_profile_information(profiles), "  ")
+    volatile_profiles = "Volatile:\n" + textwrap.indent(_create_profile_information(volatile), "  ")
+
+    desc = module_profiles + volatile_profiles
 
     parser = argparse.ArgumentParser(
         prog="acquire",
@@ -102,10 +113,19 @@ def create_argument_parser(profiles: dict, modules: dict) -> argparse.ArgumentPa
         action="store_true",
         help="encrypt output (if supported by the output type)",
     )
+    parser.add_argument(
+        "--gui",
+        nargs="?",
+        const="always",
+        default="depends",
+        action="store",
+        help="launch with a GUI (if available for your platform)",
+    )
     parser.add_argument("--public-key", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
     parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
+    parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
     parser.add_argument("-f", "--file", action="append", help="acquire file")
     parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
@@ -362,20 +382,26 @@ def persist_execution_report(path: Path, report_data: dict) -> Path:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
 
 
-SYSVOL_SUBST = re.compile(r"^(/\?\?/)?[cC]:")
+DEVICE_SUBST = re.compile(r"^(/\?\?/)")
+SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/)", flags=re.IGNORECASE)
 
 
-def normalize_path(target: Target, path: Path, resolve: bool = False) -> str:
+def normalize_path(target: Target, path: Path, *, resolve: bool = False, lower_case: bool = True) -> str:
     if resolve:
         path = path.resolve()
 
     path = path.as_posix()
 
-    if not target.fs.case_sensitive:
+    if target.os == "windows":
+        path = DEVICE_SUBST.sub("", path)
+        if sysvol_drive := target.props.get("sysvol_drive"):
+            path = normalize_sysvol(path, sysvol_drive)
+
+    if not target.fs.case_sensitive and lower_case:
         path = path.lower()
 
-    if target.os == "windows":
-        # As dissect.target always maps c: onto sysvol, we can do this substitution here.
-        path = SYSVOL_SUBST.sub("sysvol", path)
-
     return path
+
+
+def normalize_sysvol(path: str, sysvol: str) -> str:
+    return SYSVOL_SUBST.sub(sysvol, path)

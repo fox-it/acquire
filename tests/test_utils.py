@@ -1,17 +1,19 @@
 import argparse
 import pathlib
 import platform
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dissect.target import Target
 
-from acquire.acquire import MODULES, PROFILES
+from acquire.acquire import MODULES, PROFILES, VOLATILE
 from acquire.utils import (
     check_and_set_acquire_args,
     check_and_set_log_args,
     create_argument_parser,
     normalize_path,
+    normalize_sysvol,
 )
 
 
@@ -26,7 +28,7 @@ def get_args(**kwargs):
         "public_key": None,
     }
 
-    parser = create_argument_parser(PROFILES, MODULES)
+    parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     default_args = dict(parser.parse_args(args=[])._get_kwargs())
     default_args.update(kwargs)
 
@@ -296,89 +298,147 @@ def test_check_and_set_acquire_args_cagent():
 
 
 @pytest.mark.parametrize(
-    "path, resolve, norm_path, case_sensitive, os",
+    "path, sysvol, resolve, lower_case, case_sensitive, os, result",
     [
         (
             pathlib.Path("/foo/bar"),
+            None,
             False,
-            "/foo/bar",
+            True,
             True,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.Path("/foo/BAR"),
+            None,
             False,
-            "/foo/bar",
+            True,
             False,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.Path("/foo/BAR"),
+            None,
             False,
+            True,
+            True,
+            "dummy",
             "/foo/BAR",
-            True,
-            "dummy",
         ),
         (
             pathlib.Path("/foo/../bar"),
+            None,
             False,
-            "/foo/../bar",
+            True,
             True,
             "dummy",
+            "/foo/../bar",
         ),
         (
             pathlib.Path("/foo/../foo/bar"),
+            None,
             True,
-            "/foo/bar",
+            True,
             True,
             "dummy",
+            "/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("c:\\foo\\bar"),
+            "c:",
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("C:\\foo\\bar"),
+            "c:",
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\C:\\foo\\bar"),
+            "c:",
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("\\??\\c:\\foo\\bar"),
+            "c:",
             False,
-            "sysvol/foo/bar",
+            True,
             False,
             "windows",
+            "c:/foo/bar",
         ),
         (
             pathlib.PureWindowsPath("D:\\foo\\bar"),
+            "c:",
             False,
-            "d:/foo/bar",
+            True,
             False,
             "windows",
+            "d:/foo/bar",
+        ),
+        (
+            pathlib.PureWindowsPath("D:\\Foo\\BAR"),
+            "c:",
+            False,
+            False,
+            False,
+            "windows",
+            "D:/Foo/BAR",
+        ),
+        (
+            pathlib.PureWindowsPath("sysvol\\foo\\bar"),
+            "c:",
+            False,
+            False,
+            False,
+            "windows",
+            "c:/foo/bar",
         ),
     ],
 )
-@pytest.mark.skipif(platform.system() == "Windows", reason="Compares Posix Paths. Needs to be fixed.")
 def test_utils_normalize_path(
     mock_target: Target,
     path: pathlib.Path,
+    sysvol: Optional[str],
     resolve: bool,
-    norm_path: str,
+    lower_case: bool,
     case_sensitive: bool,
     os: str,
+    result: str,
 ) -> None:
-    with patch.object(mock_target, "os", new=os):
-        with patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive):
-            assert normalize_path(mock_target, path, resolve=resolve) == norm_path
+    with patch.object(mock_target, "os", new=os), patch.object(
+        mock_target.fs, "_case_sensitive", new=case_sensitive
+    ), patch.dict(mock_target.props, {"sysvol_drive": sysvol}):
+        resolved_path = normalize_path(mock_target, path, resolve=resolve, lower_case=lower_case)
+
+        if platform.system() == "Windows":
+            # A resolved path on windows adds a C:\ prefix. So we check if it ends with our expected
+            # path string
+            assert resolved_path.endswith(result)
+        else:
+            assert resolved_path == result
+
+
+@pytest.mark.parametrize(
+    "path, sysvol, result",
+    [
+        ("sysvol/foo/bar", "c:", "c:/foo/bar"),
+        ("/sysvol/foo/bar", "c:", "c:/foo/bar"),
+    ],
+)
+def test_normalize_sysvol(path: str, sysvol: str, result: str) -> None:
+    assert normalize_sysvol(path, sysvol) == result
