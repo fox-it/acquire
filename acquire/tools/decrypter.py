@@ -250,7 +250,8 @@ def check_existing(in_path: Path, out_path: Path, status_queue: Queue) -> bool:
         _info(status_queue, f"Output file already exists: {out_path}")
         return True
 
-    # Check if acquire file is compressed. If so, check if decompressed file already exists
+    # Check if acquire file is compressed (Path("file.tar.gz.enc").stem -> "file.tar.gz") 
+    # If it is compressed, check if decompressed file already exists
     if in_path.stem.endswith((".tgz", ".gz")) and (decompressed_file := out_path.with_suffix("")).exists():
         _info(status_queue, f"Decompressed file already exists: {decompressed_file}")
         return True
