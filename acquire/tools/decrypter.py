@@ -12,6 +12,7 @@ import textwrap
 from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
+from multiprocessing import Queue
 from pathlib import Path
 from queue import Empty as QueueEmptyError
 from urllib import request
@@ -244,10 +245,22 @@ def decrypt_header(header, fingerprint, key_file=None, key_server=None):
         return base64.b64decode(result["header"])
 
 
+def check_existing(in_path: Path, out_path: Path, status_queue: Queue) -> bool:
+    if out_path.exists():
+        _info(status_queue, f"Output file already exists: {out_path}")
+        return True
+
+    # Check if acquire file is compressed. If so, check if decompressed file already exists
+    if in_path.stem.endswith((".tgz", ".gz")) and (decompressed_file := out_path.with_suffix("")).exists():
+        _info(status_queue, f"Decompressed file already exists: {decompressed_file}")
+        return True
+
+    return False
+
+
 def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, key_server=None, clobber=False):
     try:
-        if out_path.exists() and not clobber:
-            _info(status_queue, f"Output file already exists: {out_path}")
+        if check_existing(in_path, out_path, status_queue) and not clobber:
             return
 
         _update(status_queue, task_id, visible=True)
