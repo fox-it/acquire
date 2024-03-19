@@ -12,7 +12,6 @@ import textwrap
 from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
-from multiprocessing import Queue
 from pathlib import Path
 from queue import Empty as QueueEmptyError
 from urllib import request
@@ -245,7 +244,7 @@ def decrypt_header(header, fingerprint, key_file=None, key_server=None):
         return base64.b64decode(result["header"])
 
 
-def check_existing(in_path: Path, out_path: Path, status_queue: Queue) -> bool:
+def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.Queue) -> bool:
     if out_path.exists():
         _info(status_queue, f"Output file already exists: {out_path}")
         return True
