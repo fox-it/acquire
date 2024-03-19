@@ -33,17 +33,21 @@ def test_find_inside_dir(tmp_path: Path):
 
 
 @pytest.mark.parametrize(
-    "existing,expected_result,expected_msg",
+    "existing,out_path,expected_result,expected_msg",
     [
-        pytest.param(None, False, None, id="out_path_not_exists"),
-        pytest.param("test.tar.gz", True, "Output file", id="out_path_exists"),
-        pytest.param(None, False, None, id="decompressed_not_exists"),
-        pytest.param("test.tar", True, "Decompressed file", id="decompressed_exists"),
+        pytest.param(None, None, False, None, id="out_path_not_exists"),
+        pytest.param("test.tar.gz", None, True, "Output file", id="out_path_exists"),
+        pytest.param(None, None, False, None, id="decompressed_not_exists"),
+        pytest.param("test.tar", None, True, "Decompressed file", id="decompressed_exists"),
+        pytest.param(None, "test.tar", False, None, id="custom_filename_not_exists"),
+        pytest.param("test.tar", "test.tar", True, None, id="custom_filename_exists"),
     ],
 )
-def test_check_existing(tmp_path: Path, existing: Optional[str], expected_result: bool, expected_msg: Optional[str]):
+def test_check_existing(
+    tmp_path: Path, out_path: str, existing: Optional[str], expected_result: bool, expected_msg: Optional[str]
+):
     queue = Queue()
-    out_path = tmp_path / "test.tar.gz"
+    out_path = tmp_path / (out_path or "test.tar.gz")
     in_path = tmp_path / "test.tar.gz.enc"
     in_path.touch()
 
