@@ -1815,7 +1815,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
         if target.path.name == "local":
             skip_list = {normalize_path(target, log_path, resolve=True)}
 
-    output_path = args.output
+    output_path = args.output or args.output_file
     if output_path.is_dir():
         output_dir = format_output_name(target.name, output_ts)
         output_path = output_path.joinpath(output_dir)
@@ -1901,7 +1901,7 @@ def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: 
             **collection_report_serialized,
         }
 
-        if args.output.is_dir():
+        if args.output:
             report_file_name = format_output_name(target.name, postfix=output_ts, ext="report.json")
         else:
             report_file_name = f"{output_path.name}.report.json"
@@ -2099,6 +2099,10 @@ def main() -> None:
 
     acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
     args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+
+    # Since output has a default value, set it to None when output_file is defined
+    if args.output_file:
+        args.output = None
 
     if cancel:
         parser.exit(0)

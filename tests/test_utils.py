@@ -1,6 +1,6 @@
 import argparse
-import pathlib
 import platform
+from pathlib import Path, PureWindowsPath
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
@@ -21,7 +21,7 @@ def get_args(**kwargs):
     default_args = {
         "no_log": True,
         "log": None,
-        "output": pathlib.Path("."),
+        "output": Path("."),
         "children": False,
         "upload": None,
         "auto_upload": False,
@@ -42,7 +42,7 @@ def get_mock_path(
     parent_is_dir: bool = True,
     tree_depth: int = 1,
 ) -> MagicMock:
-    mock_path = MagicMock(spec_set=pathlib.Path)
+    mock_path = MagicMock(spec_set=Path)
     mock_path.__str__ = lambda _: "/some/path"
 
     if exists:
@@ -128,7 +128,7 @@ def test_check_and_set_log_args_fail_log_to_path_not_exists():
         "auto_upload",
     ],
 )
-def test_check_and_set_acquire_args_upload_auto_upload(arg_name):
+def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str):
     cagent_key = "bar"
     config = {
         "upload": {"mode": "foo"},
@@ -179,7 +179,9 @@ def test_check_and_set_acquire_args_upload_auto_upload(arg_name):
         ),
     ],
 )
-def test_check_and_set_acquire_args_upload_auto_upload_fail(arg_name, upload_config, plugin_side_effect, error_match):
+def test_check_and_set_acquire_args_upload_auto_upload_fail(
+    arg_name: str, upload_config: dict, plugin_side_effect: bool, error_match: str
+):
     config = {"cagent_key": "bar"}
     config.update(upload_config)
 
@@ -195,56 +197,78 @@ def test_check_and_set_acquire_args_upload_auto_upload_fail(arg_name, upload_con
 
 
 @pytest.mark.parametrize(
-    "children, output",
+    "children, arg_name, output",
     [
         # Output without children to a directory
         (
             False,
+            "output",
             get_mock_path(),
         ),
-        # Output with children to a directoy
+        # Output with children to a directory
         (
             True,
+            "output",
             get_mock_path(),
         ),
-        # Output without children to a file
+        # Output_file without children to a file
         (
             False,
+            "output_file",
             get_mock_path(is_dir=False),
-        ),
-        # Output without children to a non-existing file, but the parent directory exists
-        (
-            False,
-            get_mock_path(exists=False),
         ),
     ],
 )
-def test_check_and_set_acquire_args_output(children, output):
-    args = get_args(children=children, output=output, config={})
+def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output: Path):
+    args = get_args(**{"children": children, arg_name: output, "config": {}})
+
     result = check_and_set_acquire_args(args, MagicMock())
 
     assert result is None
 
 
 @pytest.mark.parametrize(
-    "children, output, error_match",
+    "children, arg_name, output, error_match",
     [
-        # Output with children to a file
+        # Output_file and children defined at the same time
         (
             True,
+            "output_file",
             get_mock_path(is_dir=False),
-            "Output path must be a directory when using --children",
+            "--children can not be used with --output_file. Use --output instead",
         ),
-        # Output without children to a non-existing file with non-existing parent
+        # Output_file is a directory
         (
             False,
-            get_mock_path(exists=False, parent_is_dir=False),
-            "Output path doesn't exist: /some/path",
+            "output_file",
+            get_mock_path(),
+            "--output_file must be a path to a file in an existing directory",
+        ),
+        # Output_file has a non-existing parent directory
+        (
+            False,
+            "output_file",
+            get_mock_path(is_dir=False, parent_is_dir=False),
+            "--output_file must be a path to a file in an existing directory",
+        ),
+        # Output is a non-existing directory
+        (
+            False,
+            "output",
+            get_mock_path(exists=False),
+            "Output directory doesn't exist or is a file: /some/path",
+        ),
+        # Output is a file
+        (
+            False,
+            "output",
+            get_mock_path(exists=False, is_dir=False),
+            "Output directory doesn't exist or is a file: /some/path",
         ),
     ],
 )
-def test_check_and_set_acquire_args_output_fail(children, output, error_match):
-    args = get_args(children=children, output=output, config={})
+def test_check_and_set_acquire_args_output_fail(children: bool, arg_name: str, output: Path, error_match: str):
+    args = get_args(**{"children": children, arg_name: output, "config": {}})
 
     with pytest.raises(ValueError, match=error_match):
         check_and_set_acquire_args(args, MagicMock())
@@ -276,7 +300,7 @@ def test_check_and_set_acquire_args_encrypt_with_public_key_arg():
         get_mock_path(),
     ],
 )
-def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key):
+def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: Optional[Path]):
     args = get_args(encrypt=True, public_key=public_key, config={})
 
     with pytest.raises(ValueError, match=r"No public key available \(embedded or argument\)"):
@@ -301,7 +325,7 @@ def test_check_and_set_acquire_args_cagent():
     "path, sysvol, resolve, lower_case, case_sensitive, os, result",
     [
         (
-            pathlib.Path("/foo/bar"),
+            Path("/foo/bar"),
             None,
             False,
             True,
@@ -310,7 +334,7 @@ def test_check_and_set_acquire_args_cagent():
             "/foo/bar",
         ),
         (
-            pathlib.Path("/foo/BAR"),
+            Path("/foo/BAR"),
             None,
             False,
             True,
@@ -319,7 +343,7 @@ def test_check_and_set_acquire_args_cagent():
             "/foo/bar",
         ),
         (
-            pathlib.Path("/foo/BAR"),
+            Path("/foo/BAR"),
             None,
             False,
             True,
@@ -328,7 +352,7 @@ def test_check_and_set_acquire_args_cagent():
             "/foo/BAR",
         ),
         (
-            pathlib.Path("/foo/../bar"),
+            Path("/foo/../bar"),
             None,
             False,
             True,
@@ -337,7 +361,7 @@ def test_check_and_set_acquire_args_cagent():
             "/foo/../bar",
         ),
         (
-            pathlib.Path("/foo/../foo/bar"),
+            Path("/foo/../foo/bar"),
             None,
             True,
             True,
@@ -346,7 +370,7 @@ def test_check_and_set_acquire_args_cagent():
             "/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("c:\\foo\\bar"),
+            PureWindowsPath("c:\\foo\\bar"),
             "c:",
             False,
             True,
@@ -355,7 +379,7 @@ def test_check_and_set_acquire_args_cagent():
             "c:/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("C:\\foo\\bar"),
+            PureWindowsPath("C:\\foo\\bar"),
             "c:",
             False,
             True,
@@ -364,7 +388,7 @@ def test_check_and_set_acquire_args_cagent():
             "c:/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("\\??\\C:\\foo\\bar"),
+            PureWindowsPath("\\??\\C:\\foo\\bar"),
             "c:",
             False,
             True,
@@ -373,7 +397,7 @@ def test_check_and_set_acquire_args_cagent():
             "c:/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("\\??\\c:\\foo\\bar"),
+            PureWindowsPath("\\??\\c:\\foo\\bar"),
             "c:",
             False,
             True,
@@ -382,7 +406,7 @@ def test_check_and_set_acquire_args_cagent():
             "c:/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("D:\\foo\\bar"),
+            PureWindowsPath("D:\\foo\\bar"),
             "c:",
             False,
             True,
@@ -391,7 +415,7 @@ def test_check_and_set_acquire_args_cagent():
             "d:/foo/bar",
         ),
         (
-            pathlib.PureWindowsPath("D:\\Foo\\BAR"),
+            PureWindowsPath("D:\\Foo\\BAR"),
             "c:",
             False,
             False,
@@ -400,7 +424,7 @@ def test_check_and_set_acquire_args_cagent():
             "D:/Foo/BAR",
         ),
         (
-            pathlib.PureWindowsPath("sysvol\\foo\\bar"),
+            PureWindowsPath("sysvol\\foo\\bar"),
             "c:",
             False,
             False,
@@ -412,7 +436,7 @@ def test_check_and_set_acquire_args_cagent():
 )
 def test_utils_normalize_path(
     mock_target: Target,
-    path: pathlib.Path,
+    path: Path,
     sysvol: Optional[str],
     resolve: bool,
     lower_case: bool,

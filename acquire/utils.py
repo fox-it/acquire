@@ -85,7 +85,11 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         nargs="?",
         help="target to load (default: local)",
     )
-    parser.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    # Create a mutually exclusive group, such that only one of the output options can be used
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    output_group.add_argument("-of", "--output-file", type=Path, help="output filename")
+
     parser.add_argument(
         "-ot",
         "--output-type",
@@ -251,7 +255,7 @@ def check_and_set_log_args(args: argparse.Namespace):
     log_delay = False
 
     if not args.no_log:
-        log_path = args.log or args.output
+        log_path = args.log or args.output or args.output_file.parent
 
         if log_path.is_dir():
             log_to_dir = True
@@ -308,10 +312,12 @@ def check_and_set_acquire_args(
 
     if not args.upload:
         # check output related configuration
-        if args.children and not args.output.is_dir():
-            raise ValueError("Output path must be a directory when using --children")
-        elif not args.output.exists() and not args.output.parent.is_dir():
-            raise ValueError(f"Output path doesn't exist: {args.output}")
+        if args.children and args.output_file:
+            raise ValueError("--children can not be used with --output_file. Use --output instead")
+        elif args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
+            raise ValueError("--output_file must be a path to a file in an existing directory")
+        elif args.output and not args.output.is_dir():
+            raise ValueError(f"Output directory doesn't exist or is a file: {args.output}")
 
         # check & set encryption related configuration
         if args.encrypt:
