@@ -244,10 +244,29 @@ def decrypt_header(header, fingerprint, key_file=None, key_server=None):
         return base64.b64decode(result["header"])
 
 
+def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.Queue) -> bool:
+    if out_path.exists():
+        _info(status_queue, f"Output file already exists: {out_path}")
+        return True
+
+    # If suffixes of the out_path do not correspond with the in_path suffixes (minus ".enc"),
+    # we're probably dealing with a special custom filename. Therefore, do not check for the existence of the
+    # decompressed filename
+    if not out_path.suffixes == in_path.suffixes[:-1]:
+        return False
+
+    # Check if acquire file is compressed (Path("file.tar.gz.enc").stem -> "file.tar.gz")
+    # If it is compressed, check if decompressed file already exists
+    if in_path.stem.endswith((".tgz", ".gz")) and (decompressed_file := out_path.with_suffix("")).exists():
+        _info(status_queue, f"Decompressed file already exists: {decompressed_file}")
+        return True
+
+    return False
+
+
 def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, key_server=None, clobber=False):
     try:
-        if out_path.exists() and not clobber:
-            _info(status_queue, f"Output file already exists: {out_path}")
+        if check_existing(in_path, out_path, status_queue) and not clobber:
             return
 
         _update(status_queue, task_id, visible=True)
