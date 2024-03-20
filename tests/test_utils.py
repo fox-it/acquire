@@ -17,7 +17,7 @@ from acquire.utils import (
 )
 
 
-def get_args(**kwargs):
+def get_args(**kwargs) -> argparse.Namespace:
     default_args = {
         "no_log": True,
         "log": None,
@@ -62,7 +62,7 @@ def get_mock_path(
     return mock_path
 
 
-def test_check_and_set_log_args_no_log():
+def test_check_and_set_log_args_no_log() -> None:
     args = get_args(no_log=True)
     with patch("acquire.utils.get_utc_now_str", return_value="foo"):
         check_and_set_log_args(args)
@@ -96,7 +96,7 @@ def test_check_and_set_log_args(
     mock_path: MagicMock,
     log_to_dir: bool,
     log_delay: bool,
-):
+) -> None:
     args = get_args(**{arg_name: mock_path})
     with patch("acquire.utils.get_utc_now_str", return_value="foo"):
         check_and_set_log_args(args)
@@ -107,14 +107,14 @@ def test_check_and_set_log_args(
     assert args.log_delay == log_delay
 
 
-def test_check_and_set_log_args_fail_log_to_file_with_children():
+def test_check_and_set_log_args_fail_log_to_file_with_children() -> None:
     mock_path = get_mock_path(is_dir=False)
     args = get_args(log=mock_path, children=True)
     with pytest.raises(ValueError, match="Log path must be a directory when using --children"):
         check_and_set_log_args(args)
 
 
-def test_check_and_set_log_args_fail_log_to_path_not_exists():
+def test_check_and_set_log_args_fail_log_to_path_not_exists() -> None:
     mock_path = get_mock_path(exists=False, parent_is_dir=False)
     args = get_args(log=mock_path)
     with pytest.raises(ValueError, match="Log path doesn't exist: /some/path"):
@@ -128,7 +128,7 @@ def test_check_and_set_log_args_fail_log_to_path_not_exists():
         "auto_upload",
     ],
 )
-def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str):
+def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str) -> None:
     cagent_key = "bar"
     config = {
         "upload": {"mode": "foo"},
@@ -181,7 +181,7 @@ def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str):
 )
 def test_check_and_set_acquire_args_upload_auto_upload_fail(
     arg_name: str, upload_config: dict, plugin_side_effect: bool, error_match: str
-):
+) -> None:
     config = {"cagent_key": "bar"}
     config.update(upload_config)
 
@@ -219,7 +219,7 @@ def test_check_and_set_acquire_args_upload_auto_upload_fail(
         ),
     ],
 )
-def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output: Path):
+def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output: Path) -> None:
     args = get_args(**{"children": children, arg_name: output, "config": {}})
 
     result = check_and_set_acquire_args(args, MagicMock())
@@ -267,14 +267,14 @@ def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output
         ),
     ],
 )
-def test_check_and_set_acquire_args_output_fail(children: bool, arg_name: str, output: Path, error_match: str):
+def test_check_and_set_acquire_args_output_fail(children: bool, arg_name: str, output: Path, error_match: str) -> None:
     args = get_args(**{"children": children, arg_name: output, "config": {}})
 
     with pytest.raises(ValueError, match=error_match):
         check_and_set_acquire_args(args, MagicMock())
 
 
-def test_check_and_set_acquire_args_encrypt_with_public_key_config():
+def test_check_and_set_acquire_args_encrypt_with_public_key_config() -> None:
     config = {"public_key": "PUBLIC KEY"}
 
     args = get_args(encrypt=True, config=config)
@@ -283,7 +283,7 @@ def test_check_and_set_acquire_args_encrypt_with_public_key_config():
     assert args.public_key == "PUBLIC KEY"
 
 
-def test_check_and_set_acquire_args_encrypt_with_public_key_arg():
+def test_check_and_set_acquire_args_encrypt_with_public_key_arg() -> None:
     mock_path = get_mock_path(is_dir=False)
     mock_path.read_text = lambda: "PUBLIC KEY"
 
@@ -300,14 +300,14 @@ def test_check_and_set_acquire_args_encrypt_with_public_key_arg():
         get_mock_path(),
     ],
 )
-def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: Optional[Path]):
+def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: Optional[Path]) -> None:
     args = get_args(encrypt=True, public_key=public_key, config={})
 
     with pytest.raises(ValueError, match=r"No public key available \(embedded or argument\)"):
         check_and_set_acquire_args(args, MagicMock())
 
 
-def test_check_and_set_acquire_args_cagent():
+def test_check_and_set_acquire_args_cagent() -> None:
     cagent_key = "KEY"
     cagent_certificate = "CERT"
     config = {
