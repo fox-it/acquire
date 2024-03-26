@@ -3,7 +3,6 @@ import enum
 import functools
 import io
 import itertools
-import json
 import logging
 import os
 import platform
@@ -22,10 +21,9 @@ from dissect.target import Target, exceptions
 from dissect.target.filesystem import Filesystem
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
-from dissect.target.loaders.remote import RemoteStreamConnection
-from dissect.target.loaders.targetd import TargetdLoader
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
+from dissect.target.tools.utils import args_to_uri
 from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
@@ -91,7 +89,6 @@ MODULES = {}
 MODULE_LOOKUP = {}
 
 CLI_ARGS_MODULE = "cli-args"
-
 
 log = logging.getLogger("acquire")
 log.propagate = 0
@@ -1658,45 +1655,6 @@ def print_acquire_warning(target: Target) -> None:
         log.warning("========================================== WARNING ==========================================")
 
 
-def modargs2json(args: argparse.Namespace) -> dict:
-    json_opts = {}
-    for module in MODULES.values():
-        cli_arg = module.__cli_args__[-1:][0][1]
-        if opt := cli_arg.get("dest"):
-            json_opts[opt] = getattr(args, opt)
-    return json_opts
-
-
-def acquire_target(target: Target, *args, **kwargs) -> list[str]:
-    if isinstance(target._loader, TargetdLoader):
-        files = acquire_target_targetd(target, *args, **kwargs)
-    else:
-        files = acquire_target_regular(target, *args, **kwargs)
-    return files
-
-
-def acquire_target_targetd(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
-    files = []
-    # debug logs contain references to flow objects and will give errors
-    logging.getLogger().setLevel(logging.CRITICAL)
-    if not len(target.hostname()):
-        log.error("Unable to initialize targetd.")
-        return files
-    json_opts = modargs2json(args)
-    json_opts["profile"] = args.profile
-    json_opts["file"] = args.file
-    json_opts["directory"] = args.directory
-    json_opts["glob"] = args.glob
-    m = {"targetd-meta": "acquire", "args": json_opts}
-    json_str = json.dumps(m)
-    targetd = target._loader.instance.client
-    targetd.send_message(json_str.encode("utf-8"))
-    targetd.sync()
-    for stream in targetd.streams:
-        files.append(stream.out_file)
-    return files
-
-
 def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
     modules_selected = dict()
 
@@ -1712,7 +1670,7 @@ def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, 
     return modules_selected
 
 
-def acquire_target_regular(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
     acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
@@ -2092,7 +2050,7 @@ VOLATILE = {
 
 def main() -> None:
     parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
-    args = parse_acquire_args(parser, config=CONFIG)
+    args, rest = parse_acquire_args(parser, config=CONFIG)
 
     # start GUI if requested through CLI / config
     flavour = None
@@ -2144,26 +2102,6 @@ def main() -> None:
         log.exception(err)
         parser.exit(1)
 
-    if args.targetd:
-        from targetd.tools.targetd import start_client
-
-        # set @auto hostname to real hostname
-        if args.targetd_hostname == "@auto":
-            args.targetd_hostname = f"/host/{Target.open('local').hostname}"
-
-        config = {
-            "function": args.targetd_func,
-            "topics": [args.targetd_hostname, args.targetd_groupname, args.targetd_globalname],
-            "link": args.targetd_link,
-            "address": args.targetd_ip,
-            "port": args.targetd_port,
-            "cacert_str": args.targetd_cacert,
-            "service": args.targetd_func == "agent",
-            "cacert": None,
-        }
-        start_client(args, presets=config)
-        return
-
     if args.upload:
         try:
             upload_files(args.upload, args.upload_plugin, args.no_proxy)
@@ -2171,26 +2109,32 @@ def main() -> None:
             log.exception("Failed to upload files")
         return
 
-    RemoteStreamConnection.configure(args.cagent_key, args.cagent_certificate)
+    target_paths = []
+    for target_path in args.targets:
+        target_path = args_to_uri([target_path], args.loader, rest)[0] if args.loader else target_path
+        if target_path == "local":
+            target_query = {}
+            if args.force_fallback:
+                target_query.update({"force-directory-fs": 1})
 
-    target_path = args.target
+            if args.fallback:
+                target_query.update({"fallback-to-directory-fs": 1})
 
-    if target_path == "local":
-        target_query = {}
-        if args.force_fallback:
-            target_query.update({"force-directory-fs": 1})
-
-        if args.fallback:
-            target_query.update({"fallback-to-directory-fs": 1})
-
-        target_query = urllib.parse.urlencode(target_query)
-        target_path = f"{target_path}?{target_query}"
-
-    log.info("Loading target %s", target_path)
+            target_query = urllib.parse.urlencode(target_query)
+            target_path = f"{target_path}?{target_query}"
+        target_paths.append(target_path)
 
     try:
-        target = Target.open(target_path)
-        log.info(target)
+        for target in Target.open_all(target_paths):
+            log.info("Loading target %s", target.name)
+            log.info(target)
+            if target.os == "esxi" and target.name == "local":
+                # Loader found that we are running on an esxi host
+                # Perform operations to "enhance" memory
+                with esxi_memory_context_manager():
+                    acquire_children_and_targets(target, args)
+            else:
+                acquire_children_and_targets(target, args)
     except Exception:
         if not is_user_admin():
             log.error("Failed to load target, try re-running as administrator/root.")
@@ -2199,14 +2143,6 @@ def main() -> None:
             parser.exit(1)
         log.exception("Failed to load target")
         raise
-
-    if target.os == "esxi" and target.name == "local":
-        # Loader found that we are running on an esxi host
-        # Perform operations to "enhance" memory
-        with esxi_memory_context_manager():
-            acquire_children_and_targets(target, args)
-    else:
-        acquire_children_and_targets(target, args)
 
 
 def load_child(target: Target, child_path: Path) -> None:
