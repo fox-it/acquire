@@ -17,6 +17,11 @@ from dissect.target import Target
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
+try:
+    from acquire.version import version as VERSION
+except ImportError:
+    VERSION = "0.0.dev"
+
 # Acquire Configuration for CAgent and TargetD
 CAGENT_TARGETD_ATTRS = {
     "cagent_key",
@@ -172,6 +177,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
             parser.add_argument(*args, **kwargs)
 
     parser.add_argument("-v", "--verbose", action="count", default=3, help="increase output verbosity")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     return parser
 
 
