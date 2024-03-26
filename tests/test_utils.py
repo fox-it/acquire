@@ -110,7 +110,7 @@ def test_check_and_set_log_args(
 def test_check_and_set_log_args_fail_log_to_file_with_children() -> None:
     mock_path = get_mock_path(is_dir=False)
     args = get_args(log=mock_path, children=True)
-    with pytest.raises(ValueError, match="Log path must be a directory when using --children"):
+    with pytest.raises(ValueError, match="Log path must be a directory when using multiple targets or --children"):
         check_and_set_log_args(args)
 
 
@@ -140,11 +140,6 @@ def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str) -> None:
 
     args = get_args(**{arg_name: True, "config": config})
     check_and_set_acquire_args(args, upload_plugins)
-
-    if arg_name == "upload":
-        assert "cagent_key" not in args
-    else:
-        assert args.cagent_key == cagent_key
 
 
 @pytest.mark.parametrize(
@@ -305,20 +300,6 @@ def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: 
 
     with pytest.raises(ValueError, match=r"No public key available \(embedded or argument\)"):
         check_and_set_acquire_args(args, MagicMock())
-
-
-def test_check_and_set_acquire_args_cagent() -> None:
-    cagent_key = "KEY"
-    cagent_certificate = "CERT"
-    config = {
-        "cagent_key": cagent_key,
-        "cagent_certificate": cagent_certificate,
-    }
-    args = get_args(config=config)
-    check_and_set_acquire_args(args, MagicMock())
-
-    assert args.cagent_key == cagent_key
-    assert args.cagent_certificate == cagent_certificate
 
 
 @pytest.mark.parametrize(
