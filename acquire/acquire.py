@@ -1220,10 +1220,9 @@ class RemoteAccess(Module):
         # anydesk - Windows
         ("dir", "sysvol/ProgramData/AnyDesk"),
         ("glob", "AppData/Roaming/AnyDesk/*.trace", from_user_home),
-        ("dir", "AppData/AnyDesk/", from_user_home),
-        ("dir", "AnyDesk/", from_user_home),
+        ("glob", "AppData/Roaming/AnyDesk/*/*.trace", from_user_home),
         # anydesk - Mac + Linux
-        ("dir", ".anydesk/", from_user_home),
+        ("glob", ".anydesk*/*.trace", from_user_home),
         ("file", "/var/log/anydesk.trace"),
         # zoho
         ("dir", "sysvol/ProgramData/ZohoMeeting/log"),
