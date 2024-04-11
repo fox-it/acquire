@@ -927,9 +927,10 @@ class ThumbnailCache(Module):
 @register_module("--texteditor-tabs")
 class TexteditorTabs(Module):
     DESC = "Texteditor (un)saved tab contents"
-    # Only Windows 11 notepad tabs for now, but locations for other text editors may be added later.
+    # Only Windows 11 notepad & Notepad++ tabs for now, but locations for other text editors may be added later.
     SPEC = [
         ("dir", "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/", from_user_home),
+        ("dir", "AppData/Roaming/Notepad++/backup/", from_user_home),
     ]
 
 
