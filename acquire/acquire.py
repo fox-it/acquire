@@ -2144,7 +2144,7 @@ def main() -> None:
             acquire_gui.message("This application must be run as administrator.")
             acquire_gui.wait_for_quit()
             parser.exit(1)
-        log.exception(f"Failed to load target: {target_name}")
+        log.exception("Failed to load target: %s", target_name)
         raise
 
 
