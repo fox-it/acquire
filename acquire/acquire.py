@@ -2125,9 +2125,9 @@ def main() -> None:
         target_paths.append(target_path)
 
     try:
-        target_name = "Unknown" # just in case open_all already fails
+        target_name = "Unknown"  # just in case open_all already fails
         for target in Target.open_all(target_paths):
-            target_name = "Unknown" # overwrite previous target name
+            target_name = "Unknown"  # overwrite previous target name
             target_name = target.name
             log.info("Loading target %s", target_name)
             log.info(target)
