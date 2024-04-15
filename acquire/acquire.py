@@ -2125,8 +2125,11 @@ def main() -> None:
         target_paths.append(target_path)
 
     try:
+        target_name = "Unknown" # just in case open_all already fails
         for target in Target.open_all(target_paths):
-            log.info("Loading target %s", target.name)
+            target_name = "Unknown" # overwrite previous target name
+            target_name = target.name
+            log.info("Loading target %s", target_name)
             log.info(target)
             if target.os == "esxi" and target.name == "local":
                 # Loader found that we are running on an esxi host
@@ -2137,11 +2140,11 @@ def main() -> None:
                 acquire_children_and_targets(target, args)
     except Exception:
         if not is_user_admin():
-            log.error(f"Failed to load target {target.name}, try re-running as administrator/root.")
+            log.error(f"Failed to load target: {target_name}, try re-running as administrator/root.")
             acquire_gui.message("This application must be run as administrator.")
             acquire_gui.wait_for_quit()
             parser.exit(1)
-        log.exception("Failed to load target")
+        log.exception(f"Failed to load target: {target_name}")
         raise
 
 
