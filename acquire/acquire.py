@@ -2140,7 +2140,7 @@ def main() -> None:
                 acquire_children_and_targets(target, args)
     except Exception:
         if not is_user_admin():
-            log.error(f"Failed to load target: {target_name}, try re-running as administrator/root.")
+            log.error("Failed to load target: %s, try re-running as administrator/root", target_name)
             acquire_gui.message("This application must be run as administrator.")
             acquire_gui.wait_for_quit()
             parser.exit(1)
