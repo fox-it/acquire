@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import enum
 import functools
@@ -15,9 +17,9 @@ import urllib.request
 from collections import defaultdict, namedtuple
 from itertools import product
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import BinaryIO, Callable, Iterator, Optional, Union
 
-from dissect.target import Target, exceptions
+from dissect.target import Target
 from dissect.target.filesystem import Filesystem
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
@@ -146,46 +148,48 @@ MISC_MAPPING = {
 def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
         for user_details in target.user_details.all_with_home():
-            yield normalize_path(target, user_details.home_path.joinpath(path), lower_case=False)
+            yield user_details.home_path.joinpath(path).as_posix()
     except Exception as e:
         log.warning("Error occurred when requesting all user homes")
         log.debug("", exc_info=e)
 
     misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
     for user_dir in misc_user_homes(target):
-        yield str(user_dir.joinpath(path))
+        yield user_dir.joinpath(path).as_posix()
 
 
-def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str, str]]:
+def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, Optional[str], str, str]]:
     mount_lookup = defaultdict(list)
     for mount, fs in target.fs.mounts.items():
         mount_lookup[fs].append(mount)
 
-    sysvol = target.fs.mounts["sysvol"]
     for fs in target.filesystems:
-        if fs in mount_lookup:
-            mountpoints = ", ".join(mount_lookup[fs])
-        else:
-            mountpoints = "No mounts"
-
         # The attr check is needed to correctly collect fake NTFS filesystems
         # where the MFT etc. are added to a VirtualFilesystem. This happens for
         # instance when the target is an acquired tar target.
         if not isinstance(fs, ntfs.NtfsFilesystem) and not hasattr(fs, "ntfs"):
-            log.warning("Skipping %s (%s) - not an NTFS filesystem", fs, mountpoints)
+            log.warning("Skipping %s - not an NTFS filesystem", fs)
             continue
 
-        if fs == sysvol:
-            name = "sysvol"
-        elif fs in mount_lookup:
-            name = mount_lookup[fs][0]
+        if fs in mount_lookup:
+            mountpoints = mount_lookup[fs]
+
+            for main_mountpoint in mountpoints:
+                if main_mountpoint != "sysvol":
+                    break
+
+            name = main_mountpoint
+            mountpoints = ", ".join(mountpoints)
         else:
+            main_mountpoint = None
             name = f"vol-{fs.ntfs.serial:x}"
+            mountpoints = "No mounts"
+            log.warning("Unmounted NTFS filesystem found %s (%s)", fs, name)
 
-        yield fs, name, mountpoints
+        yield fs, main_mountpoint, name, mountpoints
 
 
-def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem]]:
+def iter_esxi_filesystems(target: Target) -> Iterator[tuple[Filesystem, str, str, Optional[str]]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
             continue
@@ -197,11 +201,11 @@ def iter_esxi_filesystems(target: Target) -> Iterator[tuple[str, str, Filesystem
         elif fs.__type__ == "vmfs":
             name = fs.vmfs.label
 
-        yield uuid, name, fs
+        yield fs, mount, uuid, name
 
 
-def register_module(*args, **kwargs):
-    def wrapper(module_cls):
+def register_module(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
+    def wrapper(module_cls: type[Module]) -> type[Module]:
         name = module_cls.__name__
 
         if name in MODULES:
@@ -225,8 +229,8 @@ def register_module(*args, **kwargs):
     return wrapper
 
 
-def module_arg(*args, **kwargs):
-    def wrapper(module_cls):
+def module_arg(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
+    def wrapper(module_cls: type[Module]) -> type[Module]:
         if not hasattr(module_cls, "__cli_args__"):
             module_cls.__cli_args__ = []
         module_cls.__cli_args__.append((args, kwargs))
@@ -235,7 +239,7 @@ def module_arg(*args, **kwargs):
     return wrapper
 
 
-def local_module(cls):
+def local_module(cls: type[object]) -> object:
     """A decorator that sets property `__local__` on a module class to mark it for local target only"""
     cls.__local__ = True
     return cls
@@ -305,22 +309,25 @@ class NTFS(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        for fs, name, mountpoints in iter_ntfs_filesystems(target):
-            log.info("Acquiring %s (%s)", fs, mountpoints)
+        for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
+            log.info("Acquiring from %s as %s (%s)", fs, name, mountpoints)
 
-            collector.collect_file(fs.path("$MFT"), outpath=name + "/$MFT")
-            collector.collect_file(fs.path("$Boot"), outpath=name + "/$Boot")
+            for filename in ("$MFT", "$Boot", "$Secure:$SDS"):
+                if main_mountpoint is not None:
+                    path = fsutil.join(main_mountpoint, filename)
+                    collector.collect_path(path)
+
+                else:
+                    # In case the NTFS filesystem is not mounted, which should not occur but
+                    # iter_ntfs_filesystems allows for the possibility, we fall back to raw file
+                    # collection.
+                    collector.collect_file_raw(filename, fs, name)
 
             cls.collect_usnjrnl(collector, fs, name)
-            cls.collect_ntfs_secure(collector, fs, name)
 
     @classmethod
     def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
-        try:
-            usnjrnl_path = fs.path("$Extend/$Usnjrnl:$J")
-            entry = usnjrnl_path.get()
-            journal = entry.open()
-
+        def usnjrnl_accessor(journal: BinaryIO) -> tuple[BinaryIO, int]:
             # If the filesystem is a virtual NTFS filesystem, journal will be
             # plain BinaryIO, not a RunlistStream.
             if isinstance(journal, RunlistStream):
@@ -328,57 +335,18 @@ class NTFS(Module):
                 while journal.runlist[i][0] is None:
                     journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
                     i += 1
+                size = journal.size - journal.tell()
+            else:
+                size = journal.size
 
-            # Use the same method to construct the output path as is used in
-            # collector.collect_file()
-            outpath = collector._output_path(f"{name}/$Extend/$Usnjrnl:$J")
+            return (journal, size)
 
-            collector.output.write(
-                outpath,
-                journal,
-                size=journal.size - journal.tell(),
-                entry=entry,
-            )
-            collector.report.add_file_collected(cls.__name__, usnjrnl_path)
-            result = "OK"
-        except exceptions.FileNotFoundError:
-            collector.report.add_file_missing(cls.__name__, usnjrnl_path)
-            result = "File not found"
-        except Exception as err:
-            log.debug("Failed to acquire UsnJrnl", exc_info=True)
-            collector.report.add_file_failed(cls.__name__, usnjrnl_path)
-            result = repr(err)
-
-        log.info("- Collecting file $Extend/$Usnjrnl:$J: %s", result)
-
-    @classmethod
-    def collect_ntfs_secure(cls, collector: Collector, fs: Filesystem, name: str) -> None:
-        try:
-            secure_path = fs.path("$Secure:$SDS")
-            entry = secure_path.get()
-            sds = entry.open()
-
-            # Use the same method to construct the output path as is used in
-            # collector.collect_file()
-            outpath = collector._output_path(f"{name}/$Secure:$SDS")
-
-            collector.output.write(
-                outpath,
-                sds,
-                size=sds.size,
-                entry=entry,
-            )
-            collector.report.add_file_collected(cls.__name__, secure_path)
-            result = "OK"
-        except FileNotFoundError:
-            collector.report.add_file_missing(cls.__name__, secure_path)
-            result = "File not found"
-        except Exception as err:
-            log.debug("Failed to acquire SDS", exc_info=True)
-            collector.report.add_file_failed(cls.__name__, secure_path)
-            result = repr(err)
-
-        log.info("- Collecting file $Secure:$SDS: %s", result)
+        collector.collect_file_raw(
+            "$Extend/$Usnjrnl:$J",
+            fs,
+            name,
+            file_accessor=usnjrnl_accessor,
+        )
 
 
 @register_module("-r", "--registry")
@@ -719,13 +687,20 @@ class RecycleBin(Module):
             patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
         with collector.file_filter(large_files_filter):
-            for fs, name, mountpoints in iter_ntfs_filesystems(target):
-                log.info("Acquiring recycle bin from %s (%s)", fs, mountpoints)
+            for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
+                log.info("Acquiring recycle bin from %s as %s (%s)", fs, name, mountpoints)
 
                 for pattern in patterns:
-                    for entry in fs.path().glob(pattern):
-                        if entry.is_file():
-                            collector.collect_file(entry, outpath=fsutil.join(name, str(entry)))
+                    if main_mountpoint is not None:
+                        pattern = fsutil.join(main_mountpoint, pattern)
+                        collector.collect_glob(pattern)
+                    else:
+                        # In case the NTFS filesystem is not mounted, which should not occur but
+                        # iter_ntfs_filesystems allows for the possibility, we fall back to raw file
+                        # collection.
+                        for entry in fs.path().glob(pattern):
+                            if entry.is_file():
+                                collector.collect_file_raw(fs, entry, name)
 
 
 @register_module("--drivers")
@@ -1291,8 +1266,9 @@ class Boot(Module):
 
 
 def private_key_filter(path: fsutil.TargetPath) -> bool:
-    with path.open("rt") as file:
-        return "PRIVATE KEY" in file.readline()
+    if path.is_file() and not path.is_symlink():
+        with path.open("rt") as file:
+            return "PRIVATE KEY" in file.readline()
 
 
 @register_module("--home")
@@ -1438,21 +1414,24 @@ class Bootbanks(Module):
             "bootbank": "BOOTBANK1",
             "altbootbank": "BOOTBANK2",
         }
-        boot_fs = []
+        boot_fs = {}
 
         for boot_dir, boot_vol in boot_dirs.items():
             dir_path = target.fs.path(boot_dir)
             if dir_path.is_symlink() and dir_path.exists():
                 dst = dir_path.readlink()
-                boot_fs.append((dst.name, boot_vol, dst.get().top.fs))
+                fs = dst.get().top.fs
+                boot_fs[fs] = boot_vol
 
-        for uuid, name, fs in boot_fs:
-            log.info("Acquiring /vmfs/volumes/%s (%s)", uuid, name)
-            base = f"fs/{uuid}:{name}"
-            for path in fs.path("/").rglob("*"):
-                if not path.is_file():
-                    continue
-                collector.collect_file(path, outpath=path, base=base)
+        for fs, mountpoint, uuid, _ in iter_esxi_filesystems(target):
+            if fs in boot_fs:
+                name = boot_fs[fs]
+                log.info("Acquiring %s (%s)", mountpoint, name)
+                mountpoint_len = len(mountpoint)
+                base = f"fs/{uuid}:{name}"
+                for path in target.fs.path(mountpoint).rglob("*"):
+                    outpath = path.as_posix()[mountpoint_len:]
+                    collector.collect_path(path, outpath=outpath, base=base)
 
 
 @register_module("--esxi")
@@ -1475,16 +1454,16 @@ class VMFS(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        for uuid, name, fs in iter_esxi_filesystems(target):
+        for fs, mountpoint, uuid, name in iter_esxi_filesystems(target):
             if not fs.__type__ == "vmfs":
                 continue
 
-            log.info("Acquiring /vmfs/volumes/%s (%s)", uuid, name)
+            log.info("Acquiring %s (%s)", mountpoint, name)
+            mountpoint_len = len(mountpoint)
             base = f"fs/{uuid}:{name}"
-            for path in fs.path("/").glob("*.sf"):
-                if not path.is_file():
-                    continue
-                collector.collect_file(path, outpath=path, base=base)
+            for path in target.fs.path(mountpoint).glob("*.sf"):
+                outpath = path.as_posix()[mountpoint_len:]
+                collector.collect_path(path, outpath=outpath, base=base)
 
 
 @register_module("--activities-cache")
@@ -1685,7 +1664,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     if log_file:
         files.append(log_file)
         if target.path.name == "local":
-            skip_list.add(normalize_path(target, log_file, resolve=True))
+            skip_list.add(normalize_path(target, log_file, resolve_parents=True, preserve_case=False))
 
     print_disks_overview(target)
     print_volumes_overview(target)
@@ -1775,7 +1754,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         log.info("Logging to file %s", log_path)
         files = [log_file_handler.baseFilename]
         if target.path.name == "local":
-            skip_list = {normalize_path(target, log_path, resolve=True)}
+            skip_list = {normalize_path(target, log_path, resolve_parents=True, preserve_case=False)}
 
     output_path = args.output or args.output_file
     if output_path.is_dir():
@@ -1791,7 +1770,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     )
     files.append(output.path)
     if target.path.name == "local":
-        skip_list.add(normalize_path(target, output.path, resolve=True))
+        skip_list.add(normalize_path(target, output.path, resolve_parents=True, preserve_case=False))
 
     log.info("Writing output to %s", output.path)
     if skip_list:

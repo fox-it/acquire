@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import ctypes
 import datetime
@@ -361,25 +363,37 @@ def persist_execution_report(path: Path, report_data: dict) -> Path:
 
 
 DEVICE_SUBST = re.compile(r"^(/\?\?/)")
-SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/)", flags=re.IGNORECASE)
+SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/|$)", flags=re.IGNORECASE)
+
+SYSVOL_UPPER_SUBST = re.compile(r"^(/?SYSVOL)(?=/|$)")
+DRIVE_LOWER_SUBST = re.compile(r"^(/?[a-z]:)(?=/|$)")
 
 
-def normalize_path(target: Target, path: Path, *, resolve: bool = False, lower_case: bool = True) -> str:
-    if resolve:
-        path = path.resolve()
+def normalize_path(
+    target: Target,
+    path: str | Path,
+    resolve_parents: bool = False,
+    preserve_case: bool = True,
+) -> str:
+    if isinstance(path, Path):
+        if resolve_parents:
+            path = path.parent.resolve().joinpath(path.name)
 
-    path = path.as_posix()
+        path = path.as_posix()
 
     if target.os == "windows":
         path = DEVICE_SUBST.sub("", path)
         if sysvol_drive := target.props.get("sysvol_drive"):
-            path = normalize_sysvol(path, sysvol_drive)
+            path = SYSVOL_SUBST.sub(sysvol_drive, path)
 
-    if not target.fs.case_sensitive and lower_case:
+        # The substitutions below are temporary until we have proper full path name uniformization
+        # for case insensitive filesystems.
+        # Replace any uppercase SYSVOL path, with a lowercase version.
+        path = SYSVOL_UPPER_SUBST.sub(lambda pat: pat.group(1).lower(), path)
+        # Replace any lower case driveletter path with an uppercase version.
+        path = DRIVE_LOWER_SUBST.sub(lambda pat: pat.group(1).upper(), path)
+
+    if not target.fs.case_sensitive and not preserve_case:
         path = path.lower()
 
     return path
-
-
-def normalize_sysvol(path: str, sysvol: str) -> str:
-    return SYSVOL_SUBST.sub(sysvol, path)
