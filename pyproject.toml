@@ -25,8 +25,8 @@ classifiers = [
   "Topic :: Utilities",
 ]
 dependencies = [
-    "dissect.cstruct",
-    "dissect.target",
+    "dissect.cstruct>3,<5",
+    "dissect.target>2,<4",
 ]
 dynamic = ["version"]
 
@@ -41,7 +41,7 @@ full = [
     "pycryptodome",
     "requests",
     "rich",
-    "dissect.target[full]>=3.7.dev,<4.0.dev",
+    "dissect.target[full]>3.6,<4",
     "requests_toolbelt",
 ]
 
