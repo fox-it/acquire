@@ -44,6 +44,5 @@ def test_gui(
     GUI.__new__ = lambda x: Diagnostic_GUI()
     shards = []
     args = Namespace(child=False, auto_upload=auto_upload, children=children, skip_parent=skip_parent, start_time=0)
-    children = [mock_target] * children
     acquire_children_and_targets(mock_target, args)
     assert shards == expected_shards
