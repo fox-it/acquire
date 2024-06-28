@@ -25,7 +25,7 @@ from acquire.gui import GUI
 @patch("acquire.gui.base.Stub", spec=True)
 @patch("acquire.acquire.acquire_target", create=True)
 def test_gui(
-    mock_target: Target, gui: GUI, children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
+    mock_target: Target, gui: GUI, num_children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ):
     def list_children():
         yield from [mock_target] * num_children
