@@ -28,7 +28,7 @@ def test_gui(
     mock_target: Target, gui: GUI, children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ):
     def list_children():
-        return children
+        yield from [mock_target] * num_children
 
     mock_target.list_children = list_children
 
