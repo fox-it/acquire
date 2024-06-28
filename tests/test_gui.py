@@ -27,7 +27,7 @@ from acquire.gui import GUI
 def test_gui(
     mock_target: Target, gui: GUI, num_children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ):
-    def list_children():
+    def list_children() -> list[Target]:
         yield from [mock_target] * num_children
 
     mock_target.list_children = list_children
