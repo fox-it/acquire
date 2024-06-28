@@ -9,7 +9,7 @@ from acquire.gui import GUI
 
 
 @pytest.mark.parametrize(
-    "children, skip_parent, auto_upload, expected_shards",
+    "num_children, skip_parent, auto_upload, expected_shards",
     [
         (0, False, False, [90]),  # 90 (default, leaves 10% for final 'step')
         (0, False, True, [50]),  # 50% till upload (upload progresses in plugin)
@@ -43,6 +43,6 @@ def test_gui(
 
     GUI.__new__ = lambda x: Diagnostic_GUI()
     shards = []
-    args = Namespace(child=False, auto_upload=auto_upload, children=children, skip_parent=skip_parent, start_time=0)
+    args = Namespace(child=False, auto_upload=auto_upload, children=True, skip_parent=skip_parent, start_time=0)
     acquire_children_and_targets(mock_target, args)
     assert shards == expected_shards
