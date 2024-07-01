@@ -1064,6 +1064,15 @@ class QuarantinedFiles(Module):
     ]
 
 
+@register_module("--edr")
+class EDR(Module):
+    DESC = "various Endpoint Detection and Response (EDR) logs"
+    SPEC = [
+        # Carbon Black
+        ("dir", "sysvol/ProgramData/CarbonBlack/Logs"),
+    ]
+
+
 @register_module("--history")
 class History(Module):
     DESC = "browser history from IE, Edge, Firefox, and Chrome"
