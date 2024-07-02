@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import ctypes
 import datetime
@@ -21,20 +23,6 @@ try:
     from acquire.version import version as VERSION
 except ImportError:
     VERSION = "0.0.dev"
-
-# Acquire Configuration for CAgent and TargetD
-CAGENT_TARGETD_ATTRS = {
-    "cagent_key",
-    "cagent_certificate",
-    "targetd_func",
-    "targetd_cacert",
-    "targetd_ip",
-    "targetd_port",
-    "targetd_hostname",
-    "targetd_groupname",
-    "targetd_globalname",
-    "targetd_link",
-}
 
 
 class StrEnum(str, Enum):
@@ -83,14 +71,12 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         fromfile_prefix_chars="@",
     )
 
-    parser.add_argument(
-        "target",
-        metavar="TARGET",
-        default="local",
-        nargs="?",
-        help="target to load (default: local)",
-    )
-    parser.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    parser.add_argument("targets", metavar="TARGETS", default=["local"], nargs="*", help="Targets to load")
+    # Create a mutually exclusive group, such that only one of the output options can be used
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    output_group.add_argument("-of", "--output-file", type=Path, help="output filename")
+
     parser.add_argument(
         "-ot",
         "--output-type",
@@ -102,11 +88,6 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         "--compress",
         action="store_true",
         help="compress output (if supported by the output type)",
-    )
-    parser.add_argument(
-        "--targetd",
-        action="store_true",
-        help="setup and install targetd agent",
     )
     parser.add_argument(
         "--encrypt",
@@ -124,6 +105,13 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("--public-key", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
     parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "-L",
+        "--loader",
+        action="store",
+        default=None,
+        help="select a specific loader (i.e. vmx, raw)",
+    )
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
     parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
@@ -180,7 +168,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
 def parse_acquire_args(
     parser: argparse.ArgumentParser,
     config: dict[str, Any],
-) -> argparse.Namespace:
+) -> tuple[argparse.Namespace, list[str]]:
     """Parse and set the acquire command line arguments.
 
     The arguments are set to values supplied in ``config[arguments]``, when not
@@ -196,10 +184,10 @@ def parse_acquire_args(
     Returns:
         A command line arguments namespace
     """
-    command_line_args = parser.parse_args()
+    command_line_args, rest = parser.parse_known_args()
     _merge_args_and_config(parser, command_line_args, config)
 
-    return command_line_args
+    return command_line_args, rest
 
 
 def _merge_args_and_config(
@@ -257,7 +245,7 @@ def check_and_set_log_args(args: argparse.Namespace):
     log_delay = False
 
     if not args.no_log:
-        log_path = args.log or args.output
+        log_path = args.log or args.output or args.output_file.parent
 
         if log_path.is_dir():
             log_to_dir = True
@@ -266,10 +254,10 @@ def check_and_set_log_args(args: argparse.Namespace):
             # Logging to a single file is allowed, even if the file does not yet
             # exist, as it will be automatically created. However then the parent
             # directory must exist.
-            if args.children:
-                # If children are acquired, logging can only happen to separate
+            if args.children or len(args.targets) > 1:
+                # If children or multiple targets are acquired, logging can only happen to separate
                 # files, so log_path needs to be a directory.
-                raise ValueError("Log path must be a directory when using --children")
+                raise ValueError("Log path must be a directory when using multiple targets or --children")
         else:
             raise ValueError(f"Log path doesn't exist: {log_path}")
 
@@ -314,10 +302,12 @@ def check_and_set_acquire_args(
 
     if not args.upload:
         # check output related configuration
-        if args.children and not args.output.is_dir():
-            raise ValueError("Output path must be a directory when using --children")
-        elif not args.output.exists() and not args.output.parent.is_dir():
-            raise ValueError(f"Output path doesn't exist: {args.output}")
+        if (args.children or len(args.targets) > 1) and args.output_file:
+            raise ValueError("--children can not be used with --output_file. Use --output instead")
+        elif args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
+            raise ValueError("--output_file must be a path to a file in an existing directory")
+        elif args.output and not args.output.is_dir():
+            raise ValueError(f"Output directory doesn't exist or is a file: {args.output}")
 
         # check & set encryption related configuration
         if args.encrypt:
@@ -327,10 +317,6 @@ def check_and_set_acquire_args(
             if not public_key:
                 raise ValueError("No public key available (embedded or argument)")
             setattr(args, "public_key", public_key)
-
-        # set cagent/targetd related configuration
-        for attr in CAGENT_TARGETD_ATTRS:
-            setattr(args, attr, args.config.get(attr))
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
@@ -383,25 +369,37 @@ def persist_execution_report(path: Path, report_data: dict) -> Path:
 
 
 DEVICE_SUBST = re.compile(r"^(/\?\?/)")
-SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/)", flags=re.IGNORECASE)
+SYSVOL_SUBST = re.compile(r"^/?sysvol(?=/|$)", flags=re.IGNORECASE)
+
+SYSVOL_UPPER_SUBST = re.compile(r"^(/?SYSVOL)(?=/|$)")
+DRIVE_LOWER_SUBST = re.compile(r"^(/?[a-z]:)(?=/|$)")
 
 
-def normalize_path(target: Target, path: Path, *, resolve: bool = False, lower_case: bool = True) -> str:
-    if resolve:
-        path = path.resolve()
+def normalize_path(
+    target: Target,
+    path: str | Path,
+    resolve_parents: bool = False,
+    preserve_case: bool = True,
+) -> str:
+    if isinstance(path, Path):
+        if resolve_parents:
+            path = path.parent.resolve().joinpath(path.name)
 
-    path = path.as_posix()
+        path = path.as_posix()
 
     if target.os == "windows":
         path = DEVICE_SUBST.sub("", path)
         if sysvol_drive := target.props.get("sysvol_drive"):
-            path = normalize_sysvol(path, sysvol_drive)
+            path = SYSVOL_SUBST.sub(sysvol_drive, path)
 
-    if not target.fs.case_sensitive and lower_case:
+        # The substitutions below are temporary until we have proper full path name uniformization
+        # for case insensitive filesystems.
+        # Replace any uppercase SYSVOL path, with a lowercase version.
+        path = SYSVOL_UPPER_SUBST.sub(lambda pat: pat.group(1).lower(), path)
+        # Replace any lower case driveletter path with an uppercase version.
+        path = DRIVE_LOWER_SUBST.sub(lambda pat: pat.group(1).upper(), path)
+
+    if not target.fs.case_sensitive and not preserve_case:
         path = path.lower()
 
     return path
-
-
-def normalize_sysvol(path: str, sysvol: str) -> str:
-    return SYSVOL_SUBST.sub(sysvol, path)

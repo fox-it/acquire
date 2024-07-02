@@ -2,7 +2,7 @@ import hashlib
 import io
 from datetime import datetime, timezone
 
-from dissect import cstruct
+from dissect.cstruct import cstruct
 
 try:
     from Crypto.Cipher import AES, PKCS1_OAEP
@@ -14,9 +14,7 @@ except ImportError:
     HAS_PYCRYPTODOME = False
 
 
-c_acquire = cstruct.cstruct()
-c_acquire.load(
-    """
+acquire_def = """
 enum HeaderType : uint8 {
     PKCS1_OAEP = 0x1,
 };
@@ -49,8 +47,7 @@ struct footer {
     uint16      length;                 // Digest length (precedes footer)
 };
 """
-)
-
+c_acquire = cstruct().load(acquire_def)
 
 FILE_MAGIC = b"ENCRYPTEDACQUIRE"
 FILE_VERSION = 1
