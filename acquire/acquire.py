@@ -46,6 +46,7 @@ from acquire.uploaders.minio import MinIO
 from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
+    VERSION,
     check_and_set_acquire_args,
     check_and_set_log_args,
     create_argument_parser,
@@ -61,18 +62,12 @@ from acquire.utils import (
 )
 
 try:
-    from acquire.version import version
-except ImportError:
-    version = "0.0.dev"
-
-try:
     # Injected by pystandalone builder
     from acquire.config import CONFIG
 except ImportError:
     CONFIG = defaultdict(lambda: None)
 
 
-VERSION = version
 ACQUIRE_BANNER = r"""
                        _
   __ _  ___ __ _ _   _(_)_ __ ___
