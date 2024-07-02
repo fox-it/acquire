@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -31,7 +33,7 @@ class UploaderPlugin:
 
 
 def upload_files_using_uploader(
-    uploader: UploaderPlugin, paths: list[Path], proxies: Optional[dict[str, str]] = None
+    uploader: UploaderPlugin, paths: list[str | Path], proxies: Optional[dict[str, str]] = None
 ) -> None:
     """Uploads the files in ``paths`` to a destination.
 
