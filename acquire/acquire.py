@@ -1658,7 +1658,7 @@ def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, 
     return modules_selected
 
 
-def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str]:
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str | Path]:
     acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
@@ -1866,16 +1866,18 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     return files
 
 
-def upload_files(paths: list[Path], upload_plugin: UploaderPlugin, no_proxy: bool = False) -> None:
+def upload_files(paths: list[str | Path], upload_plugin: UploaderPlugin, no_proxy: bool = False) -> None:
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
+    log.info('Uploading files: "%s"', " ".join(map(str, paths)))
     try:
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
-        log.error("Upload %s FAILED. See log file for details.", paths)
-        GUI().message("Upload failed.")
-        log.exception("")
+        log.error('Upload FAILED for files: "%s". See log file for details.', " ".join(map(str, paths)))
+        raise
+    else:
+        log.info("Upload succeeded.")
 
 
 class WindowsProfile:
@@ -2036,28 +2038,29 @@ VOLATILE = {
 }
 
 
+def exit_success(default_args: list[str]):
+    log.info("Acquire finished successful")
+    log.info("Arguments: %s", " ".join(sys.argv[1:]))
+    log.info("Default Arguments: %s", " ".join(default_args))
+    log.info("Exiting with status code 0 (SUCCESS)")
+    sys.exit(0)
+
+
+def exit_failure(default_args: list[str]):
+    log.error("Acquire FAILED")
+    log.error("Arguments: %s", " ".join(sys.argv[1:]))
+    log.error("Default Arguments: %s", " ".join(default_args))
+    log.error("Exiting with status code 1 (FAILURE)")
+    sys.exit(1)
+
+
 def main() -> None:
     parser = create_argument_parser(PROFILES, VOLATILE, MODULES)
     args, rest = parse_acquire_args(parser, config=CONFIG)
 
-    # start GUI if requested through CLI / config
-    flavour = None
-    if args.gui == "always" or (
-        args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
-    ):
-        flavour = platform.system()
-
-    acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
-    args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
-
     # Since output has a default value, set it to None when output_file is defined
     if args.output_file:
         args.output = None
-
-    if cancel:
-        parser.exit(0)
-
-    # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
 
     try:
         check_and_set_log_args(args)
@@ -2075,65 +2078,118 @@ def main() -> None:
 
     setup_logging(log, log_file, args.verbose, delay=args.log_delay)
 
-    log.info(ACQUIRE_BANNER)
-    log.info("User: %s | Admin: %s", get_user_name(), is_user_admin())
-    log.info("Arguments: %s", " ".join(sys.argv[1:]))
-    log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
-    log.info("")
-
-    plugins_to_load = [("cloud", MinIO)]
-    upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
-
+    acquire_successful = True
+    files_to_upload = [log_file]
+    acquire_gui = None
     try:
+        log.info(ACQUIRE_BANNER)
+        log.info("User: %s | Admin: %s", get_user_name(), is_user_admin())
+        log.info("Arguments: %s", " ".join(sys.argv[1:]))
+        log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
+        log.info("")
+
+        # start GUI if requested through CLI / config
+        flavour = None
+        if args.gui == "always" or (
+            args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
+        ):
+            flavour = platform.system()
+        acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
+
+        args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+        if cancel:
+            log.info("Acquire cancelled")
+            exit_success(args.config.get("arguments"))
+        # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
+
+        plugins_to_load = [("cloud", MinIO)]
+        upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
+
         check_and_set_acquire_args(args, upload_plugins)
-    except ValueError as err:
-        log.exception(err)
-        parser.exit(1)
 
-    if args.upload:
+        if args.upload:
+            try:
+                upload_files(args.upload, args.upload_plugin, args.no_proxy)
+            except Exception as err:
+                acquire_gui.message("Failed to upload files")
+                log.exception(err)
+                exit_failure(args.config.get("arguments"))
+            exit_success(args.config.get("arguments"))
+
+        target_paths = []
+        for target_path in args.targets:
+            target_path = args_to_uri([target_path], args.loader, rest)[0] if args.loader else target_path
+            if target_path == "local":
+                target_query = {}
+                if args.force_fallback:
+                    target_query.update({"force-directory-fs": 1})
+
+                if args.fallback:
+                    target_query.update({"fallback-to-directory-fs": 1})
+
+                target_query = urllib.parse.urlencode(target_query)
+                target_path = f"{target_path}?{target_query}"
+            target_paths.append(target_path)
+
         try:
-            upload_files(args.upload, args.upload_plugin, args.no_proxy)
+            target_name = "Unknown"  # just in case open_all already fails
+            for target in Target.open_all(target_paths):
+                target_name = "Unknown"  # overwrite previous target name
+                target_name = target.name
+                log.info("Loading target %s", target_name)
+                log.info(target)
+                if target.os == "esxi" and target.name == "local":
+                    # Loader found that we are running on an esxi host
+                    # Perform operations to "enhance" memory
+                    with esxi_memory_context_manager():
+                        files_to_upload = acquire_children_and_targets(target, args)
+                else:
+                    files_to_upload = acquire_children_and_targets(target, args)
         except Exception:
-            log.exception("Failed to upload files")
-        return
+            log.error("Failed to acquire target: %s", target_name)
+            if not is_user_admin():
+                log.error("Try re-running as administrator/root")
+                acquire_gui.message("This application must be run as administrator.")
+            raise
 
-    target_paths = []
-    for target_path in args.targets:
-        target_path = args_to_uri([target_path], args.loader, rest)[0] if args.loader else target_path
-        if target_path == "local":
-            target_query = {}
-            if args.force_fallback:
-                target_query.update({"force-directory-fs": 1})
+        files_to_upload = sort_files(files_to_upload)
 
-            if args.fallback:
-                target_query.update({"fallback-to-directory-fs": 1})
-
-            target_query = urllib.parse.urlencode(target_query)
-            target_path = f"{target_path}?{target_query}"
-        target_paths.append(target_path)
+    except Exception as err:
+        log.error("Acquiring artifacts FAILED")
+        log.exception(err)
+        acquire_successful = False
+    else:
+        log.info("Acquiring artifacts succeeded")
 
     try:
-        target_name = "Unknown"  # just in case open_all already fails
-        for target in Target.open_all(target_paths):
-            target_name = "Unknown"  # overwrite previous target name
-            target_name = target.name
-            log.info("Loading target %s", target_name)
-            log.info(target)
-            if target.os == "esxi" and target.name == "local":
-                # Loader found that we are running on an esxi host
-                # Perform operations to "enhance" memory
-                with esxi_memory_context_manager():
-                    acquire_children_and_targets(target, args)
-            else:
-                acquire_children_and_targets(target, args)
-    except Exception:
-        if not is_user_admin():
-            log.error("Failed to load target: %s, try re-running as administrator/root", target_name)
-            acquire_gui.message("This application must be run as administrator.")
+        # The auto-upload of files is done at the very very end to make sure any
+        # logged exceptions are written to the log file before uploading.
+        # This means that any failures from this point on will not be part of the
+        # uploaded log files, they will be written to the logfile on disk though.
+        if args.auto_upload and args.upload_plugin and files_to_upload:
+            try:
+                log_file_handler = get_file_handler(log)
+                if log_file_handler:
+                    log_file_handler.close()
+
+                upload_files(files_to_upload, args.upload_plugin)
+            except Exception:
+                if acquire_gui:
+                    acquire_gui.message("Failed to upload files")
+                raise
+
+        if acquire_gui:
+            acquire_gui.finish()
             acquire_gui.wait_for_quit()
-            parser.exit(1)
-        log.exception("Failed to load target: %s", target_name)
-        raise
+
+    except Exception as err:
+        acquire_successful = False
+        log.exception(err)
+
+    if acquire_successful:
+        exit_success(args.config.get("arguments"))
+    else:
+        exit_failure(args.config.get("arguments"))
 
 
 def load_child(target: Target, child_path: Path) -> None:
@@ -2149,7 +2205,7 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> None:
+def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> list[str | Path]:
     if args.child:
         target = load_child(target, args.child)
 
@@ -2172,7 +2228,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
             files.extend(acquire_target(target, args, args.start_time))
 
         except Exception:
-            log.exception("Failed to acquire target")
+            log.error("Failed to acquire main target")
             acquire_gui.message("Failed to acquire target")
             acquire_gui.wait_for_quit()
             raise
@@ -2192,29 +2248,11 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> No
                 child_files = acquire_target(child_target, args)
                 files.extend(child_files)
             except Exception:
-                log.exception("Failed to acquire child target")
+                log.exception("Failed to acquire child target %s", child_target.name)
                 acquire_gui.message("Failed to acquire child target")
                 continue
 
-    files = sort_files(files)
-
-    if args.auto_upload:
-        log_file_handler = get_file_handler(log)
-        if log_file_handler:
-            log_file_handler.close()
-
-        log.info("")
-        try:
-            upload_files(files, args.upload_plugin)
-            acquire_gui.finish()
-            acquire_gui.wait_for_quit()
-        except Exception:
-            log.exception("Failed to upload files")
-            acquire_gui.message("Failed to upload files")
-            acquire_gui.wait_for_quit()
-    else:
-        acquire_gui.finish()
-        acquire_gui.wait_for_quit()
+    return files
 
 
 def sort_files(files: list[Union[str, Path]]) -> list[Path]:
