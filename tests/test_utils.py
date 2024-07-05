@@ -1,11 +1,11 @@
 import argparse
-import platform
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dissect.target import Target
+from dissect.target.helpers.fsutil import TargetPath
 
 from acquire.acquire import MODULES, PROFILES, VOLATILE
 from acquire.utils import (
@@ -13,7 +13,6 @@ from acquire.utils import (
     check_and_set_log_args,
     create_argument_parser,
     normalize_path,
-    normalize_sysvol,
 )
 
 
@@ -110,7 +109,7 @@ def test_check_and_set_log_args(
 def test_check_and_set_log_args_fail_log_to_file_with_children() -> None:
     mock_path = get_mock_path(is_dir=False)
     args = get_args(log=mock_path, children=True)
-    with pytest.raises(ValueError, match="Log path must be a directory when using --children"):
+    with pytest.raises(ValueError, match="Log path must be a directory when using multiple targets or --children"):
         check_and_set_log_args(args)
 
 
@@ -140,11 +139,6 @@ def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str) -> None:
 
     args = get_args(**{arg_name: True, "config": config})
     check_and_set_acquire_args(args, upload_plugins)
-
-    if arg_name == "upload":
-        assert "cagent_key" not in args
-    else:
-        assert args.cagent_key == cagent_key
 
 
 @pytest.mark.parametrize(
@@ -307,162 +301,209 @@ def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: 
         check_and_set_acquire_args(args, MagicMock())
 
 
-def test_check_and_set_acquire_args_cagent() -> None:
-    cagent_key = "KEY"
-    cagent_certificate = "CERT"
-    config = {
-        "cagent_key": cagent_key,
-        "cagent_certificate": cagent_certificate,
-    }
-    args = get_args(config=config)
-    check_and_set_acquire_args(args, MagicMock())
-
-    assert args.cagent_key == cagent_key
-    assert args.cagent_certificate == cagent_certificate
-
-
 @pytest.mark.parametrize(
-    "path, sysvol, resolve, lower_case, case_sensitive, os, result",
+    "path, resolve_parents, preserve_case, sysvol, os, result, as_path",
     [
         (
-            Path("/foo/bar"),
-            None,
+            "/foo/bar",
             False,
-            True,
-            True,
+            False,
+            None,
             "dummy",
             "/foo/bar",
+            True,
         ),
         (
-            Path("/foo/BAR"),
+            "/foo/BAR",
+            False,
+            False,
             None,
-            False,
-            True,
-            False,
-            "dummy",
-            "/foo/bar",
-        ),
-        (
-            Path("/foo/BAR"),
-            None,
-            False,
-            True,
-            True,
             "dummy",
             "/foo/BAR",
+            True,
         ),
         (
-            Path("/foo/../bar"),
-            None,
+            "/foo/BAR",
             False,
             True,
-            True,
+            None,
             "dummy",
-            "/foo/../bar",
+            "/foo/BAR",
+            True,
         ),
         (
-            Path("/foo/../foo/bar"),
+            "/bla/../foo/bar",
+            False,
+            False,
             None,
+            "dummy",
+            "/bla/../foo/bar",
             True,
+        ),
+        (
+            "/bla/../foo/bar",
             True,
-            True,
+            False,
+            None,
             "dummy",
             "/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("c:\\foo\\bar"),
+            "c:\\foo\\bar",
+            False,
+            False,
             "c:",
-            False,
-            True,
-            False,
             "windows",
             "c:/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("C:\\foo\\bar"),
+            "C:\\foo\\bar",
+            False,
+            False,
             "c:",
-            False,
-            True,
-            False,
             "windows",
             "c:/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("\\??\\C:\\foo\\bar"),
+            "\\??\\C:\\foo\\bar",
+            False,
+            False,
             "c:",
-            False,
-            True,
-            False,
             "windows",
             "c:/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("\\??\\c:\\foo\\bar"),
+            "\\??\\c:\\foo\\bar",
+            False,
+            False,
             "c:",
-            False,
-            True,
-            False,
             "windows",
             "c:/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("D:\\foo\\bar"),
+            "D:\\foo\\bar",
+            False,
+            False,
             "c:",
-            False,
-            True,
-            False,
             "windows",
             "d:/foo/bar",
+            True,
         ),
         (
-            PureWindowsPath("D:\\Foo\\BAR"),
+            "D:\\Foo\\BAR",
+            False,
+            True,
             "c:",
-            False,
-            False,
-            False,
             "windows",
             "D:/Foo/BAR",
+            True,
         ),
         (
-            PureWindowsPath("sysvol\\foo\\bar"),
+            "sysvol\\foo\\bar",
+            False,
+            True,
             "c:",
-            False,
-            False,
-            False,
             "windows",
-            "c:/foo/bar",
+            "C:/foo/bar",
+            True,
+        ),
+        (
+            "sysvol/foo/bar",
+            False,
+            True,
+            None,
+            "dummy",
+            "sysvol/foo/bar",
+            True,
+        ),
+        (
+            "/??/sysvol/foo/bar",
+            False,
+            True,
+            None,
+            "dummy",
+            "/??/sysvol/foo/bar",
+            True,
+        ),
+        (
+            "sysvol/Foo/../BAR",
+            True,
+            False,
+            "c:",
+            "windows",
+            "c:/bar",
+            True,
+        ),
+        (
+            "sysvol/Foo/../BAR",
+            True,
+            True,
+            "c:",
+            "windows",
+            "C:/Foo/../BAR",
+            False,
+        ),
+        (
+            "/??/sysvol/Foo/../BAR",
+            True,
+            False,
+            "c:",
+            "windows",
+            "c:/foo/../bar",
+            False,
+        ),
+        (
+            "sysvol",
+            False,
+            True,
+            "SYSVOL",
+            "windows",
+            "sysvol",
+            False,
+        ),
+        (
+            "a:",
+            False,
+            True,
+            "C:",
+            "windows",
+            "A:",
+            False,
         ),
     ],
 )
 def test_utils_normalize_path(
     mock_target: Target,
-    path: Path,
+    path: str,
+    resolve_parents: bool,
+    preserve_case: bool,
     sysvol: Optional[str],
-    resolve: bool,
-    lower_case: bool,
-    case_sensitive: bool,
     os: str,
     result: str,
+    as_path: bool,
 ) -> None:
+    case_sensitive = True
+    if os == "windows":
+        case_sensitive = False
+
     with patch.object(mock_target, "os", new=os), patch.object(
         mock_target.fs, "_case_sensitive", new=case_sensitive
-    ), patch.dict(mock_target.props, {"sysvol_drive": sysvol}):
-        resolved_path = normalize_path(mock_target, path, resolve=resolve, lower_case=lower_case)
+    ), patch.object(mock_target.fs, "_alt_separator", new=("\\" if os == "windows" else "/")), patch.dict(
+        mock_target.props, {"sysvol_drive": sysvol}
+    ):
+        if as_path:
+            path = TargetPath(mock_target.fs, path)
 
-        if platform.system() == "Windows":
-            # A resolved path on windows adds a C:\ prefix. So we check if it ends with our expected
-            # path string
-            assert resolved_path.endswith(result)
-        else:
-            assert resolved_path == result
+        normalized_path = normalize_path(
+            mock_target,
+            path,
+            resolve_parents=resolve_parents,
+            preserve_case=preserve_case,
+        )
 
-
-@pytest.mark.parametrize(
-    "path, sysvol, result",
-    [
-        ("sysvol/foo/bar", "c:", "c:/foo/bar"),
-        ("/sysvol/foo/bar", "c:", "c:/foo/bar"),
-    ],
-)
-def test_normalize_sysvol(path: str, sysvol: str, result: str) -> None:
-    assert normalize_sysvol(path, sysvol) == result
+        assert normalized_path == result
