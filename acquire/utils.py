@@ -278,8 +278,12 @@ def check_and_set_acquire_args(
         ValueError: When an invalid combination of arguments is found.
     """
     upload_plugin = None
+    setattr(args, "upload_plugin", upload_plugin)
 
     # check & set upload related configuration
+    if args.upload and args.auto_upload:
+        raise ValueError("only one of --upload or --auto-upload can be specified")
+
     if args.upload or args.auto_upload:
         upload_mode = args.config.get("upload", {}).get("mode")
         if not upload_mode:
@@ -291,8 +295,7 @@ def check_and_set_acquire_args(
 
         # If initialization of the plugin fails, a ValueError is raised
         upload_plugin = upload_plugin_cls(**args.config)
-
-    setattr(args, "upload_plugin", upload_plugin)
+        setattr(args, "upload_plugin", upload_plugin)
 
     if not args.upload:
         # check output related configuration
