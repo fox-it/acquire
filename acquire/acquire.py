@@ -1084,7 +1084,7 @@ class History(Module):
                 ".config/chromium",
                 # Chrome - RHEL/Ubuntu - DNF
                 ".config/google-chrome",
-                # Edge - RHEL/Ubuntu - DNF/apt
+                # Edge - RHEL/Ubuntu - DNF/apt 
                 ".config/microsoft-edge",
                 # Chrome - RHEL/Ubuntu - Flatpak
                 ".var/app/com.google.Chrome/config/google-chrome",
