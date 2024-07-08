@@ -38,7 +38,7 @@ class ZipOutput(Output):
         self.path = path.with_suffix(path.suffix + ext)
 
         if compress:
-            self.compression = zipfile.ZIP_LZMA
+            self.compression = zipfile.ZIP_DEFLATED
         else:
             self.compression = zipfile.ZIP_STORED
 
@@ -75,6 +75,7 @@ class ZipOutput(Output):
         info = zipfile.ZipInfo()
         info.filename = output_path
         info.file_size = size or 0
+        info.compress_type = self.compression
 
         if entry:
             if entry.is_symlink():
