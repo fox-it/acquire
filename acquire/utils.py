@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from dissect.target import Target
 
-from acquire.outputs import OUTPUTS
+from acquire.outputs import COMPRESSION_METHODS, OUTPUTS
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -75,7 +75,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument(
         "-ot",
         "--output-type",
-        choices=OUTPUTS.keys(),
+        choices=OUTPUTS,
         default="tar",
         help="output type (default: tar)",
     )
@@ -83,6 +83,11 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         "--compress",
         action="store_true",
         help="compress output (if supported by the output type)",
+    )
+    parser.add_argument(
+        "--compress-method",
+        choices=COMPRESSION_METHODS,
+        help="compression method (if supported by the output type)",
     )
     parser.add_argument(
         "--encrypt",

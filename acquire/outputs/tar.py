@@ -8,6 +8,8 @@ from dissect.target.filesystem import FilesystemEntry
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
 
+TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
+
 
 class TarOutput(Output):
     """Tar archive acquire output format. Output can be compressed and/or encrypted.
@@ -15,6 +17,7 @@ class TarOutput(Output):
     Args:
         path: The path to write the tar archive to.
         compress: Whether to compress the tar archive.
+        compression_method: Compression method to use (Default: gzip). Supports "gzip", "bzip2", "xz".
         encrypt: Whether to encrypt the tar archive.
         public_key: The RSA public key to encrypt the header with.
     """
@@ -23,15 +26,19 @@ class TarOutput(Output):
         self,
         path: Path,
         compress: bool = False,
+        compression_method: str = "gzip",
         encrypt: bool = False,
         public_key: Optional[bytes] = None,
     ) -> None:
+        self.compression = None
         ext = ".tar" if ".tar" not in path.suffixes else ""
         mode = "w|" if encrypt else "w:"
 
         if compress:
-            ext += ".gz" if ".gz" not in path.suffixes else ""
-            mode += "gz"
+            self.compression = TAR_COMPRESSION_METHODS.get(compression_method, "gz")
+
+            ext += f".{self.compression}" if f".{self.compression}" not in path.suffixes else ""
+            mode += self.compression
 
         if encrypt:
             ext += ".enc"
