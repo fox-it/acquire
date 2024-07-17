@@ -16,7 +16,12 @@ from typing import Any, Optional
 
 from dissect.target import Target
 
-from acquire.outputs import COMPRESSION_METHODS, OUTPUTS
+from acquire.outputs import (
+    COMPRESSION_METHODS,
+    OUTPUTS,
+    TAR_COMPRESSION_METHODS,
+    ZIP_COMPRESSION_METHODS,
+)
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -322,6 +327,11 @@ def check_and_set_acquire_args(
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
+
+    if args.output_type == "zip" and args.compress_method not in ZIP_COMPRESSION_METHODS:
+        raise ValueError(f"Invalid compression method for zip: {ZIP_COMPRESSION_METHODS.keys()}")
+    if args.output_type == "tar" and args.compress_method not in TAR_COMPRESSION_METHODS:
+        raise ValueError(f"Invalid compression method for tar: {TAR_COMPRESSION_METHODS.keys()}")
 
 
 def get_user_name() -> str:

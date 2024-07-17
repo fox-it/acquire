@@ -491,10 +491,11 @@ def test_utils_normalize_path(
     if os == "windows":
         case_sensitive = False
 
-    with patch.object(mock_target, "os", new=os), patch.object(
-        mock_target.fs, "_case_sensitive", new=case_sensitive
-    ), patch.object(mock_target.fs, "_alt_separator", new=("\\" if os == "windows" else "/")), patch.dict(
-        mock_target.props, {"sysvol_drive": sysvol}
+    with (
+        patch.object(mock_target, "os", new=os),
+        patch.object(mock_target.fs, "_case_sensitive", new=case_sensitive),
+        patch.object(mock_target.fs, "_alt_separator", new=("\\" if os == "windows" else "/")),
+        patch.dict(mock_target.props, {"sysvol_drive": sysvol}),
     ):
         if as_path:
             path = TargetPath(mock_target.fs, path)
