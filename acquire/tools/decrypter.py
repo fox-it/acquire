@@ -307,7 +307,7 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
                 _info(status_queue, f"{in_path} • {message}")
             except VerifyError as e:
                 _info(status_queue, f"{in_path} • Verify error: {e}")
-                message = "! Output file should NOT be trusted"
+                message = "! Verification error, output file should NOT be trusted"
                 _info(status_queue, f"{in_path} • {message}")
             except OSError as e:
                 message = f"Filesystem error: {e}"
@@ -461,20 +461,19 @@ def main():
                     executor.shutdown(wait=True, cancel_futures=True)
                     break
 
-            if len(files) > 1:
-                results_string = textwrap.indent(
-                    "\n".join(
-                        f"{file} - {'Success' if success else 'Failed'}: {message}"
-                        for file, (success, message) in sorted(results.items())
-                    ),
-                    " • ",
-                )
-                (progress.console.log if progress else log.info)(
-                    f"\nDecrypt results (file - result: message):\n{results_string}"
-                )
+            results_string = textwrap.indent(
+                "\n".join(
+                    f"{file} - {'Success' if success else 'Failed'}: {message}"
+                    for file, (success, message) in sorted(results.items())
+                ),
+                " • ",
+            )
+            (progress.console.log if progress else log.info)(
+                f"\nDecrypt results (file - result: message):\n{results_string}"
+            )
 
-            if not all(results.values()) or tasks:
-                exit_code = 2 if any(results.values()) else 1
+            if not all(successes := (success for success, _ in results.values())) or tasks:
+                exit_code = 2 if any(successes) else 1
     exit(exit_code)
 
 
