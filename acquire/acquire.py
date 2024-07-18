@@ -215,7 +215,7 @@ def register_module(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
 
         desc = module_cls.DESC or name
         kwargs["help"] = f"acquire {desc}"
-        kwargs["action"] = "store_true"
+        kwargs["action"] = argparse.BooleanOptionalAction
         kwargs["dest"] = name.lower()
         module_cls.__modname__ = name
 
@@ -661,15 +661,13 @@ def recyclebin_filter(path: fsutil.TargetPath) -> bool:
 @register_module("--recyclebin")
 @module_arg(
     "--large-files",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     help="Collect files larger than 10MB in the Recycle Bin",
-    default=False,
 )
 @module_arg(
-    "--no-data-files",
-    action="store_true",
-    help="Skip collection of data files in the Recycle Bin",
-    default=False,
+    "--data-files",
+    action=argparse.BooleanOptionalAction,
+    help="Collect the data files in the Recycle Bin",
 )
 class RecycleBin(Module):
     DESC = "recycle bin metadata and data files"
@@ -683,7 +681,7 @@ class RecycleBin(Module):
 
         patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
 
-        if not cli_args.no_data_files:
+        if cli_args.data_files is None or cli_args.data_files:
             patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
         with collector.file_filter(large_files_filter):
@@ -1328,7 +1326,7 @@ class Home(Module):
 
 
 @register_module("--ssh")
-@module_arg("--private-keys", action="store_true", help="Add any private keys", default=False)
+@module_arg("--private-keys", action=argparse.BooleanOptionalAction, help="Add any private keys")
 class SSH(Module):
     SPEC = [
         ("glob", ".ssh/*", from_user_home),
