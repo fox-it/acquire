@@ -472,8 +472,16 @@ def main():
                 f"\nDecrypt results (file - result: message):\n{results_string}"
             )
 
-            if not all(successes := (success for success, _ in results.values())) or tasks:
-                exit_code = 2 if any(successes) else 1
+            successes = [success for success, _ in results.values()] or [False]
+            # If no successful results, return 1
+            if not any(successes):
+                exit_code = 1
+            # Else, if some results were successful return 2
+            elif not all(successes):
+                exit_code = 2
+            # Else, if all were successful but there were still tasks to handle, return 2
+            elif all(success) and tasks:
+                exit_code = 2
     exit(exit_code)
 
 
