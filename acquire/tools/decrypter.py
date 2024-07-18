@@ -265,17 +265,22 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
 
 
 def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, key_server=None, clobber=False):
+    success = False
+    message = "An unknown error occurred"
+
     try:
         if check_existing(in_path, out_path, status_queue) and not clobber:
+            message = "Output file or decompressed file already exists!"
             return
 
         _update(status_queue, task_id, visible=True)
-        success = False
         with in_path.open("rb") as infh:
             try:
                 ef = EncryptedFile(infh, key_file=key_file, key_server=key_server)
             except Exception as e:
-                _info(status_queue, f"{in_path} • Error opening encrypted file: {e}")
+                message = f"Error opening encrypted file: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+                return
             _info(
                 status_queue,
                 f"{in_path} • File: {ef.file_header.magic.decode()} | {ef.file_header.header_type} | {ef.timestamp}",
@@ -283,25 +288,33 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
             _info(status_queue, f"{in_path} • Header: {ef.header.magic.decode()} | {ef.header.cipher_type}")
             _update(status_queue, task_id, total=ef.size)
 
-            with out_path.open("wb") as outfh:
-                _info(status_queue, f"{in_path} • Decrypting to {out_path}")
-                _start(status_queue, task_id)
-                try:
+            try:
+                with out_path.open("wb") as outfh:
+                    _info(status_queue, f"{in_path} • Decrypting to {out_path}")
+                    _start(status_queue, task_id)
+
                     for chunk in ef.chunks():
                         if stop_event.is_set():
                             raise ValueError("stopping")
                         outfh.write(chunk)
                         _update(status_queue, task_id, advance=len(chunk))
                     ef.verify()
-                    _info(status_queue, f"{in_path} • File verified OK!")
+                    message = "File verified OK!"
+                    _info(status_queue, f"{in_path} • {message}")
                     success = True
-                except ValueError as e:
-                    _info(status_queue, f"{in_path} • Error decrypting file: {e}")
-                except VerifyError as e:
-                    _info(status_queue, f"{in_path} • Verify error: {e}")
-                    _info(status_queue, f"{in_path} • ! Output file should NOT be trusted")
-                except Exception as e:
-                    _info(status_queue, f"{in_path} • Unknown error: {e}")
+            except ValueError as e:
+                message = f"Error decrypting file: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+            except VerifyError as e:
+                _info(status_queue, f"{in_path} • Verify error: {e}")
+                message = "! Verification error, output file should NOT be trusted"
+                _info(status_queue, f"{in_path} • {message}")
+            except OSError as e:
+                message = f"Filesystem error: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+            except Exception as e:
+                message = f"Unknown error: {e}"
+                _info(status_queue, f"{in_path} • {message}")
 
         if not success:
             failed_path = out_path.with_suffix(f"{out_path.suffix}.failed")
@@ -309,7 +322,7 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
             out_path.rename(failed_path)
     finally:
         _update(status_queue, task_id, visible=False)
-        _exit(status_queue, task_id)
+        _exit(status_queue, task_id, str(in_path), message, success)
 
 
 def _start(queue, task_id):
@@ -324,8 +337,8 @@ def _info(queue, msg):
     queue.put_nowait((STATUS_INFO, msg))
 
 
-def _exit(queue, task_id):
-    queue.put_nowait((STATUS_EXIT, task_id))
+def _exit(queue: multiprocessing.Queue, task_id: int, in_path: str, message: str, success: bool):
+    queue.put_nowait((STATUS_EXIT, (task_id, in_path, message, success)))
 
 
 def setup_logging(logger, verbosity):
@@ -391,6 +404,7 @@ def main():
         key_file = None
         key_server = args.key_server
 
+    exit_code = 0
     ctx = progress or contextlib.nullcontext()
     with ctx:
         signal_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -420,12 +434,15 @@ def main():
 
             signal.signal(signal.SIGINT, signal_handler)
 
+            results = {}
             while tasks:
                 try:
                     cmd, args = status_queue.get(timeout=10)
 
                     if cmd == STATUS_EXIT:
-                        tasks.remove(args)
+                        task_id, in_path, message, success = args
+                        tasks.remove(task_id)
+                        results[in_path] = (success, message)
                     elif cmd == STATUS_INFO:
                         if progress:
                             progress.console.log(args)
@@ -443,6 +460,29 @@ def main():
                     stop_event.set()
                     executor.shutdown(wait=True, cancel_futures=True)
                     break
+
+            results_string = textwrap.indent(
+                "\n".join(
+                    f"{file} - {'Success' if success else 'Failed'}: {message}"
+                    for file, (success, message) in sorted(results.items())
+                ),
+                " • ",
+            )
+            (progress.console.log if progress else log.info)(
+                f"\nDecrypt results (file - result: message):\n{results_string}"
+            )
+
+            successes = [success for success, _ in results.values()] or [False]
+            # If no successful results, return 1
+            if not any(successes):
+                exit_code = 1
+            # Else, if some results were successful return 2
+            elif not all(successes):
+                exit_code = 2
+            # Else, if all were successful but there were still tasks to handle, return 2
+            elif all(success) and tasks:
+                exit_code = 2
+    exit(exit_code)
 
 
 def show_duplicates(output_directory: Path, files: list[Path]) -> None:
