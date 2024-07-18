@@ -114,9 +114,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
     parser.add_argument("-g", "--glob", action="append", help="acquire files matching glob pattern")
 
-    parser.add_argument(
-        "--disable-report", action="store_true", help="disable acquisition report file"
-    )
+    parser.add_argument("--disable-report", action="store_true", help="disable acquisition report file")
 
     parser.add_argument("--child", help="only collect specific child")
     parser.add_argument(
