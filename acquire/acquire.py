@@ -681,7 +681,7 @@ class RecycleBin(Module):
 
         patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
 
-        if cli_args.data_files is None and cli_args.data_files:
+        if cli_args.data_files is None or cli_args.data_files:
             patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
         with collector.file_filter(large_files_filter):
