@@ -665,7 +665,7 @@ def recyclebin_filter(path: fsutil.TargetPath) -> bool:
     help="Collect files larger than 10MB in the Recycle Bin",
 )
 @module_arg(
-    "--no-data-files",
+    "--data-files",
     action=argparse.BooleanOptionalAction,
     help="Skip collection of data files in the Recycle Bin",
 )
@@ -681,7 +681,7 @@ class RecycleBin(Module):
 
         patterns = ["$Recycle.bin/*/$I*", "Recycler/*/INFO2", "Recycled/INFO2"]
 
-        if not cli_args.no_data_files:
+        if cli_args.data_files is not None and cli_args.data_files:
             patterns.extend(["$Recycle.Bin/$R*", "$Recycle.Bin/*/$R*", "RECYCLE*/D*"])
 
         with collector.file_filter(large_files_filter):

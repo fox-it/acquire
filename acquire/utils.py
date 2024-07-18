@@ -99,7 +99,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     )
     parser.add_argument("--public-key", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("-l", "--log", type=Path, help="log directory location")
-    parser.add_argument("--no-log", action=argparse.BooleanOptionalAction, help=argparse.SUPPRESS)
+    parser.add_argument("--no-log", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "-L",
         "--loader",
@@ -115,7 +115,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-g", "--glob", action="append", help="acquire files matching glob pattern")
 
     parser.add_argument(
-        "--disable-report", action=argparse.BooleanOptionalAction, help="disable acquisition report file"
+        "--disable-report", action="store_true", help="disable acquisition report file"
     )
 
     parser.add_argument("--child", help="only collect specific child")
@@ -153,7 +153,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         nargs="+",
         help="upload specified files (all other acquire actions are ignored)",
     )
-    parser.add_argument("--no-proxy", action=argparse.BooleanOptionalAction, help="don't autodetect proxies")
+    parser.add_argument("--no-proxy", action="store_true", help="don't autodetect proxies")
 
     for module_cls in modules.values():
         for args, kwargs in module_cls.__cli_args__:
