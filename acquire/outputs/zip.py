@@ -79,6 +79,7 @@ class ZipOutput(Output):
         info = zipfile.ZipInfo()
         info.filename = output_path
         info.file_size = size or 0
+        info.compress_type = self.compression
 
         if entry:
             info.external_attr = self._get_external_attr(entry)
