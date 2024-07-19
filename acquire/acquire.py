@@ -1782,6 +1782,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     output = OUTPUTS[args.output_type](
         output_path,
         compress=args.compress,
+        compression_method=args.compress_method,
         encrypt=args.encrypt,
         public_key=args.public_key,
     )

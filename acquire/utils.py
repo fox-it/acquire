@@ -16,7 +16,12 @@ from typing import Any, Optional
 
 from dissect.target import Target
 
-from acquire.outputs import OUTPUTS
+from acquire.outputs import (
+    COMPRESSION_METHODS,
+    OUTPUTS,
+    TAR_COMPRESSION_METHODS,
+    ZIP_COMPRESSION_METHODS,
+)
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
@@ -75,7 +80,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument(
         "-ot",
         "--output-type",
-        choices=OUTPUTS.keys(),
+        choices=OUTPUTS,
         default="tar",
         help="output type (default: tar)",
     )
@@ -83,6 +88,11 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         "--compress",
         action=argparse.BooleanOptionalAction,
         help="compress output (if supported by the output type)",
+    )
+    parser.add_argument(
+        "--compress-method",
+        choices=COMPRESSION_METHODS,
+        help="compression method (if supported by the output type)",
     )
     parser.add_argument(
         "--encrypt",
@@ -319,6 +329,16 @@ def check_and_set_acquire_args(
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
+
+    if args.compress:
+        if (args.output_type == "zip" and args.compress_method) and args.compress_method not in ZIP_COMPRESSION_METHODS:
+            raise ValueError(
+                f"Invalid compression method for zip, allowed are: {', '.join(ZIP_COMPRESSION_METHODS.keys())}"
+            )
+        if (args.output_type == "tar" and args.compress_method) and args.compress_method not in TAR_COMPRESSION_METHODS:
+            raise ValueError(
+                f"Invalid compression method for tar, allowed are: {', '.join(TAR_COMPRESSION_METHODS.keys())}"
+            )
 
 
 def get_user_name() -> str:
