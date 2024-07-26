@@ -81,7 +81,7 @@ jobs:
           make install
 
       - name: Install forked PyOxidizer
-        run: cargo install --git https://github.com/Schamper/pyoxidizer pyoxidizer --force --locked
+        run: cargo install --git https://github.com/fox-it/pyoxidizer --branch esxi-compatibility pyoxidizer --force --locked
 
       - name: Install dependencies
         run: /opt/python/cp39-cp39/bin/pip install dissect
