@@ -24,6 +24,11 @@ from acquire.outputs import (
 )
 from acquire.uploaders.plugin_registry import UploaderRegistry
 
+try:
+    from acquire.version import version as VERSION
+except ImportError:
+    VERSION = "0.0.dev"
+
 
 class StrEnum(str, Enum):
     """Sortable and serializible string-based enum"""
@@ -168,6 +173,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
             parser.add_argument(*args, **kwargs)
 
     parser.add_argument("-v", "--verbose", action="count", default=3, help="increase output verbosity")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     return parser
 
 
