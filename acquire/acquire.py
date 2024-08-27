@@ -1206,7 +1206,9 @@ class RemoteAccess(Module):
         # teamviewer
         ("glob", "sysvol/Program Files/TeamViewer/*.log"),
         ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
+        ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
+        ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
         ("dir", "sysvol/ProgramData/AnyDesk"),
         ("glob", "AppData/Roaming/AnyDesk/*.trace", from_user_home),
