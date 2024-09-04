@@ -15,4 +15,4 @@ tests/docs/build
 # Ignore artefacts created by an acquire run in the package directory
 *.tar
 *.log
-*.report.json 
+*.report.json
