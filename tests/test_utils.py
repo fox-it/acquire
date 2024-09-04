@@ -229,21 +229,21 @@ def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output
             True,
             "output_file",
             get_mock_path(is_dir=False),
-            "--children can not be used with --output_file. Use --output instead",
+            "--children can not be used with --output-file. Use --output instead",
         ),
         # Output_file is a directory
         (
             False,
             "output_file",
             get_mock_path(),
-            "--output_file must be a path to a file in an existing directory",
+            "--output-file must be a path to a file in an existing directory",
         ),
         # Output_file has a non-existing parent directory
         (
             False,
             "output_file",
             get_mock_path(is_dir=False, parent_is_dir=False),
-            "--output_file must be a path to a file in an existing directory",
+            "--output-file must be a path to a file in an existing directory",
         ),
         # Output is a non-existing directory
         (
