@@ -312,9 +312,9 @@ def check_and_set_acquire_args(
     if not args.upload:
         # check output related configuration
         if (args.children or len(args.targets) > 1) and args.output_file:
-            raise ValueError("--children can not be used with --output_file. Use --output instead")
+            raise ValueError("--children can not be used with --output-file. Use --output instead")
         elif args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
-            raise ValueError("--output_file must be a path to a file in an existing directory")
+            raise ValueError("--output-file must be a path to a file in an existing directory")
         elif args.output and not args.output.is_dir():
             raise ValueError(f"Output directory doesn't exist or is a file: {args.output}")
 
