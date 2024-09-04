@@ -11,8 +11,3 @@ acquire/version.py
 tests/docs/api
 tests/docs/build
 .tox/
-
-# Ignore artefacts created by an acquire run in the package directory
-*.tar
-*.log
-*.report.json
