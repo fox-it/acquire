@@ -10,4 +10,9 @@ __pycache__/
 acquire/version.py
 tests/docs/api
 tests/docs/build
-.tox/
+.tox/log
+
+# Ignore artefacts created by an acquire run
+*.tar
+*.log
+*.report.json 
