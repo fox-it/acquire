@@ -10,10 +10,19 @@ on:
 
 jobs:
   ci:
-    uses: fox-it/dissect-workflow-templates/.github/workflows/dissect-ci-template.yml@main
+    uses: fox-it/dissect-workflow-templates/.github/workflows/dissect-ci-template.yml@allow-failure-acquire
     with:
       deb-packages: 'liblzo2-dev'
     secrets: inherit
+
+  test:
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/
 
   publish:
     if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
