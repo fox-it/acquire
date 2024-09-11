@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from dissect.target import Target
+from dissect.target.helpers import keychain
 
 from acquire.outputs import (
     COMPRESSION_METHODS,
@@ -163,6 +164,9 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     )
     parser.add_argument("--no-proxy", action="store_true", help="don't autodetect proxies")
 
+    parser.add_argument("-K", "--keychain-file", type=Path, help="keychain file in CSV format")
+    parser.add_argument("-Kv", "--keychain-value", help="passphrase, recovery key or key file path value")
+
     for module_cls in modules.values():
         for args, kwargs in module_cls.__cli_args__:
             parser.add_argument(*args, **kwargs)
@@ -190,10 +194,10 @@ def parse_acquire_args(
     Returns:
         A command line arguments namespace
     """
-    command_line_args, rest = parser.parse_known_args()
-    _merge_args_and_config(parser, command_line_args, config)
+    args, rest = parser.parse_known_args()
+    _merge_args_and_config(parser, args, config)
 
-    return command_line_args, rest
+    return args, rest
 
 
 def _merge_args_and_config(
@@ -339,6 +343,12 @@ def check_and_set_acquire_args(
             raise ValueError(
                 f"Invalid compression method for tar, allowed are: {', '.join(TAR_COMPRESSION_METHODS.keys())}"
             )
+
+    if args.keychain_file:
+        keychain.register_keychain_file(args.keychain_file)
+
+    if args.keychain_value:
+        keychain.register_wildcard_value(args.keychain_value)
 
 
 def get_user_name() -> str:
