@@ -13,7 +13,9 @@ from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from queue import Empty as QueueEmptyError
+from queue import Empty as QueueEmptyError, Queue
+from threading import Event
+from typing import BinaryIO, Iterator
 from urllib import request
 from urllib.error import HTTPError
 from urllib.parse import urljoin
@@ -73,7 +75,7 @@ class VerifyError(Exception):
 
 
 class EncryptedFile(AlignedStream):
-    def __init__(self, fh, key_file=None, key_server=None):
+    def __init__(self, fh: BinaryIO, key_file: Path | None = None, key_server: str | None = None) -> None:
         self.fh = fh
         self.key_file = key_file
         self.key_server = key_server
@@ -116,10 +118,10 @@ class EncryptedFile(AlignedStream):
     def seekable(self):
         return False
 
-    def seek(self, pos, whence=io.SEEK_CUR):
+    def seek(self, pos: int, whence: int = io.SEEK_CUR) -> int:
         raise io.UnsupportedOperation("seeking is not allowed")
 
-    def _read(self, offset, length):
+    def _read(self, offset: int, length: int) -> bytes:
         if not self.size:
             result = []
 
@@ -162,14 +164,14 @@ class EncryptedFile(AlignedStream):
             read_size = max(0, min(length, self.size - offset))
             return self.cipher.decrypt(self.fh.read(read_size))
 
-    def chunks(self, chunk_size=CHUNK_SIZE):
+    def chunks(self, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
         while True:
             chunk = self.read(chunk_size)
             if not chunk:
                 break
             yield chunk
 
-    def verify(self):
+    def verify(self) -> None:
         try:
             self.cipher.verify(self.digest)
         except ValueError:
@@ -213,11 +215,11 @@ class EncryptedFile(AlignedStream):
         self._footer = footer
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> datetime:
         return datetime.fromtimestamp(self.file_header.timestamp, timezone.utc)
 
 
-def decrypt_header(header, fingerprint, key_file=None, key_server=None):
+def decrypt_header(header, fingerprint: bytes, key_file=Path | None, key_server=str | None) -> bytes:
     if not key_file and not key_server:
         raise ValueError("Need either key file or key server")
 
@@ -264,7 +266,16 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
     return False
 
 
-def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, key_server=None, clobber=False):
+def worker(
+    task_id : int,
+    stop_event: Event,
+    status_queue: Queue,
+    in_path: Path,
+    out_path: Path,
+    key_file: Path | None = None,
+    key_server: str | None = None,
+    clobber=False,
+) -> None:
     success = False
     message = "An unknown error occurred"
 
@@ -325,23 +336,23 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
         _exit(status_queue, task_id, str(in_path), message, success)
 
 
-def _start(queue, task_id):
+def _start(queue: Queue, task_id : int) -> None:
     queue.put_nowait((STATUS_START, task_id))
 
 
-def _update(queue, task_id, *args, **kwargs):
+def _update(queue: Queue, task_id : int, *args, **kwargs) -> None:
     queue.put_nowait((STATUS_UPDATE, (task_id, args, kwargs)))
 
 
-def _info(queue, msg):
+def _info(queue: Queue, msg : str) -> None:
     queue.put_nowait((STATUS_INFO, msg))
 
 
-def _exit(queue: multiprocessing.Queue, task_id: int, in_path: str, message: str, success: bool):
+def _exit(queue: multiprocessing.Queue, task_id: int, in_path: str, message: str, success: bool) -> None:
     queue.put_nowait((STATUS_EXIT, (task_id, in_path, message, success)))
 
 
-def setup_logging(logger, verbosity):
+def setup_logging(logger: logging.Logger, verbosity: int) -> None:
     if verbosity == 1:
         level = logging.ERROR
     elif verbosity == 2:
@@ -360,7 +371,7 @@ def setup_logging(logger, verbosity):
     logger.setLevel(level)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="+", type=Path, help="paths to encrypted files")
     parser.add_argument("-o", "--output", type=Path, help="optional path to output file")
