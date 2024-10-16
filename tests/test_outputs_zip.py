@@ -48,12 +48,6 @@ def test_zip_output_write_entry(mock_fs: VirtualFilesystem, zip_output: ZipOutpu
         assert stat.S_ISREG(file_type)
 
 
-@pytest.fixture
-def public_key() -> bytes:
-    with open("tests/data/public_key.pem", "r") as f:
-        return f.read()
-
-
 def test_zip_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_path: Path) -> None:
     entry_name = "/foo/bar/some-file"
     entry = mock_fs.get(entry_name)
@@ -63,9 +57,9 @@ def test_zip_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
 
     encrypted_stream = EncryptedFile(zip_output.path.open("rb"), Path("tests/data/private_key.pem"))
     decrypted_path = tmp_path / "decrypted.zip"
-    # Direct streaming is not an otion because zipfile needs seek when reading from encrypted files directly
+    # Direct streaming is not an option because zipfile needs seek when reading from encrypted files directly
     with open(decrypted_path, "wb") as f:
         f.write(encrypted_stream.read())
-    zip_file = zipfile.ZipFile(decrypted_path, mode="r")
 
+    zip_file = zipfile.ZipFile(decrypted_path, mode="r")
     assert entry.open().read() == zip_file.open(entry_name).read()
