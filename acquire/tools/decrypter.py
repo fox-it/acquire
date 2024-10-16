@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import base64
 import contextlib
@@ -220,7 +222,7 @@ class EncryptedFile(AlignedStream):
         return datetime.fromtimestamp(self.file_header.timestamp, timezone.utc)
 
 
-def decrypt_header(header, fingerprint: bytes, key_file=Path | None, key_server=str | None) -> bytes:
+def decrypt_header(header, fingerprint: bytes, key_file: Path | None = None, key_server: str | None = None) -> bytes:
     if not key_file and not key_server:
         raise ValueError("Need either key file or key server")
 
