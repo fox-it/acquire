@@ -54,7 +54,7 @@ def public_key() -> bytes:
         return f.read()
 
 
-def test_zip_encrypt_write_entry(mock_fs: VirtualFilesystem, public_key: bytes, tmp_path: Path) -> None:
+def test_zip_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_path: Path) -> None:
     entry_name = "/foo/bar/some-file"
     entry = mock_fs.get(entry_name)
     zip_output = ZipOutput(tmp_path, compress=True, compression_method="bzip2", encrypt=True, public_key=public_key)

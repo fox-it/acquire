@@ -48,7 +48,7 @@ class ZipOutput(Output):
 
         if encrypt:
             self._fh = EncryptedStream(self.path.open("wb"), public_key)
-            self.archive = zipfile.ZipFile(file=self._fh, mode="w", compression=self.compression, allowZip64=True)
+            self.archive = zipfile.ZipFile(self._fh, mode="w", compression=self.compression, allowZip64=True)
         else:
             self.archive = zipfile.ZipFile(self.path, mode="w", compression=self.compression, allowZip64=True)
 
