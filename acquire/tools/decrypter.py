@@ -13,7 +13,8 @@ from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from queue import Empty as QueueEmptyError, Queue
+from queue import Empty as QueueEmptyError
+from queue import Queue
 from threading import Event
 from typing import BinaryIO, Iterator
 from urllib import request
@@ -178,11 +179,11 @@ class EncryptedFile(AlignedStream):
             raise VerifyError("Digest check failed")
 
     @property
-    def file_header(self):
+    def file_header(self) -> c_acquire.file:
         return self._file_header
 
     @file_header.setter
-    def file_header(self, file_header):
+    def file_header(self, file_header: c_acquire.file) -> None:
         if file_header.magic != FILE_MAGIC:
             raise ValueError(f"Invalid file magic: {file_header.magic}")
 
@@ -195,21 +196,21 @@ class EncryptedFile(AlignedStream):
         self._file_header = file_header
 
     @property
-    def header(self):
+    def header(self) -> c_acquire.header:
         return self._header
 
     @header.setter
-    def header(self, header):
+    def header(self, header: c_acquire.header) -> None:
         if header.magic != HEADER_MAGIC:
             raise ValueError(f"Invalid header magic: {header.magic}")
         self._header = header
 
     @property
-    def footer(self):
+    def footer(self) -> c_acquire.footer:
         return self._footer
 
     @footer.setter
-    def footer(self, footer):
+    def footer(self, footer: c_acquire.footer) -> None:
         if footer.magic != FOOTER_MAGIC:
             raise ValueError(f"Invalid footer magic: {footer}")
         self._footer = footer
@@ -267,7 +268,7 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
 
 
 def worker(
-    task_id : int,
+    task_id: int,
     stop_event: Event,
     status_queue: Queue,
     in_path: Path,
@@ -336,15 +337,15 @@ def worker(
         _exit(status_queue, task_id, str(in_path), message, success)
 
 
-def _start(queue: Queue, task_id : int) -> None:
+def _start(queue: Queue, task_id: int) -> None:
     queue.put_nowait((STATUS_START, task_id))
 
 
-def _update(queue: Queue, task_id : int, *args, **kwargs) -> None:
+def _update(queue: Queue, task_id: int, *args, **kwargs) -> None:
     queue.put_nowait((STATUS_UPDATE, (task_id, args, kwargs)))
 
 
-def _info(queue: Queue, msg : str) -> None:
+def _info(queue: Queue, msg: str) -> None:
     queue.put_nowait((STATUS_INFO, msg))
 
 
