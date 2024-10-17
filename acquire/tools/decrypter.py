@@ -277,7 +277,7 @@ def worker(
     out_path: Path,
     key_file: Path | None = None,
     key_server: str | None = None,
-    clobber=False,
+    clobber: bool = False,
 ) -> None:
     success = False
     message = "An unknown error occurred"
