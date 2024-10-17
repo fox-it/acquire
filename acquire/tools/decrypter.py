@@ -490,12 +490,12 @@ def main() -> None:
             # If no successful results, return 1
             if not any(successes):
                 exit_code = 1
-            # Else, if some results were successful return 2
+            # Else, if some results but not all were successful return 2
             elif not all(successes):
                 exit_code = 2
-            # Else, if all were successful but there were still tasks to handle, return 2
-            elif success and tasks:
-                exit_code = 2
+            # Else, if all were successful but there were still tasks to handle, return 3
+            elif tasks:
+                exit_code = 3
     exit(exit_code)
 
 
