@@ -113,7 +113,7 @@ class EncryptedStream(io.RawIOBase):
         return self.fh.tell()
 
     def seek(self, pos, whence=io.SEEK_CUR):
-        raise TypeError("seeking is not allowed")
+        raise io.UnsupportedOperation("seeking is not allowed")
 
     def close(self):
         self.finalize()
