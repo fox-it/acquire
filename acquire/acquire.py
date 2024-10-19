@@ -30,6 +30,19 @@ from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
 from acquire.dynamic.windows.named_objects import NamedObjectType
+from acquire.dynamic.windows.arp import (
+    NetAdapter,
+    NetNeighbor,
+    get_windows_network_adapters,
+    get_windows_arp_cache,
+    get_windows_net_neighbors,
+    format_net_neighbors_list
+)
+from acquire.dynamic.windows.netstat import (
+    NetConnection,
+    get_active_connections,
+    format_net_connections_list
+)
 from acquire.esxi import esxi_memory_context_manager
 from acquire.gui import GUI
 from acquire.hashes import (
@@ -377,11 +390,19 @@ class Registry(Module):
 @register_module("--netstat")
 @local_module
 class Netstat(Module):
-    DESC = "netstat output"
-    SPEC = [
-        ("command", (["powershell.exe", "netstat", "-a", "-n", "-o"], "netstat")),
-    ]
+    DESC = "Windows network connections"
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        net_connections: list[NetConnection] = get_active_connections()
+        output = format_net_connections_list(net_connections)
+        
+        output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE) if collector.base else collector.COMMAND_OUTPUT_BASE
+        full_output_path = fsutil.join(output_base, "netstat")
+        
+        collector.output.write_bytes(full_output_path, output.encode())
+        collector.report.add_command_collected(cls.__name__, ["netstat", "-a", "-n", "-o"])
 
 
 @register_module("--win-processes")
@@ -417,18 +438,23 @@ class WinArpCache(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        network_adapters: list[NetAdapter] = get_windows_network_adapters()
+
+        neighbors: list[NetNeighbor] = []
+
         if float(target.ntversion) < 6.2:
-            commands = [
-                # < Windows 10
-                ("command", (["arp", "-av"], "win7-arp-cache")),
-            ]
+            neighbors = get_windows_arp_cache(network_adapters)
         else:
-            commands = [
-                # Windows 10+ (PowerShell)
-                ("command", (["PowerShell", "Get-NetNeighbor"], "win10-arp-cache")),
-            ]
-        return commands
+            neighbors = get_windows_net_neighbors(network_adapters)
+
+        output = format_net_neighbors_list(neighbors)
+
+        output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE) if collector.base else collector.COMMAND_OUTPUT_BASE
+        full_output_path = fsutil.join(output_base, "arp-cache")
+
+        collector.output.write_bytes(full_output_path, output.encode())
+        collector.report.add_command_collected(cls.__name__, ["arp-cache"])
 
 
 @register_module("--win-rdp-sessions")
