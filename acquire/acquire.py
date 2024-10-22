@@ -32,7 +32,6 @@ from acquire.collector import Collector, get_full_formatted_report, get_report_s
 from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.dynamic.windows.arp import (
     NetAdapter,
-    NetNeighbor,
     get_windows_network_adapters,
     get_windows_net_neighbors,
     format_net_neighbors_list
@@ -440,6 +439,7 @@ class WinArpCache(Module):
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         network_adapters: list[NetAdapter] = get_windows_network_adapters()
         neighbors = get_windows_net_neighbors(network_adapters)
+
         output = format_net_neighbors_list(neighbors)
 
         output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE) if collector.base else collector.COMMAND_OUTPUT_BASE
