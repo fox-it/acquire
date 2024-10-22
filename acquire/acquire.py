@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import enum
 import functools
 import io
@@ -382,6 +383,82 @@ class Netstat(Module):
         ("command", (["powershell.exe", "netstat", "-a", "-n", "-o"], "netstat")),
     ]
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+
+@register_module("--devices")
+@local_module
+class Devices(Module):
+    DESC = "devices output"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        def _get_message_for_errno(errno: int) -> str:
+            kernel32.FormatMessageW.argtypes = [
+                ctypes.wintypes.DWORD,
+                ctypes.wintypes.LPVOID,
+                ctypes.wintypes.DWORD,
+                ctypes.wintypes.DWORD,
+                ctypes.wintypes.LPVOID,
+                ctypes.wintypes.DWORD,
+            ]
+
+            kernel32.FormatMessageW.restype = ctypes.wintypes.DWORD
+
+            FORMAT_MESSAGE_FROM_SYSTEM = 0x00001000
+            FORMAT_MESSAGE_ALLOCATE_BUFFER = 0x00000100
+            FORMAT_MESSAGE_IGNORE_INSERTS = 0x00000200
+
+            lpMsgBuf = ctypes.c_wchar_p()
+            kernel32.FormatMessageW(
+                FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
+                None,
+                errno,
+                0,  # Language
+                ctypes.byref(lpMsgBuf),
+                0,
+            )
+            try:
+                message = lpMsgBuf.value
+            except Exception as e:
+                message = f"(unable to retrieve error message: {e})"
+            finally:
+                kernel32.LocalFree.argtypes = [ctypes.wintypes.HLOCAL]
+                kernel32.LocalFree.restype = ctypes.wintypes.HLOCAL
+                kernel32.LocalFree(lpMsgBuf)
+
+            return message.strip()
+
+        try:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+            buf_size = 65536
+            buf = ctypes.create_string_buffer(buf_size)
+
+            kernel32.GetLastError.argtypes = []
+            kernel32.GetLastError.restype = ctypes.wintypes.DWORD
+
+            kernel32.QueryDosDeviceA(None, buf, buf_size)
+
+            lines = []
+            for line in buf.raw.split(b"\x00"):
+                if line.strip(b" ") == b"":
+                    break
+                lines.append(line.decode("utf-8"))
+
+            if len(lines) < 1:
+                error_code = kernel32.GetLastError()
+                raise Exception(f"Last Error = {error_code} ({_get_message_for_errno(error_code)})")
+
+            collector.output.write_bytes("QueryDosDeviceA.txt", "\n".join(lines).encode("utf-8"))
+            collector.report.add_command_collected(cls.__name__, ["QueryDosDeviceA"])
+        except Exception:
+            collector.report.add_command_failed(cls.__name__, ["QueryDosDeviceA"])
+            log.error(
+                "- Failed to collect output from command `QueryDosDeviceA`",
+                exc_info=True,
+            )
+        return
 
 
 @register_module("--win-processes")
@@ -2019,6 +2096,7 @@ PROFILES = {
 
 class VolatileProfile:
     DEFAULT = [
+        Devices,
         Netstat,
         WinProcesses,
         WinProcEnv,
