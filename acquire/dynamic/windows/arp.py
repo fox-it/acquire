@@ -6,21 +6,17 @@ from socket import inet_ntop
 
 from acquire.dynamic.windows.iphlpapi import (
     ADDRESS_FAMILY,
-    ERROR_NO_DATA,
-    ERROR_NOT_SUPPORTED,
     IF_OPER_STATUS,
     IF_TYPE,
     IP_ADAPTER_ADDRESSES,
     LPVOID,
     MIB_IPNET_ROW2,
     MIB_IPNET_TABLE2,
-    MIB_IPNETROW,
-    MIB_IPNETTABLE,
+    NL_NEIGHBOR_STATE,
     NO_ERROR,
     ULONG,
     FreeMibTable,
     GetAdaptersAddresses,
-    GetIpNetTable,
     GetIpNetTable2,
 )
 
@@ -100,22 +96,34 @@ class NetAdapter:
 
 
 class NetNeighbor:
-    def __init__(self, family: ADDRESS_FAMILY, address: str, mac: str | None, adapter: NetAdapter | None):
-        self.family: ADDRESS_FAMILY = family
-        self.address: str = address
-        self.mac: str | None = mac
-        self.adapter: NetAdapter | None = adapter
+    def __init__(
+            self,
+            family: ADDRESS_FAMILY,
+            address: str,
+            mac: str | None,
+            state: NL_NEIGHBOR_STATE,
+            adapter: NetAdapter | None
+        ):
+            self.family: ADDRESS_FAMILY = family
+            self.address: str = address
+            self.mac: str | None = mac
+            self.state: NL_NEIGHBOR_STATE = state
+            self.adapter: NetAdapter | None = adapter
 
     def as_dict(self) -> dict:
         return {
             'family': self.family.name,
             'address': self.address,
             'mac': self.mac if self.mac else '',
+            'state': self.state.name,
             'adapter': self.adapter.as_dict()
         }
 
     def __str__(self) -> str:
-        return f"NetNeighbor(family={self.family.name}, address={self.address}, mac={self.mac}, adapter={self.adapter})"
+        return (
+            f"NetNeighbor(family={self.family.name}, address={self.address},"
+            f"mac={self.mac}, state={self.state.name}, adapter={self.adapter})"
+        )
 
 
 def get_windows_network_adapters() -> list[NetAdapter]:
@@ -153,39 +161,6 @@ def get_adapter_by_index(adapters: list[NetAdapter], index: int) -> NetAdapter |
     return None
 
 
-def get_windows_arp_cache(adapters: list[NetAdapter]) -> list[NetNeighbor]:
-    table_buffer_len = ULONG(0)
-    status = GetIpNetTable(LPVOID(0), ctypes.byref(table_buffer_len), True)
-
-    if status in [ERROR_NO_DATA, ERROR_NOT_SUPPORTED]:
-        return []
-
-    buffer = ctypes.create_string_buffer(table_buffer_len.value)
-    result = GetIpNetTable(buffer, ctypes.byref(table_buffer_len), True)
-
-    if result != NO_ERROR:
-        return []
-
-    table = ctypes.cast(buffer, ctypes.POINTER(MIB_IPNETTABLE)).contents
-    rows = ctypes.cast(table.table, ctypes.POINTER(MIB_IPNETROW * table.dwNumEntries)).contents
-
-    neighbors = []
-
-    for row in rows:
-        adapter = get_adapter_by_index(adapters, row.dwIndex)
-
-        entry = NetNeighbor(
-            family=ADDRESS_FAMILY.AF_INET,
-            address=inet_ntop(ADDRESS_FAMILY.AF_INET, row.dwAddr),
-            mac=format_physical_address(row.bPhysAddr, row.dwPhysAddrLen),
-            adapter=adapter,
-        )
-
-        neighbors.append(entry)
-
-    return neighbors
-
-
 def get_windows_net_neighbors(adapters: list[NetAdapter]) -> list[NetNeighbor]:
     table_pointer = ctypes.POINTER(MIB_IPNET_TABLE2)()
     result = GetIpNetTable2(ADDRESS_FAMILY.AF_UNSPEC, ctypes.byref(table_pointer))
@@ -211,7 +186,8 @@ def get_windows_net_neighbors(adapters: list[NetAdapter]) -> list[NetNeighbor]:
 
         mac = format_physical_address(row.PhysicalAddress, row.PhysicalAddressLength)
         adapter = get_adapter_by_index(adapters, row.InterfaceIndex)
-        neighbor = NetNeighbor(family=ADDRESS_FAMILY(row.Address.si_family), address=address, mac=mac, adapter=adapter)
+        neighbor = NetNeighbor(family=ADDRESS_FAMILY(row.Address.si_family), address=address, mac=mac,
+                               state=NL_NEIGHBOR_STATE(row.State), adapter=adapter)
         neighbors.append(neighbor)
 
     FreeMibTable(table_pointer)
@@ -221,9 +197,10 @@ def get_windows_net_neighbors(adapters: list[NetAdapter]) -> list[NetNeighbor]:
 
 def format_net_neighbors_csv(net_neighbors: list[NetNeighbor]) -> str:
     def formatter(neighbor: NetNeighbor) -> str:
-        return f",".join([str(neighbor.adapter.index), neighbor.address, neighbor.mac if neighbor.mac else ""])
+        return f",".join([str(neighbor.adapter.index), neighbor.address, neighbor.mac if neighbor.mac else "",
+                          neighbor.state.name])
     
-    header = ",".join(["interface_index", "ip_address", "mac"])
+    header = ",".join(["interface_index", "ip_address", "mac", "state"])
     rows = "\n".join(formatter(neighbor) for neighbor in net_neighbors)
 
     return f"{header}\n{rows}" 
@@ -236,9 +213,9 @@ def format_net_neighbors_json(net_neighbors: list[NetNeighbor], indent=0) -> str
 def format_net_neighbors_list(net_neighbors: list[NetNeighbor]) -> str:
     def formatter(neighbor: NetNeighbor) -> str:
         mac = neighbor.mac if neighbor.mac else ""
-        return f"{neighbor.adapter.index:<10}{neighbor.address:<60}{mac:<20}"
+        return f"{neighbor.adapter.index:<10}{neighbor.address:<60}{mac:<20}{neighbor.state.name:<20}"
     
-    header = f"{'ifIndex':<10}{'IP Address':<60}{'MAC Address':<20}"
+    header = f"{'ifIndex':<10}{'IP Address':<60}{'MAC Address':<20}{'State':<20}"
     header += "\n" + ('=' * len(header))
     rows = "\n".join(formatter(neighbor) for neighbor in net_neighbors)
 

@@ -369,16 +369,6 @@ class SOCKADDR_INET(ctypes.Union):
     ]
 
 
-class MIB_IPNETROW(ctypes.Structure):
-    _fields_: ClassVar[list[tuple[str, type]]] = [
-        ("dwIndex", DWORD),
-        ("dwPhysAddrLen", DWORD),
-        ("bPhysAddr", ctypes.c_ubyte * MAXLEN_PHYSADDR),
-        ("dwAddr", ctypes.c_ubyte * 4),
-        ("dwType", DWORD),
-    ]
-
-
 class MIB_IPNET_ROW2(ctypes.Structure):
     _fields_: ClassVar[list[tuple[str, type]]] = [
         ("Address", SOCKADDR_INET),
@@ -399,13 +389,6 @@ class MIB_IPNET_ROW2(ctypes.Structure):
     # `InterfaceIndex` member.
     if BITNESS == 32:
         _fields_.insert(2, ('Padding', DWORD))
-
-
-class MIB_IPNETTABLE(ctypes.Structure):
-    _fields_: ClassVar[list[tuple[str, type]]] = [
-        ("dwNumEntries", DWORD),
-        ("table", MIB_IPNETROW * 1)
-    ]
 
 
 class MIB_IPNET_TABLE2(ctypes.Structure):
@@ -529,7 +512,6 @@ class MIB_UDP6TABLE_OWNER_PID(ctypes.Structure):
 
 
 PULONG = ctypes.POINTER(ULONG)
-PMIB_IPNETTABLE = ctypes.POINTER(MIB_IPNETTABLE)
 PMIB_IPNET_TABLE2 = ctypes.POINTER(MIB_IPNET_TABLE2)
 PMIB_TCPTABLE_OWNER_PID = ctypes.POINTER(MIB_TCPTABLE_OWNER_PID)
 PMIB_TCP6TABLE_OWNER_PID = ctypes.POINTER(MIB_TCP6TABLE_OWNER_PID)
@@ -539,10 +521,6 @@ PMIB_UDP6TABLE_OWNER_PID = ctypes.POINTER(MIB_UDP6TABLE_OWNER_PID)
 iphlpapi = ctypes.WinDLL("Iphlpapi.dll")
 
 # arp calls
-GetIpNetTable = iphlpapi.GetIpNetTable
-GetIpNetTable.argtypes = [LPVOID, PULONG, BOOL]
-GetIpNetTable.restype = ULONG
-
 GetIpNetTable2 = iphlpapi.GetIpNetTable2
 GetIpNetTable2.argtypes = [ULONG, ctypes.POINTER(PMIB_IPNET_TABLE2)]
 GetIpNetTable2.restype = ULONG
