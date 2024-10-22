@@ -156,7 +156,7 @@ def tcp6_row_parser(row: MIB_TCP6ROW_OWNER_PID) -> NetConnection:
 
 def udp6_row_parser(row: MIB_UDP6ROW_OWNER_PID) -> NetConnection:
     return NetConnection(
-        protocol=CONNECTION_PROTOCOL.TCP6,
+        protocol=CONNECTION_PROTOCOL.UDP6,
         local_addr=f"[{inet_ntop(ADDRESS_FAMILY.AF_INET6, row.ucLocalAddr)}]",
         local_port=htons(row.dwLocalPort),
         remote_addr=None,
