@@ -29,17 +29,17 @@ from dissect.target.tools.utils import args_to_uri
 from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
-from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.dynamic.windows.arp import (
     NetAdapter,
-    get_windows_network_adapters,
+    format_net_neighbors_list,
     get_windows_net_neighbors,
-    format_net_neighbors_list
+    get_windows_network_adapters,
 )
+from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.dynamic.windows.netstat import (
     NetConnection,
+    format_net_connections_list,
     get_active_connections,
-    format_net_connections_list
 )
 from acquire.esxi import esxi_memory_context_manager
 from acquire.gui import GUI
@@ -395,10 +395,14 @@ class Netstat(Module):
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         net_connections: list[NetConnection] = get_active_connections()
         output = format_net_connections_list(net_connections)
-        
-        output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE) if collector.base else collector.COMMAND_OUTPUT_BASE
+
+        output_base = (
+            fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE)
+            if collector.base
+            else collector.COMMAND_OUTPUT_BASE
+        )
         full_output_path = fsutil.join(output_base, "netstat")
-        
+
         collector.output.write_bytes(full_output_path, output.encode())
         collector.report.add_command_collected(cls.__name__, ["netstat", "-a", "-n", "-o"])
 
@@ -442,7 +446,11 @@ class WinArpCache(Module):
 
         output = format_net_neighbors_list(neighbors)
 
-        output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE) if collector.base else collector.COMMAND_OUTPUT_BASE
+        output_base = (
+            fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE)
+            if collector.base
+            else collector.COMMAND_OUTPUT_BASE
+        )
         full_output_path = fsutil.join(output_base, "arp-cache")
 
         collector.output.write_bytes(full_output_path, output.encode())

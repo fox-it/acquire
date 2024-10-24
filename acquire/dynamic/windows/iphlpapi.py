@@ -388,7 +388,7 @@ class MIB_IPNET_ROW2(ctypes.Structure):
     # To correct for this, we add an extra four bytes of padding after the
     # `InterfaceIndex` member.
     if BITNESS == 32:
-        _fields_.insert(2, ('Padding', DWORD))
+        _fields_.insert(2, ("Padding", DWORD))
 
 
 class MIB_IPNET_TABLE2(ctypes.Structure):

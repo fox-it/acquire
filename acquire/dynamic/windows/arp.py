@@ -69,22 +69,30 @@ class NetAdapter:
             type=type,
             status=status,
         )
-    
+
     @staticmethod
     def header_fields() -> list[str]:
-        return ["Index", "Adapter Name", "Description", "Friendly Name",
-                "MAC Address", "MTU", "Type", "Operation Status"]
-    
+        return [
+            "Index",
+            "Adapter Name",
+            "Description",
+            "Friendly Name",
+            "MAC Address",
+            "MTU",
+            "Type",
+            "Operation Status",
+        ]
+
     def as_dict(self, indent=0) -> dict:
         return {
-            'index': self.index,
-            'name': self.name,
-            'description': self.description,
-            'friendly_name': self.friendly_name,
-            'mac': self.physical_address,
-            'mtu': self.mtu,
-            'type': self.type.name,
-            'status': self.operation_status.name
+            "index": self.index,
+            "name": self.name,
+            "description": self.description,
+            "friendly_name": self.friendly_name,
+            "mac": self.physical_address,
+            "mtu": self.mtu,
+            "type": self.type.name,
+            "status": self.operation_status.name,
         }
 
     def __str__(self) -> str:
@@ -97,26 +105,26 @@ class NetAdapter:
 
 class NetNeighbor:
     def __init__(
-            self,
-            family: ADDRESS_FAMILY,
-            address: str,
-            mac: str | None,
-            state: NL_NEIGHBOR_STATE,
-            adapter: NetAdapter | None
-        ):
-            self.family: ADDRESS_FAMILY = family
-            self.address: str = address
-            self.mac: str | None = mac
-            self.state: NL_NEIGHBOR_STATE = state
-            self.adapter: NetAdapter | None = adapter
+        self,
+        family: ADDRESS_FAMILY,
+        address: str,
+        mac: str | None,
+        state: NL_NEIGHBOR_STATE,
+        adapter: NetAdapter | None,
+    ):
+        self.family: ADDRESS_FAMILY = family
+        self.address: str = address
+        self.mac: str | None = mac
+        self.state: NL_NEIGHBOR_STATE = state
+        self.adapter: NetAdapter | None = adapter
 
     def as_dict(self) -> dict:
         return {
-            'family': self.family.name,
-            'address': self.address,
-            'mac': self.mac if self.mac else '',
-            'state': self.state.name,
-            'adapter': self.adapter.as_dict()
+            "family": self.family.name,
+            "address": self.address,
+            "mac": self.mac if self.mac else "",
+            "state": self.state.name,
+            "adapter": self.adapter.as_dict(),
         }
 
     def __str__(self) -> str:
@@ -186,8 +194,13 @@ def get_windows_net_neighbors(adapters: list[NetAdapter]) -> list[NetNeighbor]:
 
         mac = format_physical_address(row.PhysicalAddress, row.PhysicalAddressLength)
         adapter = get_adapter_by_index(adapters, row.InterfaceIndex)
-        neighbor = NetNeighbor(family=ADDRESS_FAMILY(row.Address.si_family), address=address, mac=mac,
-                               state=NL_NEIGHBOR_STATE(row.State), adapter=adapter)
+        neighbor = NetNeighbor(
+            family=ADDRESS_FAMILY(row.Address.si_family),
+            address=address,
+            mac=mac,
+            state=NL_NEIGHBOR_STATE(row.State),
+            adapter=adapter,
+        )
         neighbors.append(neighbor)
 
     FreeMibTable(table_pointer)
@@ -197,13 +210,14 @@ def get_windows_net_neighbors(adapters: list[NetAdapter]) -> list[NetNeighbor]:
 
 def format_net_neighbors_csv(net_neighbors: list[NetNeighbor]) -> str:
     def formatter(neighbor: NetNeighbor) -> str:
-        return f",".join([str(neighbor.adapter.index), neighbor.address, neighbor.mac if neighbor.mac else "",
-                          neighbor.state.name])
-    
+        return f",".join(
+            [str(neighbor.adapter.index), neighbor.address, neighbor.mac if neighbor.mac else "", neighbor.state.name]
+        )
+
     header = ",".join(["interface_index", "ip_address", "mac", "state"])
     rows = "\n".join(formatter(neighbor) for neighbor in net_neighbors)
 
-    return f"{header}\n{rows}" 
+    return f"{header}\n{rows}"
 
 
 def format_net_neighbors_json(net_neighbors: list[NetNeighbor], indent=0) -> str:
@@ -214,9 +228,9 @@ def format_net_neighbors_list(net_neighbors: list[NetNeighbor]) -> str:
     def formatter(neighbor: NetNeighbor) -> str:
         mac = neighbor.mac if neighbor.mac else ""
         return f"{neighbor.adapter.index:<10}{neighbor.address:<60}{mac:<20}{neighbor.state.name:<20}"
-    
+
     header = f"{'ifIndex':<10}{'IP Address':<60}{'MAC Address':<20}{'State':<20}"
-    header += "\n" + ('=' * len(header))
+    header += "\n" + ("=" * len(header))
     rows = "\n".join(formatter(neighbor) for neighbor in net_neighbors)
 
     return f"{header}\n{rows}"

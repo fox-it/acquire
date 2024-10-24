@@ -65,13 +65,13 @@ class NetConnection:
 
     def as_dict(self) -> dict:
         return {
-            'protocol': self.protocol.name,
-            'local_address': self.local_address,
-            'local_port': self.local_port,
-            'remote_address': self.remote_address,
-            'remote_port': self.remote_port,
-            'state': self.state.name if self.state else None,
-            'pid': self.pid
+            "protocol": self.protocol.name,
+            "local_address": self.local_address,
+            "local_port": self.local_port,
+            "remote_address": self.remote_address,
+            "remote_port": self.remote_port,
+            "state": self.state.name if self.state else None,
+            "pid": self.pid,
         }
 
     def __str__(self) -> str:
@@ -195,19 +195,20 @@ def format_net_connections_csv(net_connections: list[NetConnection]) -> str:
         rhost = connection.remote_address if connection.remote_address else ""
         rport = str(connection.remote_port) if connection.remote_port else ""
         state = connection.state.name if connection.state else ""
-        return ",".join([connection.protocol.name, connection.local_address, 
-                         str(connection.local_port), rhost, rport, state])    
-    
-    header = ",".join(["protocol", "local address", "local port", "remote address", 
-                       "remote port", "state"])
+        return ",".join(
+            [connection.protocol.name, connection.local_address, str(connection.local_port), rhost, rport, state]
+        )
+
+    header = ",".join(["protocol", "local address", "local port", "remote address", "remote port", "state"])
     rows = "\n".join(formatter(connection) for connection in net_connections)
 
-    return f"{header}\n{rows}" 
+    return f"{header}\n{rows}"
 
 
 def format_net_connections_json(net_connections: list[NetConnection], indent=0) -> str:
-    return dumps(net_connections, default=lambda connection: connection.as_dict(),
-                 indent=indent if indent > 0 else None)
+    return dumps(
+        net_connections, default=lambda connection: connection.as_dict(), indent=indent if indent > 0 else None
+    )
 
 
 def format_net_connections_list(net_connections: list[NetConnection]) -> str:
@@ -222,13 +223,10 @@ def format_net_connections_list(net_connections: list[NetConnection]) -> str:
         else:
             rconn = "*:*"
 
-        return (
-            f"{connection.protocol.name:<10}{lconn:<40}{rconn:<40}"
-            f"{state:<20}{str(connection.pid):<10}"
-        )
-    
+        return f"{connection.protocol.name:<10}{lconn:<40}{rconn:<40}" f"{state:<20}{str(connection.pid):<10}"
+
     header = f"{'Proto':<10}{'Local Address':<40}{'Foreign Address':<40}{'State':<20}{'PID':<10}"
-    header += "\n" + ('=' * len(header))
+    header += "\n" + ("=" * len(header))
     rows = "\n".join(formatter(connection) for connection in net_connections)
 
     return f"{header}\n{rows}"
