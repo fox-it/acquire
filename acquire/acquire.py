@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import enum
 import functools
 import io
