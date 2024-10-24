@@ -33,3 +33,9 @@ def mock_target(mock_fs: VirtualFilesystem) -> Target:
     target.filesystems.add(mock_fs)
     target.os = "mock"
     return target
+
+
+@pytest.fixture
+def public_key() -> bytes:
+    with open("tests/data/public_key.pem", "r") as f:
+        return f.read()
