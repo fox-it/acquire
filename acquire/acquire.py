@@ -23,6 +23,7 @@ from dissect.target import Target
 from dissect.target.filesystem import Filesystem
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
+from dissect.target.loaders.local import _windows_get_devices
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils import args_to_uri
@@ -382,6 +383,27 @@ class Netstat(Module):
         ("command", (["powershell.exe", "netstat", "-a", "-n", "-o"], "netstat")),
     ]
     EXEC_ORDER = ExecutionOrder.BOTTOM
+
+
+@register_module("--devices")
+@local_module
+class Devices(Module):
+    DESC = "devices output"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        try:
+            lines = _windows_get_devices()
+            collector.output.write_bytes("QueryDosDeviceA.txt", "\n".join(lines).encode("utf-8"))
+            collector.report.add_command_collected(cls.__name__, ["QueryDosDeviceA"])
+        except Exception:
+            collector.report.add_command_failed(cls.__name__, ["QueryDosDeviceA"])
+            log.error(
+                "- Failed to collect output from command `QueryDosDeviceA`",
+                exc_info=True,
+            )
+        return
 
 
 @register_module("--win-processes")
@@ -2019,6 +2041,7 @@ PROFILES = {
 
 class VolatileProfile:
     DEFAULT = [
+        Devices,
         Netstat,
         WinProcesses,
         WinProcEnv,
