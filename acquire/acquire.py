@@ -2032,6 +2032,7 @@ class OSXProfile:
         *DEFAULT,
         History,
         SSH,
+        Docker,
     ]
 
 
