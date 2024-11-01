@@ -1372,6 +1372,15 @@ class SSH(Module):
             super().run(target, cli_args, collector)
 
 
+@register_module("--docker")
+class Docker(Module):
+    SPEC = [
+        ("glob", "/var/lib/docker/containers/*/*-json.log"),
+        ("glob", "/var/lib/docker/containers/*/*.json"),
+        ("glob", "/var/lib/docker/containers/*/hostname"),
+    ]
+
+
 @register_module("--var")
 class Var(Module):
     SPEC = [
@@ -1966,6 +1975,7 @@ class LinuxProfile:
     DEFAULT = MINIMAL
     FULL = [
         *DEFAULT,
+        Docker,
         History,
         WebHosting,
     ]
