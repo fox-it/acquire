@@ -1375,9 +1375,19 @@ class SSH(Module):
 @register_module("--docker")
 class Docker(Module):
     SPEC = [
+        # Container log files
         ("glob", "/var/lib/docker/containers/*/*-json.log"),
         ("glob", "/var/lib/docker/containers/*/*.json"),
         ("glob", "/var/lib/docker/containers/*/hostname"),
+        # Linux daemon configs
+        ("file", "/etc/docker/daemon.json"),
+        ("file", "/var/snap/docker/current/config/daemon.json"),
+        # Windows daemon configs
+        ("file", "sysvol/ProgramData/docker/config/daemon.json"),
+        # User-specific config files (MacOS/Linux/Windows)
+        ("file", ".docker/daemon.json", from_user_home),
+        # Repositories
+        ("file", "/var/lib/docker/image/overlay2/repositories.json"),
     ]
 
 
