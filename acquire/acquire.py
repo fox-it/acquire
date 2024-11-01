@@ -1374,6 +1374,7 @@ class SSH(Module):
 
 @register_module("--docker")
 class Docker(Module):
+    DESC = "various Docker logs and configuration files"
     SPEC = [
         # Container log files
         ("glob", "/var/lib/docker/containers/*/*-json.log"),
