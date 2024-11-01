@@ -1972,6 +1972,7 @@ class WindowsProfile:
         SSH,
         IIS,
         TextEditor,
+        Docker,
     ]
 
 
