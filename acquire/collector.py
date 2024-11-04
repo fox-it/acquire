@@ -518,6 +518,9 @@ class Collector:
                     self.report.add_symlink_collected(module_name, branch_path)
                     log.info("- Collecting symlink branch suceeded %s", branch_path)
 
+        except (FileNotFoundError, NotADirectoryError, NotASymlinkError, SymlinkRecursionError, ValueError):
+            self.report.add_path_missing(module_name, error_path)
+            log.error("- Path %s is not found (while collecting %s)", error_path, path)
         except OSError as error:
             if error.errno == errno.ENOENT:
                 self.report.add_path_missing(module_name, error_path)
@@ -528,9 +531,6 @@ class Collector:
             else:
                 self.report.add_path_failed(module_name, error_path)
                 log.error("- OSError while collecting path %s (while collecting %s)", error_path, path)
-        except (FileNotFoundError, NotADirectoryError, NotASymlinkError, SymlinkRecursionError, ValueError):
-            self.report.add_path_missing(module_name, error_path)
-            log.error("- Path %s is not found (while collecting %s)", error_path, path)
         except Exception:
             self.report.add_path_failed(module_name, error_path)
             log.error("- Failed to collect path %s (while collecting %s)", error_path, path, exc_info=True)
