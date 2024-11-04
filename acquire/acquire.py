@@ -1696,17 +1696,20 @@ def print_acquire_warning(target: Target) -> None:
         log.warning("========================================== WARNING ==========================================")
 
 
-def _add_modules_for_profile(choice: str, operating_system: str, profile: dict, msg: str) -> Optional[dict]:
-    modules_selected = dict()
+def _get_modules_for_profile(
+    profile_name: str,
+    operating_system: str,
+    profiles: dict[str, dict[str, list[type[Module]]]],
+    err_msg: str,
+) -> dict[str, type[Module]]:
+    modules_selected = {}
 
-    if choice and choice != "none":
-        profile_dict = profile[choice]
-        if operating_system not in profile_dict:
-            log.error(msg, operating_system, choice)
-            return None
-
-        for mod in profile_dict[operating_system]:
-            modules_selected[mod.__modname__] = mod
+    if profile_name != "none":
+        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
+            for mod in profile:
+                modules_selected[mod.__modname__] = mod
+        else:
+            log.error(err_msg, operating_system, profile_name)
 
     return modules_selected
 
@@ -1775,24 +1778,23 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
         profile = "default"
         log.info("")
 
-    profile_modules = _add_modules_for_profile(
-        profile, target.os, PROFILES, "No collection set for OS %s with profile %s"
+    normal_modules = _get_modules_for_profile(
+        profile, target.os, PROFILES, "No collection set for OS '%s' with profile '%s'"
     )
+    modules_selected.update(normal_modules)
 
     if not (volatile_profile := args.volatile_profile):
         volatile_profile = "none"
 
-    volatile_modules = _add_modules_for_profile(
-        volatile_profile, target.os, VOLATILE, "No collection set for OS %s with volatile profile %s"
+    volatile_modules = _get_modules_for_profile(
+        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
-
-    if (profile_modules or volatile_modules) is None:
-        return files
-
-    modules_selected.update(profile_modules)
     modules_selected.update(volatile_modules)
 
-    log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
+    if not modules_selected:
+        log.warn("NO modules selected!")
+    else:
+        log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
     local_only_modules = {name: module for name, module in modules_selected.items() if hasattr(module, "__local__")}
     if target.path.name != "local" and local_only_modules:
