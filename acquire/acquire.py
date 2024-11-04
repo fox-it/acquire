@@ -1372,6 +1372,26 @@ class SSH(Module):
             super().run(target, cli_args, collector)
 
 
+@register_module("--docker")
+class Docker(Module):
+    DESC = "various Docker logs and configuration files"
+    SPEC = [
+        # Container log files
+        ("glob", "/var/lib/docker/containers/*/*-json.log"),
+        ("glob", "/var/lib/docker/containers/*/*.json"),
+        ("glob", "/var/lib/docker/containers/*/hostname"),
+        # Linux daemon configs
+        ("file", "/etc/docker/daemon.json"),
+        ("file", "/var/snap/docker/current/config/daemon.json"),
+        # Windows daemon configs
+        ("file", "sysvol/ProgramData/docker/config/daemon.json"),
+        # User-specific config files (MacOS/Linux/Windows)
+        ("file", ".docker/daemon.json", from_user_home),
+        # Repositories
+        ("file", "/var/lib/docker/image/overlay2/repositories.json"),
+    ]
+
+
 @register_module("--var")
 class Var(Module):
     SPEC = [
@@ -1952,6 +1972,7 @@ class WindowsProfile:
         SSH,
         IIS,
         TextEditor,
+        Docker,
     ]
 
 
@@ -1966,6 +1987,7 @@ class LinuxProfile:
     DEFAULT = MINIMAL
     FULL = [
         *DEFAULT,
+        Docker,
         History,
         WebHosting,
     ]
@@ -2010,6 +2032,7 @@ class OSXProfile:
         *DEFAULT,
         History,
         SSH,
+        Docker,
     ]
 
 
