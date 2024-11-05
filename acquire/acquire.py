@@ -945,7 +945,10 @@ class Misc(Module):
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
         ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
+        # Windows Search DB
         ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
+        # Windows Search DB - Windows Search Database Roaming
+        ("glob", "AppData/Roaming/Microsoft/Search/Data/Applications/S-1-*/*", from_user_home),
         ("dir", "sysvol/Windows/SoftwareDistribution/DataStore"),
     ]
 
