@@ -1307,6 +1307,8 @@ class Boot(Module):
         ("glob", "/boot/grub*"),
         ("glob", "/boot/init*"),
         ("glob", "/boot/system*"),
+        # Proxmox specific file
+        ("glob", "/boot/pve*"),
     ]
 
 
@@ -1410,6 +1412,10 @@ class Var(Module):
         ("dir", "/var/audit"),
         ("dir", "/var/cron"),
         ("dir", "/var/run"),
+        # Proxmox specific files
+        ("dir", "/var/lib/pve-cluster"),
+        ("dir", "/var/lib/pve-firewall"),
+        ("dir", "/var/lib/pve-manager"),
         # some OS-X specific files
         ("dir", "/private/var/at"),
         ("dir", "/private/var/db/diagnostics"),
@@ -2041,6 +2047,22 @@ class OSXProfile:
     ]
 
 
+class ProxmoxProfile:
+    MINIMAL = [
+        Etc,
+        Boot,
+        Home,
+        SSH,
+        Var,
+    ]
+    DEFAULT = MINIMAL
+    FULL = [
+        *DEFAULT,
+        History,
+        WebHosting,
+    ]
+
+
 PROFILES = {
     "full": {
         "windows": WindowsProfile.FULL,
@@ -2048,6 +2070,7 @@ PROFILES = {
         "bsd": BsdProfile.FULL,
         "esxi": ESXiProfile.FULL,
         "osx": OSXProfile.FULL,
+        "proxmox": ProxmoxProfile.FULL,
     },
     "default": {
         "windows": WindowsProfile.DEFAULT,
@@ -2055,6 +2078,7 @@ PROFILES = {
         "bsd": BsdProfile.DEFAULT,
         "esxi": ESXiProfile.DEFAULT,
         "osx": OSXProfile.DEFAULT,
+        "proxmox": ProxmoxProfile.DEFAULT,
     },
     "minimal": {
         "windows": WindowsProfile.MINIMAL,
@@ -2062,6 +2086,7 @@ PROFILES = {
         "bsd": BsdProfile.MINIMAL,
         "esxi": ESXiProfile.MINIMAL,
         "osx": OSXProfile.MINIMAL,
+        "proxmox": ProxmoxProfile.MINIMAL,
     },
     "none": None,
 }
@@ -2090,6 +2115,7 @@ VOLATILE = {
         "bsd": [],
         "esxi": [],
         "osx": [],
+        "proxmox": [],
     },
     "extensive": {
         "windows": VolatileProfile.DEFAULT,
@@ -2097,6 +2123,7 @@ VOLATILE = {
         "bsd": VolatileProfile.EXTENSIVE,
         "esxi": VolatileProfile.EXTENSIVE,
         "osx": [],
+        "proxmox": [],
     },
     "none": None,
 }
