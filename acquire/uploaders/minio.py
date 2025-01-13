@@ -20,6 +20,7 @@ class MinIO(UploaderPlugin):
         self.access_id = upload.get("access_id")
         self.access_key = upload.get("access_key")
         self.bucket_name = upload.get("bucket")
+        self.folder = upload.get("folder", "")
 
         if not all((self.endpoint, self.access_id, self.access_key, self.bucket_name)):
             raise ValueError("Invalid cloud upload configuration")
@@ -45,7 +46,13 @@ class MinIO(UploaderPlugin):
         return Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
 
     def upload_file(self, client: Any, path: Path) -> None:
-        client.fput_object(self.bucket_name, os.path.basename(path), path)
+        
+        if self.folder:
+            object_path = f"{self.folder.rstrip('/')}/{os.path.basename(path)}"
+        else:
+            object_path = os.path.basename(path)
+
+        client.fput_object(self.bucket_name, object_path, path)
 
     def finish(self, client: Any) -> None:
         pass
