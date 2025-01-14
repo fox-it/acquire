@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 from unittest.mock import Mock, patch
 
 import pytest
@@ -80,19 +81,15 @@ def test_upload_file_multiple_failures(minio_instance: MinIO):
         upload_files_using_uploader(minio_instance, [Path("hello")])
         mocked_logger.error.assert_called_with("Upload %s FAILED after too many attempts. Stopping.", Path("hello"))
 
-def test_minio_folder_initialization(minio_plugin):
-    arguments = {
-        "endpoint": "test",
-        "access_id": "test",
-        "access_key": "test",
-        "bucket": "test",
-        "folder": "Uploads/"
-    }
+
+def test_minio_folder_initialization(minio_plugin: Callable) -> None:
+    arguments = {"endpoint": "test", "access_id": "test", "access_key": "test", "bucket": "test", "folder": "Uploads/"}
     minio = minio_plugin(upload=arguments)
     assert minio.folder == "Uploads"
 
-    minio.folder = "Uploads/test_folder"
-    assert minio.folder == "Uploads/test_folder"
+    arguments["folder"] = "Uploads/test_folder"
+    minio_no_backslash = minio_plugin(upload=arguments)
+    assert minio_no_backslash.folder == "Uploads/test_folder"
 
     arguments.pop("folder")
     minio_no_folder = minio_plugin(upload=arguments)
@@ -102,23 +99,16 @@ def test_minio_folder_initialization(minio_plugin):
 def test_upload_file_with_folder(minio_instance: MinIO):
     mock_client = Mock()
     test_path = Path("example.txt")
-    minio_instance.folder = 'test_folder'
+    minio_instance.folder = "test_folder"
     minio_instance.upload_file(mock_client, test_path)
 
-    mock_client.fput_object.assert_called_once_with(
-        "test", "test_folder/example.txt", test_path
-    )
+    mock_client.fput_object.assert_called_once_with("test", "test_folder/example.txt", test_path)
 
 
 def test_upload_file_without_folder(minio_instance: MinIO):
     mock_client = Mock()
-    minio_instance.folder = ""
-    mock_client = Mock()
     test_path = Path("example.txt")
+    minio_instance.folder = ""
     minio_instance.upload_file(mock_client, test_path)
 
-    mock_client.fput_object.assert_called_once_with(
-        "test", "example.txt", test_path
-    )
-
-    
+    mock_client.fput_object.assert_called_once_with("test", "example.txt", test_path)

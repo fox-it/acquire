@@ -46,7 +46,6 @@ class MinIO(UploaderPlugin):
         return Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
 
     def upload_file(self, client: Any, path: Path) -> None:
-        
         object_path = path.name
         if self.folder:
             object_path = f"{self.folder}/{object_path}"
