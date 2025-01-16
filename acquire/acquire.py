@@ -82,11 +82,7 @@ ACQUIRE_BANNER = r"""
  \__,_|\___\__, |\__,_|_|_|  \___|
   by Fox-IT   |_|             v{}
   part of NCC Group
-""".format(
-    VERSION
-)[
-    1:
-]
+""".format(VERSION)[1:]
 
 MODULES = {}
 MODULE_LOOKUP = {}
@@ -768,6 +764,35 @@ class Exchange(Module):
                 except Exception:
                     pass
         return spec
+
+
+@register_module("--mssql")
+class MSSQL(Module):
+    DESC = "MSSql error logs"
+
+    SPEC = [("glob", "/var/opt/mssql/log/errorlog*")]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        log_paths = set()
+
+        if not target.has_function("registry"):
+            return
+
+        for reg_key in target.registry.glob_ext("HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\*"):
+            try:
+                log_paths.add(reg_key.value("ErrorDumpDir").value)
+            except Exception:
+                pass
+
+            try:
+                subkey = reg_key.subkey("CPE")
+                log_paths.add(subkey.value("ErrorDumpDir").value)
+            except Exception:
+                pass
+
+        for log_path in log_paths:
+            yield ("glob", f"{log_path}/ERRORLOG*")
 
 
 @register_module("--iis")
