@@ -82,7 +82,11 @@ ACQUIRE_BANNER = r"""
  \__,_|\___\__, |\__,_|_|_|  \___|
   by Fox-IT   |_|             v{}
   part of NCC Group
-""".format(VERSION)[1:]
+""".format(
+    VERSION
+)[
+    1:
+]
 
 MODULES = {}
 MODULE_LOOKUP = {}
@@ -2009,6 +2013,7 @@ class WindowsProfile:
         IIS,
         TextEditor,
         Docker,
+        MSSQL,
     ]
 
 
@@ -2026,6 +2031,7 @@ class LinuxProfile:
         Docker,
         History,
         WebHosting,
+        MSSQL,
     ]
 
 
