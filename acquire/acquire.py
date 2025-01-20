@@ -772,12 +772,12 @@ class Exchange(Module):
 
 @register_module("--mssql")
 class MSSQL(Module):
-    DESC = "MSSql error logs"
+    DESC = "MSSQL error logs"
 
     SPEC = [("glob", "/var/opt/mssql/log/errorlog*")]
 
     @classmethod
-    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple[str, str]]:
         log_paths = set()
 
         if not target.has_function("registry"):
