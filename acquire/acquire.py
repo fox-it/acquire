@@ -770,6 +770,35 @@ class Exchange(Module):
         return spec
 
 
+@register_module("--mssql")
+class MSSQL(Module):
+    DESC = "MSSQL error logs"
+
+    SPEC = [("glob", "/var/opt/mssql/log/errorlog*")]
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple[str, str]]:
+        log_paths = set()
+
+        if not target.has_function("registry"):
+            return
+
+        for reg_key in target.registry.glob_ext("HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\*"):
+            try:
+                log_paths.add(reg_key.value("ErrorDumpDir").value)
+            except Exception:
+                pass
+
+            try:
+                subkey = reg_key.subkey("CPE")
+                log_paths.add(subkey.value("ErrorDumpDir").value)
+            except Exception:
+                pass
+
+        for log_path in log_paths:
+            yield ("glob", f"{log_path}/ERRORLOG*")
+
+
 @register_module("--iis")
 class IIS(Module):
     DESC = "IIS logs"
@@ -1984,6 +2013,7 @@ class WindowsProfile:
         IIS,
         TextEditor,
         Docker,
+        MSSQL,
     ]
 
 
@@ -2001,6 +2031,7 @@ class LinuxProfile:
         Docker,
         History,
         WebHosting,
+        MSSQL,
     ]
 
 
