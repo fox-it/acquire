@@ -374,7 +374,7 @@ def setup_logging(logger: logging.Logger, verbosity: int) -> None:
     logger.setLevel(level)
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="+", type=Path, help="paths to encrypted files")
     parser.add_argument("-o", "--output", type=Path, help="optional path to output file")
@@ -496,7 +496,8 @@ def main() -> None:
             # Else, if all were successful but there were still tasks to handle, return 3
             elif tasks:
                 exit_code = 3
-    exit(exit_code)
+
+    return exit_code
 
 
 def show_duplicates(output_directory: Path, files: list[Path]) -> None:
