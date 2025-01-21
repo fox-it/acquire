@@ -1138,7 +1138,7 @@ class EDR(Module):
 
 @register_module("--history")
 class History(Module):
-    DESC = "browser history from IE, Edge, Firefox, and Chrome"
+    DESC = "browser history from IE, Edge, Firefox, Chrome, Brave and Opera (Stable and GX)"
     DIR_COMBINATIONS = namedtuple("DirCombinations", ["root_dirs", "dir_extensions", "history_files"])
     COMMON_DIR_COMBINATIONS = [
         DIR_COMBINATIONS(
@@ -1147,7 +1147,7 @@ class History(Module):
                 ".config/chromium",
                 # Chrome - RHEL/Ubuntu - DNF
                 ".config/google-chrome",
-                # Edge - RHEL/Ubuntu - DNF/apt
+                # Edge - RHEL/Ubuntu - DNF/apt 
                 ".config/microsoft-edge",
                 # Chrome - RHEL/Ubuntu - Flatpak
                 ".var/app/com.google.Chrome/config/google-chrome",
@@ -1174,6 +1174,16 @@ class History(Module):
                 ".config/BraveSoftware",
                 # Brave - MacOS
                 "Library/Application Support/BraveSoftware",
+                # Opera - Windows (Stable)
+                "AppData/Roaming/Opera Software/Opera Stable/Default",
+                "AppData/Local/Opera Software/Opera Stable/Default",
+                # Opera - Windows (GX)
+                "AppData/Roaming/Opera Software/Opera GX Stable",
+                "AppData/Local/Opera Software/Opera GX Stable",
+                # Opera - MacOS (Stable)
+                "Library/Application Support/com.operasoftware.Opera/Default",
+                # Opera - MacOS (GX)
+                "Library/Application Support/com.operasoftware.OperaGX",
             ],
             ["*", "Snapshots/*/*"],
             [
