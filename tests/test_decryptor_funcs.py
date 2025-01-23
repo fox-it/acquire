@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 from multiprocessing import Queue
-from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import pytest
 
 from acquire.tools.decrypter import check_existing, find_enc_files
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_find_non_encrypted_files(tmp_path: Path):
+
+def test_find_non_encrypted_files(tmp_path: Path) -> None:
     input_files = [tmp_path / "test", tmp_path / "help"]
 
     for file in input_files:
@@ -16,7 +20,7 @@ def test_find_non_encrypted_files(tmp_path: Path):
     assert find_enc_files(input_files) == []
 
 
-def test_find_inside_dir(tmp_path: Path):
+def test_find_inside_dir(tmp_path: Path) -> None:
     output_path = tmp_path.joinpath("output/for/this/test")
     output_path.mkdir(parents=True)
 
@@ -33,7 +37,7 @@ def test_find_inside_dir(tmp_path: Path):
 
 
 @pytest.mark.parametrize(
-    "existing,out_path,expected_result,expected_msg",
+    ("existing", "out_path", "expected_result", "expected_msg"),
     [
         pytest.param(None, None, False, None, id="out_path_not_exists"),
         pytest.param("test.tar.gz", None, True, "Output file", id="out_path_exists"),
@@ -44,8 +48,8 @@ def test_find_inside_dir(tmp_path: Path):
     ],
 )
 def test_check_existing(
-    tmp_path: Path, out_path: str, existing: Optional[str], expected_result: bool, expected_msg: Optional[str]
-):
+    tmp_path: Path, out_path: str, existing: str | None, expected_result: bool, expected_msg: str | None
+) -> None:
     queue = Queue()
     out_path = tmp_path / (out_path or "test.tar.gz")
     in_path = tmp_path / "test.tar.gz.enc"

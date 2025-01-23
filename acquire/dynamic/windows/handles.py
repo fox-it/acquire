@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import ctypes
 import gzip
@@ -5,7 +7,7 @@ import io
 import threading
 from logging import Filter, LogRecord, getLogger
 from queue import Empty, Queue
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING
 
 from acquire.dynamic.windows.exceptions import OpenProcessError
 from acquire.dynamic.windows.ntdll import (
@@ -34,6 +36,9 @@ from acquire.dynamic.windows.types import (
     Handle,
     ProcessAccess,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 log = getLogger(__name__)
 
@@ -65,7 +70,7 @@ class DuplicateFilter(Filter):
         return show
 
 
-def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
+def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> str | None:
     """Return type of handle.
 
     Args:
@@ -88,7 +93,7 @@ def get_handle_type_info(handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[
 
         if result == NtStatusCode.STATUS_SUCCESS:
             return public_object_type_information.name
-        elif result == NtStatusCode.STATUS_INFO_LENGTH_MISMATCH:
+        if result == NtStatusCode.STATUS_INFO_LENGTH_MISMATCH:
             size = DWORD(size.value * 4)
             ctypes.resize(public_object_type_information, size.value)
         elif result == NtStatusCode.STATUS_INVALID_HANDLE:
@@ -131,7 +136,7 @@ def open_process(pid: int) -> int:
     return h_process
 
 
-def _get_file_name_thread(h_file: HANDLE, queue: Queue):
+def _get_file_name_thread(h_file: HANDLE, queue: Queue) -> None:
     iob = IO_STATUS_BLOCK()
     file_name_information = FileNameInformationFactory()
     file_name = None
@@ -157,7 +162,7 @@ def _get_file_name_thread(h_file: HANDLE, queue: Queue):
     queue.put(file_name)
 
 
-def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Optional[str]:
+def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> str | None:
     """Return handle name."""
 
     remote = pid != GetCurrentProcessId()
@@ -166,7 +171,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
         try:
             h_remote = open_process(pid)
         except OpenProcessError as e:
-            log.error(e)
+            log.error(e)  # noqa: TRY400
             return None
         try:
             handle = duplicate_handle(h_remote, handle)
@@ -191,7 +196,7 @@ def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> Opti
     return result
 
 
-def get_handles() -> Iterable[Handle]:
+def get_handles() -> Iterator[Handle]:
     """Returns all handles of a target."""
     system_handle_information = SYSTEM_HANDLE_INFORMATION_EX()
     size = DWORD(ctypes.sizeof(system_handle_information))
@@ -228,7 +233,7 @@ def get_handles() -> Iterable[Handle]:
 
             yield Handle(handle, handle_type, handle_name)
         except Exception as handle_error:
-            log.error(f"An error occurred while parsing handle, skipping handle. Error: {handle_error}")
+            log.error("An error occurred while parsing handle, skipping handle. Error: %s", handle_error)  # noqa: TRY400
 
     log.removeFilter(duplicate_filter)
 
@@ -252,12 +257,12 @@ def duplicate_handle(h_process: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) 
         DuplicateHandleFlags.DUPLICATE_SAME_ACCESS,
     )
     if result == 0:
-        raise RuntimeError()
+        raise RuntimeError
 
     return h_dup
 
 
-def serialize_handles_into_csv(rows: Iterable[Handle], compress: bool = True) -> bytes:
+def serialize_handles_into_csv(rows: Iterator[Handle], compress: bool = True) -> bytes:
     """Serialize handle data into a csv.
 
     Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
@@ -266,10 +271,7 @@ def serialize_handles_into_csv(rows: Iterable[Handle], compress: bool = True) ->
 
     raw_buffer = io.BytesIO()
 
-    if compress:
-        buffer = gzip.GzipFile(fileobj=raw_buffer, mode="wb")
-    else:
-        buffer = raw_buffer
+    buffer = gzip.GzipFile(fileobj=raw_buffer, mode="wb") if compress else raw_buffer
 
     with io.TextIOWrapper(buffer, encoding="utf-8") as wrapper:
         csv_writer = None

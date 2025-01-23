@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from time import sleep, time
 
 import pytest
@@ -5,8 +7,8 @@ import pytest
 from acquire.volatilestream import timeout
 
 
-def test_timeout():
-    def snooze():
+def test_timeout() -> None:
+    def snooze() -> None:
         sleep(10)
 
     function = timeout(snooze, timelimit=5)

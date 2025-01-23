@@ -6,6 +6,7 @@ dist/
 *.pyc
 __pycache__/
 .pytest_cache/
+build/
 
 acquire/version.py
 tests/docs/api

@@ -9,30 +9,24 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import groupby
-from typing import (
-    TYPE_CHECKING,
-    BinaryIO,
-    Callable,
-    Iterable,
-    Optional,
-    Sequence,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, BinaryIO, Callable
 
-from dissect.target import Target
 from dissect.target.exceptions import (
     FileNotFoundError,
     NotADirectoryError,
     NotASymlinkError,
     SymlinkRecursionError,
 )
-from dissect.target.filesystem import Filesystem
 from dissect.target.helpers import fsutil
 
 from acquire.utils import StrEnum, get_formatted_exception, normalize_path
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
+    from dissect.target import Target
+    from dissect.target.filesystem import Filesystem
+
     from acquire.outputs.base import Output
 
 log = logging.getLogger(__name__)
@@ -62,7 +56,7 @@ class Record:
     outcome: Outcome
     artifact_type: ArtifactType
     artifact_value: str
-    details: Optional[str] = None
+    details: str | None = None
 
 
 @dataclass
@@ -72,7 +66,7 @@ class CollectionReport:
     registry: set[Record] = dataclasses.field(default_factory=set)
     seen_paths: set[str] = dataclasses.field(default_factory=set)
 
-    def _uniq_path(self, path: Union[str, fsutil.TargetPath]) -> str:
+    def _uniq_path(self, path: str | fsutil.TargetPath) -> str:
         path = normalize_path(self.target, path, resolve_parents=False, preserve_case=False)
         # Depending on the way they are constructed, windows paths may start with a root '/'
         # followed by a drive letter or start immediately with a drive letter (and no root. To make
@@ -87,8 +81,8 @@ class CollectionReport:
         module_name: str,
         outcome: Outcome,
         artifact_type: ArtifactType,
-        artifact_value: Union[str, fsutil.TargetPath],
-        details: Optional[str] = None,
+        artifact_value: str | fsutil.TargetPath,
+        details: str | None = None,
     ) -> None:
         if artifact_type in (ArtifactType.FILE, ArtifactType.DIR, ArtifactType.SYMLINK, ArtifactType.PATH):
             # Any path like artefacts are expected to be resolved to the level needed.
@@ -155,7 +149,7 @@ class CollectionReport:
         exc = get_formatted_exception()
         self._register(module, Outcome.FAILURE, ArtifactType.COMMAND, tuple(command_parts), exc)
 
-    def get_records_per_module_per_outcome(self, serialize_records=False) -> dict[str, dict[str, list[Record]]]:
+    def get_records_per_module_per_outcome(self, serialize_records: bool = False) -> dict[str, dict[str, list[Record]]]:
         grouped_records = defaultdict(lambda: defaultdict(list))
 
         # sort records by module name and outcome to prepare for grouping
@@ -164,7 +158,7 @@ class CollectionReport:
         for module_name, records_per_module in groupby(sorted_registry, lambda r: r.module_name):
             for outcome, records_per_module_outcome in groupby(records_per_module, lambda r: r.outcome):
                 if serialize_records:
-                    records = map(lambda r: dataclasses.asdict(r), records_per_module_outcome)
+                    records = (dataclasses.asdict(r) for r in records_per_module_outcome)
                 else:
                     records = records_per_module_outcome
                 grouped_records[module_name][outcome].extend(records)
@@ -187,7 +181,7 @@ class Collector:
     METADATA_BASE = "$metadata$"
     COMMAND_OUTPUT_BASE = f"{METADATA_BASE}/command-output"
 
-    def __init__(self, target: Target, output: Output, base: str = "fs", skip_list: Optional[set] = None):
+    def __init__(self, target: Target, output: Output, base: str = "fs", skip_list: set | None = None):
         self.target = target
         self.output = output
         self.base = base
@@ -199,14 +193,14 @@ class Collector:
 
         self.output.init(self.target)
 
-    def __enter__(self) -> Collector:
+    def __enter__(self) -> Collector:  # noqa: PYI034
         return self
 
     def __exit__(self, *args, **kwargs) -> None:
         self.close()
 
     @contextmanager
-    def bind_module(self, module: Type) -> Collector:
+    def bind_module(self, module: type) -> Collector:
         try:
             self.bind(module)
             yield self
@@ -214,7 +208,7 @@ class Collector:
             self.unbind()
 
     @contextmanager
-    def file_filter(self, filter: Optional[Callable[[fsutil.TargetPath], bool]]) -> Collector:
+    def file_filter(self, filter: Callable[[fsutil.TargetPath], bool] | None) -> Collector:
         try:
             if filter:
                 self.filter = filter
@@ -222,7 +216,7 @@ class Collector:
         finally:
             self.filter = lambda _: False
 
-    def bind(self, module: Type) -> None:
+    def bind(self, module: type) -> None:
         self.bound_module_name = module.__name__
 
     def unbind(self) -> None:
@@ -231,7 +225,7 @@ class Collector:
     def close(self) -> None:
         self.output.close()
 
-    def _output_path(self, path: str | fsutil.TargetPath, base: Optional[str] = None) -> str:
+    def _output_path(self, path: str | fsutil.TargetPath, base: str | None = None) -> str:
         if base is None:
             base = self.base
 
@@ -253,8 +247,8 @@ class Collector:
 
     def collect(
         self,
-        spec: Iterable,
-        module_name: Optional[str] = None,
+        spec: Iterator,
+        module_name: str | None = None,
         follow: bool = True,
         volatile: bool = False,
     ) -> None:
@@ -269,10 +263,7 @@ class Collector:
             else:
                 artifact_type, value = spec_item
 
-            if transform_func is not None:
-                values = transform_func(self.target, value)
-            else:
-                values = [value]
+            values = transform_func(self.target, value) if transform_func is not None else [value]
 
             for value in values:
                 if artifact_type in (ArtifactType.FILE, ArtifactType.DIR, ArtifactType.SYMLINK, ArtifactType.PATH):
@@ -285,7 +276,7 @@ class Collector:
                 else:
                     raise ValueError("Unknown artifact type %s in spec: %s", artifact_type, spec)
 
-    def _get_symlink_branches(self, path: fsutil.TargetPath) -> (fsutil.TargetPath, list[fsutil.TargetPath]):
+    def _get_symlink_branches(self, path: fsutil.TargetPath) -> tuple[fsutil.TargetPath, list[fsutil.TargetPath]]:
         """Given a ``path`` that contains symlinks in any of its intermediate parts, collect all these
         intermediate branches that end in a symlink.
 
@@ -301,10 +292,7 @@ class Collector:
         branches = []
 
         for path_part in path.parts[:-1]:
-            if cur_path is None:
-                cur_path = self.target.fs.path(path_part)
-            else:
-                cur_path = cur_path.joinpath(path_part)
+            cur_path = self.target.fs.path(path_part) if cur_path is None else cur_path.joinpath(path_part)
 
             if cur_path.is_symlink():
                 branches.append(cur_path)
@@ -322,11 +310,11 @@ class Collector:
     def collect_path(
         self,
         path: str | fsutil.TargetPath,
-        outpath: Optional[str] = None,
-        module_name: Optional[str] = None,
-        base: Optional[str] = None,
+        outpath: str | None = None,
+        module_name: str | None = None,
+        base: str | None = None,
         volatile: bool = False,
-        seen_paths: set[fsutil.TargetPath] = None,
+        seen_paths: set[fsutil.TargetPath] | None = None,
     ) -> None:
         """Collect a path from the target's root filesystem, including any intermediary symlinks.
 
@@ -520,20 +508,20 @@ class Collector:
 
         except (FileNotFoundError, NotADirectoryError, NotASymlinkError, SymlinkRecursionError, ValueError):
             self.report.add_path_missing(module_name, error_path)
-            log.error("- Path %s is not found (while collecting %s)", error_path, path)
+            log.error("- Path %s is not found (while collecting %s)", error_path, path)  # noqa: TRY400
         except OSError as error:
             if error.errno == errno.ENOENT:
                 self.report.add_path_missing(module_name, error_path)
-                log.error("- Path %s is not found (while collecting %s)", error_path, path)
+                log.error("- Path %s is not found (while collecting %s)", error_path, path)  # noqa: TRY400
             elif error.errno == errno.EACCES:
                 self.report.add_path_failed(module_name, error_path)
-                log.error("- Permission denied while accessing path %s (while collecting %s)", error_path, path)
+                log.error("- Permission denied while accessing path %s (while collecting %s)", error_path, path)  # noqa: TRY400
             else:
                 self.report.add_path_failed(module_name, error_path)
-                log.error("- OSError while collecting path %s (while collecting %s)", error_path, path)
+                log.error("- OSError while collecting path %s (while collecting %s)", error_path, path)  # noqa: TRY400
         except Exception:
             self.report.add_path_failed(module_name, error_path)
-            log.error("- Failed to collect path %s (while collecting %s)", error_path, path, exc_info=True)
+            log.error("- Failed to collect path %s (while collecting %s)", error_path, path, exc_info=True)  # noqa: G201
         else:
             if not all_deduped and collect_inpath != path:
                 self.report.add_path_collected(module_name, path)
@@ -544,10 +532,10 @@ class Collector:
         path: str | fsutil.TargetPath,
         fs: Filesystem,
         mountpoint: str,
-        outpath: Optional[str] = None,
-        module_name: Optional[str] = None,
-        base: Optional[str] = None,
-        file_accessor: Optional[Callable[[BinaryIO, int], BinaryIO]] = None,
+        outpath: str | None = None,
+        module_name: str | None = None,
+        base: str | None = None,
+        file_accessor: Callable[[BinaryIO, int], BinaryIO] | None = None,
     ) -> None:
         """Collect a single file from one of the target's filesystems.
 
@@ -628,24 +616,24 @@ class Collector:
         except OSError as error:
             if error.errno == errno.ENOENT:
                 self.report.add_file_missing(module_name, collect_inpath)
-                log.error("- File %s (%s on %s) is not found", collect_inpath, path, fs)
+                log.error("- File %s (%s on %s) is not found", collect_inpath, path, fs)  # noqa: TRY400
             elif error.errno == errno.EACCES:
                 self.report.add_file_failed(module_name, collect_inpath)
-                log.error("- Permission denied while accessing file %s (%s on %s)", collect_inpath, path, fs)
+                log.error("- Permission denied while accessing file %s (%s on %s)", collect_inpath, path, fs)  # noqa: TRY400
             else:
                 self.report.add_file_failed(module_name, collect_inpath)
-                log.error("- OSError while collecting file %s (%s on %s)", collect_inpath, path, fs)
+                log.error("- OSError while collecting file %s (%s on %s)", collect_inpath, path, fs)  # noqa: TRY400
         except (FileNotFoundError, NotADirectoryError, NotASymlinkError, SymlinkRecursionError, ValueError):
             self.report.add_file_missing(module_name, collect_inpath)
-            log.error("- File %s (%s on %s) not found", collect_inpath, path, fs)
+            log.error("- File %s (%s on %s) not found", collect_inpath, path, fs)  # noqa: TRY400
         except Exception:
             self.report.add_file_failed(module_name, collect_inpath)
-            log.error("- Failed to collect file %s (%s on %s)", collect_inpath, path, fs, exc_info=True)
+            log.exception("- Failed to collect file %s (%s on %s)", collect_inpath, path, fs)
         else:
             self.report.add_file_collected(module_name, collect_inpath)
             log.info("- Collecting file %s (%s on %s) succeeded", collect_inpath, path, fs)
 
-    def collect_glob(self, pattern: str, module_name: Optional[str] = None) -> None:
+    def collect_glob(self, pattern: str, module_name: str | None = None) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
             raise ValueError("Module name must be provided or Collector needs to be bound to a module")
@@ -657,7 +645,7 @@ class Collector:
                 glob_is_empty = False
                 self.collect_path(entry, module_name=module_name)
         except Exception:
-            log.error("- Failed to collect glob %s", pattern, exc_info=True)
+            log.exception("- Failed to collect glob %s", pattern)
             self.report.add_glob_failed(module_name, pattern)
         else:
             if glob_is_empty:
@@ -670,7 +658,7 @@ class Collector:
         self,
         command_parts: list[str],
         output_filename: str,
-        module_name: Optional[str] = None,
+        module_name: str | None = None,
     ) -> None:
         module_name = self.bound_module_name or module_name
         if not module_name:
@@ -686,7 +674,7 @@ class Collector:
             self.report.add_command_collected(module_name, command_parts)
         except Exception:
             self.report.add_command_failed(module_name, command_parts)
-            log.error("- Failed to collect output from command `%s`", " ".join(command_parts), exc_info=True)
+            log.exception("- Failed to collect output from command `%s`", " ".join(command_parts))
             return
         log.info("- Collecting output from command `%s` succeeded", " ".join(command_parts))
 
@@ -703,7 +691,7 @@ def get_report_summary(report: CollectionReport) -> str:
     if not record_counts:
         return ""
 
-    module_name_max_len = max(len(module_name) for module_name in record_counts.keys())
+    module_name_max_len = max(len(module_name) for module_name in record_counts)
     # Must be as long as a header
     module_name_max_len = max(len("Module"), module_name_max_len)
 
@@ -773,10 +761,8 @@ def get_full_formatted_report(report: CollectionReport, record_indent: int = 4) 
 
     for module_name, records_per_module in report.get_records_per_module_per_outcome().items():
         blocks.append(module_name)
-        for _, records_per_module_per_outcome in records_per_module.items():
-            record_lines = []
-            for record in records_per_module_per_outcome:
-                record_lines.append(record_line_template.format(record=record))
+        for records_per_module_per_outcome in records_per_module.values():
+            record_lines = [record_line_template.format(record=record) for record in records_per_module_per_outcome]
 
             paragraph = "\n".join(record_lines)
             paragraph = textwrap.indent(paragraph, prefix=record_indent * " ")

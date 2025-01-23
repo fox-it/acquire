@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
-from argparse import Namespace
 from threading import Thread
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 
 class GUIError(RuntimeError):
@@ -22,7 +24,7 @@ class GUI:
     auto_upload = None
     upload_available = False
 
-    def __new__(cls, flavour: Optional[str] = None, upload_available: bool = False):
+    def __new__(cls, flavour: str | None = None, upload_available: bool = False):
         # singleton+factory pattern
         if cls._instance is None:
             cls = Stub
@@ -31,7 +33,7 @@ class GUI:
                 from acquire.gui.win32 import Win32
 
                 cls = Win32
-            GUI._instance = super(GUI, cls).__new__(cls)
+            GUI._instance = super().__new__(cls)
             GUI._instance.upload_available = upload_available
         return GUI._instance
 

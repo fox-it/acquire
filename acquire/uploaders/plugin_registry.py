@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import logging
 from importlib import metadata
-from typing import Generic, ItemsView, Iterable, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from acquire.uploaders.plugin import UploaderPlugin
+
+if TYPE_CHECKING:
+    from collections.abc import ItemsView, Iterator
 
 T = TypeVar("T")
 
@@ -15,14 +20,14 @@ class PluginRegistry(Generic[T]):
     Includes functionality to load plugins from classes defined in entrypoints.
     """
 
-    def __init__(self, name: str, plugins: Optional[Iterable[tuple[str, T]]] = None):
-        """Create a plugin registry, with an optional plugin iterable.
+    def __init__(self, name: str, plugins: Iterator[tuple[str, T]] | None = None):
+        """Create a plugin registry, with an optional plugin Iterator.
 
         Args:
             name: The name of an entrypoint we want to load plugins from.
-            plugins: An iterable that contains plugins that we want to register.
+            plugins: An Iterator that contains plugins that we want to register.
         """
-        self.plugins: dict[str, T] = dict()
+        self.plugins: dict[str, T] = {}
 
         plugins = plugins or []
         for plugin_name, klass in plugins:
@@ -54,7 +59,7 @@ class PluginRegistry(Generic[T]):
     def get(self, name: str) -> T:
         return self.plugins.get(name)
 
-    def _find_entrypoint_data(self, entry_point_name: str) -> List[metadata.EntryPoint]:
+    def _find_entrypoint_data(self, entry_point_name: str) -> list[metadata.EntryPoint]:
         """Searches through the entrypoints to find specific entry_point names.
 
         Args:
@@ -83,10 +88,9 @@ class PluginRegistry(Generic[T]):
             try:
                 # Loads the class of the entrypoint, and registers it.
                 self.register(ep.name, ep.load())
-                log.debug(f"Loaded plugin {ep}")
-            except ModuleNotFoundError as e:
-                log.exception(msg="Entrypoint module could not be loaded.", exc_info=e)
-                pass
+                log.debug("Loaded plugin %s", ep)
+            except ModuleNotFoundError:  # noqa: PERF203
+                log.exception("Entrypoint module could not be loaded")
 
 
 UploaderRegistry = PluginRegistry[UploaderPlugin]

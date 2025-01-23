@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import logging
 import re
 import subprocess
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 @contextmanager
-def esxi_memory_context_manager():
+def esxi_memory_context_manager() -> Iterator[EsxiMemoryManager]:
     memory = EsxiMemoryManager()
 
     try:
@@ -18,7 +24,7 @@ def esxi_memory_context_manager():
 class EsxiMemoryManager:
     def __init__(self) -> None:
         self.group_id: str = ""
-        self.mem_scheme: dict[str, str] = dict()
+        self.mem_scheme: dict[str, str] = {}
 
     def setup(self) -> None:
         """Change the ESXi memory limits of the group to unlimited."""
@@ -33,8 +39,8 @@ class EsxiMemoryManager:
 
     def _execute_vsish_command(self, command: list[str]) -> str:
         """Performs and logs a vsish command."""
-        vsish_command = ["vsish", "-e"] + command
-        logging.info(f"Executing '{' '.join(vsish_command)}' on ESXi host.")
+        vsish_command = ["vsish", "-e", *command]
+        logging.info("Executing '%s' on ESXi host.", " ".join(vsish_command))
 
         output = subprocess.check_output(vsish_command)
 
@@ -55,7 +61,7 @@ class EsxiMemoryManager:
         )
         group_id = group_id.split(" ")[0]
         if not group_id:
-            raise ValueError("Something went wrong, group_id was empty.")
+            raise ValueError("Something went wrong, group_id was empty")
 
         return group_id
 
@@ -80,5 +86,4 @@ class EsxiMemoryManager:
 
         data_pattern = re.compile(r"(\w+):\s*(-?\d+)")
         mem_configuration = data_pattern.findall(mem_sched_allocation)
-        mem_shed = dict((x, y) for x, y in mem_configuration)
-        return mem_shed
+        return dict(mem_configuration)

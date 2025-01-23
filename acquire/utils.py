@@ -12,9 +12,8 @@ import textwrap
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
-from dissect.target import Target
 from dissect.target.helpers import keychain
 
 from acquire.outputs import (
@@ -23,7 +22,11 @@ from acquire.outputs import (
     TAR_COMPRESSION_METHODS,
     ZIP_COMPRESSION_METHODS,
 )
-from acquire.uploaders.plugin_registry import UploaderRegistry
+
+if TYPE_CHECKING:
+    from dissect.target import Target
+
+    from acquire.uploaders.plugin_registry import UploaderRegistry
 
 
 class StrEnum(str, Enum):
@@ -33,12 +36,12 @@ class StrEnum(str, Enum):
 def _create_profile_information(profiles: dict) -> str:
     desc = ""
 
-    profile_names = (name for name in profiles.keys() if name != "none")
+    profile_names = (name for name in profiles if name != "none")
     for name in profile_names:
         profile_dict = profiles[name]
         desc += f"{name} profile:\n"
 
-        minindent = max([len(os_) for os_ in profile_dict.keys()])
+        minindent = max([len(os_) for os_ in profile_dict])
         descfmt = f"  {{:{minindent}s}}: {{}}\n"
 
         for os_, modlist in profile_dict.items():
@@ -75,7 +78,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("targets", metavar="TARGETS", default=["local"], nargs="*", help="Targets to load")
     # Create a mutually exclusive group, such that only one of the output options can be used
     output_group = parser.add_mutually_exclusive_group()
-    output_group.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    output_group.add_argument("-o", "--output", default=Path(), type=Path, help="output directory")
     output_group.add_argument("-of", "--output-file", type=Path, help="output filename")
 
     parser.add_argument(
@@ -204,7 +207,7 @@ def _merge_args_and_config(
     parser: argparse.ArgumentParser,
     command_line_args: argparse.Namespace,
     config: dict[str, Any],
-):
+) -> None:
     """Update the parsed command line arguments with the optional set of configured default arguments.
 
     The arguments are set to values supplied in ``config[arguments]``, when not
@@ -231,10 +234,10 @@ def _merge_args_and_config(
             config_argument = getattr(config_defaults_args, argument, value)
             setattr(command_line_args, argument, config_argument)
 
-    setattr(command_line_args, "config", config)
+    command_line_args.config = config
 
 
-def check_and_set_log_args(args: argparse.Namespace):
+def check_and_set_log_args(args: argparse.Namespace) -> None:
     """Check command line arguments which are related to logging.
 
     Also some arguments derived from the user supplied ones are set in the
@@ -271,16 +274,16 @@ def check_and_set_log_args(args: argparse.Namespace):
         else:
             raise ValueError(f"Log path doesn't exist: {log_path}")
 
-    setattr(args, "start_time", start_time)
-    setattr(args, "log_path", log_path)
-    setattr(args, "log_to_dir", log_to_dir)
-    setattr(args, "log_delay", log_delay)
+    args.start_time = start_time
+    args.log_path = log_path
+    args.log_to_dir = log_to_dir
+    args.log_delay = log_delay
 
 
 def check_and_set_acquire_args(
     args: argparse.Namespace,
     upload_plugins: UploaderRegistry,
-):
+) -> None:
     """Check the command line arguments and set some derived arguments.
 
     This function is separate from ``check_and_set_log_args()`` as logging
@@ -294,7 +297,7 @@ def check_and_set_acquire_args(
         ValueError: When an invalid combination of arguments is found.
     """
     upload_plugin = None
-    setattr(args, "upload_plugin", upload_plugin)
+    args.upload_plugin = upload_plugin
 
     # check & set upload related configuration
     if args.upload and args.auto_upload:
@@ -311,15 +314,15 @@ def check_and_set_acquire_args(
 
         # If initialization of the plugin fails, a ValueError is raised
         upload_plugin = upload_plugin_cls(**args.config)
-        setattr(args, "upload_plugin", upload_plugin)
+        args.upload_plugin = upload_plugin
 
     if not args.upload:
         # check output related configuration
         if (args.children or len(args.targets) > 1) and args.output_file:
             raise ValueError("--children can not be used with --output-file. Use --output instead")
-        elif args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
+        if args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
             raise ValueError("--output-file must be a path to a file in an existing directory")
-        elif args.output and not args.output.is_dir():
+        if args.output and not args.output.is_dir():
             raise ValueError(f"Output directory doesn't exist or is a file: {args.output}")
 
         # check & set encryption related configuration
@@ -329,7 +332,7 @@ def check_and_set_acquire_args(
                 public_key = args.public_key.read_text()
             if not public_key:
                 raise ValueError("No public key available (embedded or argument)")
-            setattr(args, "public_key", public_key)
+            args.public_key = public_key
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
@@ -383,9 +386,9 @@ def get_formatted_exception() -> str:
     return "".join(traceback.format_exception(*exc_info))
 
 
-def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional[str] = None) -> str:
+def format_output_name(prefix: str, postfix: str | None = None, ext: str | None = None) -> str:
     if not postfix:
-        postfix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        postfix = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
     name = f"{prefix}_{postfix}"
     if ext:
         name = f"{name}.{ext}"
@@ -393,7 +396,7 @@ def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional
 
 
 def persist_execution_report(path: Path, report_data: dict) -> Path:
-    with open(path, "w") as f:
+    with path.open("w") as f:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
 
 

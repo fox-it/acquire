@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from dissect.target import Target
 from dissect.target.helpers.fsutil import TargetPath
 
 from acquire.acquire import MODULES, PROFILES, VOLATILE
@@ -15,12 +16,15 @@ from acquire.utils import (
     normalize_path,
 )
 
+if TYPE_CHECKING:
+    from dissect.target import Target
+
 
 def get_args(**kwargs) -> argparse.Namespace:
     default_args = {
         "no_log": True,
         "log": None,
-        "output": Path("."),
+        "output": Path(),
         "children": False,
         "upload": None,
         "auto_upload": False,
@@ -31,8 +35,7 @@ def get_args(**kwargs) -> argparse.Namespace:
     default_args = dict(parser.parse_args(args=[])._get_kwargs())
     default_args.update(kwargs)
 
-    args = argparse.Namespace(**default_args)
-    return args
+    return argparse.Namespace(**default_args)
 
 
 def get_mock_path(
@@ -80,7 +83,7 @@ def test_check_and_set_log_args_no_log() -> None:
     ],
 )
 @pytest.mark.parametrize(
-    "mock_path, log_to_dir, log_delay",
+    ("mock_path", "log_to_dir", "log_delay"),
     [
         # Log to a directory
         (get_mock_path(), True, True),
@@ -149,7 +152,7 @@ def test_check_and_set_acquire_args_upload_auto_upload(arg_name: str) -> None:
     ],
 )
 @pytest.mark.parametrize(
-    "upload_config, plugin_side_effect, error_match",
+    ("upload_config", "plugin_side_effect", "error_match"),
     [
         (
             {},
@@ -191,7 +194,7 @@ def test_check_and_set_acquire_args_upload_auto_upload_fail(
 
 
 @pytest.mark.parametrize(
-    "children, arg_name, output",
+    ("children", "arg_name", "output"),
     [
         # Output without children to a directory
         (
@@ -222,7 +225,7 @@ def test_check_and_set_acquire_args_output(children: bool, arg_name: str, output
 
 
 @pytest.mark.parametrize(
-    "children, arg_name, output, error_match",
+    ("children", "arg_name", "output", "error_match"),
     [
         # Output_file and children defined at the same time
         (
@@ -294,7 +297,7 @@ def test_check_and_set_acquire_args_encrypt_with_public_key_arg() -> None:
         get_mock_path(),
     ],
 )
-def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: Optional[Path]) -> None:
+def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: Path | None) -> None:
     args = get_args(encrypt=True, public_key=public_key, config={})
 
     with pytest.raises(ValueError, match=r"No public key available \(embedded or argument\)"):
@@ -302,7 +305,7 @@ def test_check_and_set_acquire_args_encrypt_without_public_key_fail(public_key: 
 
 
 @pytest.mark.parametrize(
-    "path, resolve_parents, preserve_case, sysvol, os, result, as_path",
+    ("path", "resolve_parents", "preserve_case", "sysvol", "os", "result", "as_path"),
     [
         (
             "/foo/bar",
@@ -482,7 +485,7 @@ def test_utils_normalize_path(
     path: str,
     resolve_parents: bool,
     preserve_case: bool,
-    sysvol: Optional[str],
+    sysvol: str | None,
     os: str,
     result: str,
     as_path: bool,

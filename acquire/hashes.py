@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import gzip
 import hashlib
@@ -5,13 +7,16 @@ import io
 import logging
 import re
 import time
-from pathlib import Path
-from typing import Callable, Generator, Iterable, List, Optional, Set, Tuple
-
-from dissect.target import Target
-from dissect.target.helpers.fsutil import TargetPath
+from typing import TYPE_CHECKING, Any, Callable
 
 from acquire.utils import StrEnum
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from dissect.target import Target
+    from dissect.target.helpers.fsutil import TargetPath
 
 log = logging.getLogger(__name__)
 
@@ -21,13 +26,14 @@ class HashFunc(StrEnum):
     SHA1 = "sha1"
     SHA256 = "sha256"
 
-    def as_hashlib_method(self):
+    def as_hashlib_method(self) -> Callable[..., Any] | None:
         if self == HashFunc.MD5:
             return hashlib.md5
-        elif self == HashFunc.SHA1:
+        if self == HashFunc.SHA1:
             return hashlib.sha1
-        elif self == HashFunc.SHA256:
+        if self == HashFunc.SHA256:
             return hashlib.sha256
+        return None
 
 
 PROGRESS_LOG_STEP = 10000  # processed files
@@ -38,8 +44,8 @@ CSV_COLUMNS = ["path", "file-size"] + [h.value for h in HashFunc]
 def get_paths_from_dir(
     target: Target,
     glob: str,
-    extensions: Optional[Set[str]] = None,
-) -> Generator[Path, None, None]:
+    extensions: set[str] | None = None,
+) -> Iterator[Path]:
     """Yield paths that match provided `glob` pattern and `extensions` values"""
 
     extension_suffixes = {f".{ext}" for ext in extensions} if extensions else None
@@ -50,7 +56,7 @@ def get_paths_from_dir(
         yield path
 
 
-def get_path_details(path: TargetPath, hash_funcs: Optional[Iterable[HashFunc]] = None) -> Tuple:
+def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> tuple:
     """
     Calculate and return the details for specified path.
 
@@ -77,7 +83,7 @@ def get_path_details(path: TargetPath, hash_funcs: Optional[Iterable[HashFunc]] 
     }
 
 
-def filter_out_nonfiles(paths: Iterable[Path]) -> Generator[Path, None, None]:
+def filter_out_nonfiles(paths: Iterator[Path]) -> Iterator[Path]:
     """Filter out paths that are not files"""
     for path in paths:
         try:
@@ -92,7 +98,7 @@ def filter_out_nonfiles(paths: Iterable[Path]) -> Generator[Path, None, None]:
         yield path
 
 
-def filter_out_huge_files(paths: Iterable[Path], *, max_size_bytes: int) -> Iterable[Path]:
+def filter_out_huge_files(paths: Iterator[Path], *, max_size_bytes: int) -> Iterator[Path]:
     """Filter out paths that are larger than `max_size_bytes` value"""
     for path in paths:
         try:
@@ -108,11 +114,11 @@ def filter_out_huge_files(paths: Iterable[Path], *, max_size_bytes: int) -> Iter
 
 
 def filter_out_by_value_match(
-    paths: Iterable[Path],
+    paths: Iterator[Path],
     *,
     value: bytes,
-    offsets: Iterable[int] = (0,),
-) -> Generator[Path, None, None]:
+    offsets: Iterator[int] = (0,),
+) -> Iterator[Path]:
     """Filter out paths where file data matches the provided `value` at the specified offsets"""
 
     if not offsets:
@@ -137,11 +143,11 @@ def filter_out_by_value_match(
 
 
 def filter_out_by_path_match(
-    paths: Iterable[Path],
+    paths: Iterator[Path],
     *,
     re_pattern: str,
     re_flags: re.RegexFlag = re.IGNORECASE,
-) -> Iterable[Path]:
+) -> Iterator[Path]:
     """Filter out paths that match provided regex pattern"""
     pattern = re.compile(re_pattern, flags=re_flags)
     return filter(lambda p: not pattern.match(str(p)), paths)
@@ -149,9 +155,9 @@ def filter_out_by_path_match(
 
 def collect_hashes(
     target: Target,
-    specs: Iterable[Iterable[Tuple]],
-    path_filters: Iterable[Callable[[Iterable[Path]], Iterable[Path]]] = None,
-) -> Generator[Tuple, None, None]:
+    specs: Iterator[Iterator[tuple]],
+    path_filters: Iterator[Callable[[Iterator[Path]], Iterator[Path]]] | None = None,
+) -> Iterator[tuple]:
     """
     Walk through the paths, calculate hashes and return details per path.
 
@@ -217,7 +223,7 @@ def collect_hashes(
             yield details
 
 
-def serialize_into_csv(rows: Iterable[List], compress: bool = True) -> Tuple[int, bytes]:
+def serialize_into_csv(rows: Iterator[list], compress: bool = True) -> tuple[int, bytes]:
     """
     Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
     containing the number of rows processed and the result bytes.
@@ -228,10 +234,7 @@ def serialize_into_csv(rows: Iterable[List], compress: bool = True) -> Tuple[int
     counter = 0
     start = time.time()
 
-    if compress:
-        buffer = gzip.GzipFile(fileobj=raw_buffer, mode="wb")
-    else:
-        buffer = raw_buffer
+    buffer = gzip.GzipFile(fileobj=raw_buffer, mode="wb") if compress else raw_buffer
 
     with io.TextIOWrapper(buffer, encoding="utf-8") as wrapper:
         csv_writer = csv.DictWriter(wrapper, fieldnames=CSV_COLUMNS)
