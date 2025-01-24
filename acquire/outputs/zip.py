@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import io
 import shutil
 import stat
 import zipfile
-from datetime import datetime
-from pathlib import Path
-from typing import BinaryIO, Optional, Union
-
-from dissect.target.filesystem import FilesystemEntry
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, BinaryIO
 
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from dissect.target.filesystem import FilesystemEntry
 
 ZIP_COMPRESSION_METHODS = {"deflate": zipfile.ZIP_DEFLATED, "bzip2": zipfile.ZIP_BZIP2, "lzma": zipfile.ZIP_LZMA}
 
@@ -31,7 +35,7 @@ class ZipOutput(Output):
         compress: bool = False,
         compression_method: str = "deflate",
         encrypt: bool = False,
-        public_key: Optional[bytes] = None,
+        public_key: bytes | None = None,
     ) -> None:
         ext = ".zip" if ".zip" not in path.suffixes else ""
 
@@ -56,8 +60,8 @@ class ZipOutput(Output):
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]] = None,
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path | None = None,
+        size: int | None = None,
     ) -> None:
         """Write a filesystem entry or file-like object to a zip file.
 
@@ -92,7 +96,7 @@ class ZipOutput(Output):
             lstat = entry.lstat()
             if lstat:
                 # Python zipfile module does not support timestamps before 1980
-                dt = datetime.fromtimestamp(lstat.st_mtime)
+                dt = datetime.fromtimestamp(lstat.st_mtime, tz=timezone.utc)
                 year = max(dt.year, 1980)
                 info.date_time = (year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
@@ -118,7 +122,7 @@ class ZipOutput(Output):
         elif entry.is_dir():
             unix_st_mode = stat.S_IFDIR
 
-        unix_st_mode = (
+        return (
             unix_st_mode
             | stat.S_IRUSR
             | stat.S_IWUSR
@@ -130,5 +134,3 @@ class ZipOutput(Output):
             | stat.S_IWOTH
             | stat.S_IXOTH
         ) << 16
-
-        return unix_st_mode

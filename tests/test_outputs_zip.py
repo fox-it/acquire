@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import stat
 import zipfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from dissect.target.filesystem import VirtualFilesystem
 
 from acquire.outputs import ZipOutput
 from acquire.tools.decrypter import EncryptedFile
+
+if TYPE_CHECKING:
+    from dissect.target.filesystem import VirtualFilesystem
 
 
 @pytest.fixture(params=[(True, "deflate"), (True, "bzip2"), (True, "lzma"), (False, None)])
@@ -58,8 +63,7 @@ def test_zip_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
     encrypted_stream = EncryptedFile(zip_output.path.open("rb"), Path("tests/data/private_key.pem"))
     decrypted_path = tmp_path / "decrypted.zip"
     # Direct streaming is not an option because zipfile needs seek when reading from encrypted files directly
-    with open(decrypted_path, "wb") as f:
-        f.write(encrypted_stream.read())
+    Path(decrypted_path).write_bytes(encrypted_stream.read())
 
     zip_file = zipfile.ZipFile(decrypted_path, mode="r")
     assert entry.open().read() == zip_file.open(entry_name).read()

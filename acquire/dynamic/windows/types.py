@@ -15,6 +15,7 @@ from ctypes.wintypes import (
     WCHAR,
 )
 from enum import IntEnum
+from typing import Any
 
 PVOID = ctypes.c_void_p
 NTSTATUS = ULONG
@@ -73,7 +74,7 @@ class FILE_INFORMATION_CLASS(IntEnum):
 
 
 class SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Object", PVOID),
         ("UniqueProcessId", ULONG_PTR),
         ("HandleValue", ULONG_PTR),
@@ -82,7 +83,7 @@ class SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX(ctypes.Structure):
         ("ObjectTypeIndex", USHORT),
         ("HandleAttributes", ULONG),
         ("Reserved", ULONG),
-    ]
+    )
 
     @property
     def object(self) -> str:
@@ -118,47 +119,51 @@ class SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX(ctypes.Structure):
 
 
 class SYSTEM_HANDLE_INFORMATION_EX(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("NumberOfHandles", ULONG_PTR),
         ("Reserved", ULONG_PTR),
         ("Handles", SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX * 1),
-    ]
+    )
 
 
-def FileNameInformationFactory(file_name_size: int = 1):
+class FILE_NAME_INFORMATION(ctypes.Structure):
+    _fields_ = (("FileNameLength", ULONG), ("FileName", WCHAR * 1))
+
+
+def FileNameInformationFactory(file_name_size: int = 1) -> FILE_NAME_INFORMATION:
     class FILE_NAME_INFORMATION(ctypes.Structure):
-        _fields_ = [("FileNameLength", ULONG), ("FileName", WCHAR * file_name_size)]
+        _fields_ = (("FileNameLength", ULONG), ("FileName", WCHAR * file_name_size))
 
     return FILE_NAME_INFORMATION()
 
 
 class IO_STATUS_BLOCK_DUMMYUNIONNAME(ctypes.Union):
-    _fields_ = [("Status", NTSTATUS), ("Pointer", ULONG_PTR)]
+    _fields_ = (("Status", NTSTATUS), ("Pointer", ULONG_PTR))
 
 
 class IO_STATUS_BLOCK(ctypes.Structure):
-    _fields_ = [("DUMMYUNIONNAME", IO_STATUS_BLOCK_DUMMYUNIONNAME), ("Information", ctypes.c_size_t)]
+    _fields_ = (("DUMMYUNIONNAME", IO_STATUS_BLOCK_DUMMYUNIONNAME), ("Information", ctypes.c_size_t))
 
 
 class LUID(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("LowPart", DWORD),
         ("HighPart", DWORD),
-    ]
+    )
 
 
 class LUID_AND_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Luid", LUID),
         ("Attributes", DWORD),
-    ]
+    )
 
 
 class TOKEN_PRIVILEGES(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("PrivilegeCount", DWORD),
         ("Privileges", 1 * LUID_AND_ATTRIBUTES),
-    ]
+    )
 
 
 class Handle:
@@ -179,16 +184,16 @@ class Handle:
         self._handle = handle
 
     @property
-    def dictionary(self):
+    def dictionary(self) -> dict[str, Any]:
         return {key: value for key, value in self.__dict__.items() if not key.startswith("_")}
 
 
 class UNICODE_STRING(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Length", USHORT),
         ("MaximumLength", USHORT),
         ("Buffer", LPWSTR),
-    ]
+    )
 
     def __str__(self) -> str:
         return self.Buffer
@@ -208,10 +213,10 @@ class UNICODE_STRING(ctypes.Structure):
 
 
 class PUBLIC_OBJECT_TYPE_INFORMATION(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Name", UNICODE_STRING),
         ("Reserved", ULONG * 22),
-    ]
+    )
 
     @property
     def name(self) -> str:
@@ -222,10 +227,10 @@ PUNICODE_STRING = ctypes.POINTER(UNICODE_STRING)
 
 
 class OBJECT_DIRECTORY_INFORMATION(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Name", UNICODE_STRING),
         ("TypeName", UNICODE_STRING),
-    ]
+    )
 
     @property
     def name(self) -> str:
@@ -239,35 +244,35 @@ class OBJECT_DIRECTORY_INFORMATION(ctypes.Structure):
 __all__ = [
     "BOOL",
     "DWORD",
-    "HANDLE",
-    "LPWSTR",
-    "PHANDLE",
-    "PULONG",
-    "ULONG",
-    "USHORT",
-    "PVOID",
-    "NTSTATUS",
-    "NULL",
-    "UNICODE_STRING",
-    "PUNICODE_STRING",
-    "OBJECT_DIRECTORY_INFORMATION",
-    "ProcessToken",
-    "ProcessAccess",
-    "ErrorCode",
-    "DuplicateHandleFlags",
-    "SYSTEM_INFORMATION_CLASS",
-    "OBJECT_INFORMATION_CLASS",
     "FILE_INFORMATION_CLASS",
-    "SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX",
-    "SYSTEM_HANDLE_INFORMATION_EX",
-    "PUBLIC_OBJECT_TYPE_INFORMATION",
-    "IO_STATUS_BLOCK_DUMMYUNIONNAME",
+    "HANDLE",
     "IO_STATUS_BLOCK",
+    "IO_STATUS_BLOCK_DUMMYUNIONNAME",
+    "LPDWORD",
+    "LPVOID",
+    "LPWSTR",
     "LUID",
     "LUID_AND_ATTRIBUTES",
+    "NTSTATUS",
+    "NULL",
+    "OBJECT_DIRECTORY_INFORMATION",
+    "OBJECT_INFORMATION_CLASS",
+    "PHANDLE",
+    "PUBLIC_OBJECT_TYPE_INFORMATION",
+    "PULONG",
+    "PUNICODE_STRING",
+    "PVOID",
+    "SYSTEM_HANDLE_INFORMATION_EX",
+    "SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX",
+    "SYSTEM_INFORMATION_CLASS",
     "TOKEN_PRIVILEGES",
-    "Handle",
+    "ULONG",
+    "UNICODE_STRING",
+    "USHORT",
     "WCHAR",
-    "LPVOID",
-    "LPDWORD",
+    "DuplicateHandleFlags",
+    "ErrorCode",
+    "Handle",
+    "ProcessAccess",
+    "ProcessToken",
 ]

@@ -14,13 +14,12 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from itertools import product
 from pathlib import Path
-from typing import BinaryIO, Callable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
 
 from dissect.target import Target
-from dissect.target.filesystem import Filesystem
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
@@ -61,6 +60,11 @@ from acquire.utils import (
     persist_execution_report,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from dissect.target.filesystem import Filesystem
+
 try:
     from acquire.version import version
 except ImportError:
@@ -74,19 +78,15 @@ except ImportError:
 
 
 VERSION = version
-ACQUIRE_BANNER = r"""
+ACQUIRE_BANNER = rf"""
                        _
   __ _  ___ __ _ _   _(_)_ __ ___
  / _` |/ __/ _` | | | | | '__/ _ \
 | (_| | (_| (_| | |_| | | | |  __/
  \__,_|\___\__, |\__,_|_|_|  \___|
-  by Fox-IT   |_|             v{}
+  by Fox-IT   |_|             v{VERSION}
   part of NCC Group
-""".format(
-    VERSION
-)[
-    1:
-]
+"""[1:]
 
 MODULES = {}
 MODULE_LOOKUP = {}
@@ -131,13 +131,11 @@ def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     user_dirs = ["root", "home/*"]
 
     home_dirs = (target.fs.path("/").glob(path) for path in user_dirs)
-    for home_dir in itertools.chain.from_iterable(home_dirs):
-        yield home_dir
+    yield from itertools.chain.from_iterable(home_dirs)
 
 
 def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
-    for homedir in itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target)):
-        yield homedir
+    yield from itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target))
 
 
 MISC_MAPPING = {
@@ -159,7 +157,7 @@ def from_user_home(target: Target, path: str) -> Iterator[str]:
         yield user_dir.joinpath(path).as_posix()
 
 
-def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, Optional[str], str, str]]:
+def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str | None, str, str]]:
     mount_lookup = defaultdict(list)
     for mount, fs in target.fs.mounts.items():
         mount_lookup[fs].append(mount)
@@ -190,7 +188,7 @@ def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem,
         yield fs, main_mountpoint, name, mountpoints
 
 
-def iter_esxi_filesystems(target: Target) -> Iterator[tuple[Filesystem, str, str, Optional[str]]]:
+def iter_esxi_filesystems(target: Target) -> Iterator[tuple[Filesystem, str, str, str | None]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
             continue
@@ -254,7 +252,7 @@ class ExecutionOrder(enum.IntEnum):
 
 class Module:
     DESC = None
-    SPEC = []
+    SPEC = ()
     EXEC_ORDER = ExecutionOrder.DEFAULT
 
     @classmethod
@@ -353,25 +351,23 @@ class NTFS(Module):
 @register_module("-r", "--registry")
 class Registry(Module):
     DESC = "registry hives"
-    HIVES = ["drivers", "sam", "security", "software", "system", "default"]
-    SPEC = [
+    HIVES = ("drivers", "sam", "security", "software", "system", "default")
+    SPEC = (
         ("dir", "sysvol/windows/system32/config/txr"),
         ("dir", "sysvol/windows/system32/config/regback"),
         ("glob", "sysvol/System Volume Information/_restore*/RP*/snapshot/_REGISTRY_*"),
         ("glob", "ntuser.dat*", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/UsrClass.dat*", from_user_home),
         ("glob", "Local Settings/Application Data/Microsoft/Windows/UsrClass.dat*", from_user_home),
-    ]
+    )
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # Glob all hives to include e.g. .LOG files and .regtrans-ms files.
         files = []
         for hive in cls.HIVES:
-            pattern = "sysvol/windows/system32/config/{}*".format(hive)
-            for entry in target.fs.path().glob(pattern):
-                if entry.is_file():
-                    files.append(("file", entry))
+            pattern = f"sysvol/windows/system32/config/{hive}*"
+            files.extend([("file", entry) for entry in target.fs.path().glob(pattern) if entry.is_file()])
         return files
 
 
@@ -379,9 +375,7 @@ class Registry(Module):
 @local_module
 class Netstat(Module):
     DESC = "netstat output"
-    SPEC = [
-        ("command", (["powershell.exe", "netstat", "-a", "-n", "-o"], "netstat")),
-    ]
+    SPEC = (("command", (["powershell.exe", "netstat", "-a", "-n", "-o"], "netstat")),)
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
@@ -399,10 +393,7 @@ class Devices(Module):
             collector.report.add_command_collected(cls.__name__, ["QueryDosDeviceA"])
         except Exception:
             collector.report.add_command_failed(cls.__name__, ["QueryDosDeviceA"])
-            log.error(
-                "- Failed to collect output from command `QueryDosDeviceA`",
-                exc_info=True,
-            )
+            log.exception("- Failed to collect output from command `QueryDosDeviceA`")
         return
 
 
@@ -410,9 +401,7 @@ class Devices(Module):
 @local_module
 class WinProcesses(Module):
     DESC = "Windows process list"
-    SPEC = [
-        ("command", (["tasklist", "/V", "/fo", "csv"], "win-processes")),
-    ]
+    SPEC = (("command", (["tasklist", "/V", "/fo", "csv"], "win-processes")),)
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
@@ -420,7 +409,7 @@ class WinProcesses(Module):
 @local_module
 class WinProcEnv(Module):
     DESC = "Process environment variables"
-    SPEC = [
+    SPEC = (
         (
             "command",
             (
@@ -428,7 +417,7 @@ class WinProcEnv(Module):
                 "win-process-env-vars",
             ),
         ),
-    ]
+    )
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
@@ -497,61 +486,58 @@ class WinMemDump(Module):
             )
             return
 
-        else:
-            log.info("- Collecting output from command `%s`", " ".join(command_parts))
+        log.info("- Collecting output from command `%s`", " ".join(command_parts))
 
-            mem_dump_path = collector.output.path.with_name("winpmem")
-            mem_dump_errors_path = mem_dump_path.with_name("winpmem.errors")
+        mem_dump_path = collector.output.path.with_name("winpmem")
+        mem_dump_errors_path = mem_dump_path.with_name("winpmem.errors")
 
-            output_base = collector.COMMAND_OUTPUT_BASE
-            if collector.base:
-                output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE)
+        output_base = collector.COMMAND_OUTPUT_BASE
+        if collector.base:
+            output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE)
 
-            mem_dump_output_path = fsutil.join(output_base, mem_dump_path.name)
-            mem_dump_errors_output_path = fsutil.join(output_base, mem_dump_errors_path.name)
+        mem_dump_output_path = fsutil.join(output_base, mem_dump_path.name)
+        mem_dump_errors_output_path = fsutil.join(output_base, mem_dump_errors_path.name)
 
-            with mem_dump_path.open(mode="wb") as mem_dump_fh:
-                with mem_dump_errors_path.open(mode="wb") as mem_dump_errors_fh:
-                    try:
-                        # The shell parameter must be set to False, as otherwise the
-                        # output from stdout is not piped into the filehandle.
-                        # The check parameter must be set to False, as winpmem.exe
-                        # always seems to exit with an error code, even on success.
-                        subprocess.run(
-                            bufsize=0,
-                            args=command_parts,
-                            stdout=mem_dump_fh,
-                            stderr=mem_dump_errors_fh,
-                            shell=False,
-                            check=False,
-                        )
+        with mem_dump_path.open(mode="wb") as mem_dump_fh, mem_dump_errors_path.open(mode="wb") as mem_dump_errors_fh:
+            try:
+                # The shell parameter must be set to False, as otherwise the
+                # output from stdout is not piped into the filehandle.
+                # The check parameter must be set to False, as winpmem.exe
+                # always seems to exit with an error code, even on success.
+                subprocess.run(
+                    bufsize=0,
+                    args=command_parts,
+                    stdout=mem_dump_fh,
+                    stderr=mem_dump_errors_fh,
+                    shell=False,
+                    check=False,
+                )
 
-                    except Exception:
-                        collector.report.add_command_failed(cls.__name__, command_parts)
-                        log.error(
-                            "- Failed to collect output from command `%s`",
-                            " ".join(command_parts),
-                            exc_info=True,
-                        )
-                        return
+            except Exception:
+                collector.report.add_command_failed(cls.__name__, command_parts)
+                log.exception(
+                    "- Failed to collect output from command `%s`",
+                    " ".join(command_parts),
+                )
+                return
 
-            collector.output.write_entry(mem_dump_output_path, mem_dump_path)
-            collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
-            collector.report.add_command_collected(cls.__name__, command_parts)
-            mem_dump_path.unlink()
-            mem_dump_errors_path.unlink()
+        collector.output.write_entry(mem_dump_output_path, mem_dump_path)
+        collector.output.write_entry(mem_dump_errors_output_path, mem_dump_errors_path)
+        collector.report.add_command_collected(cls.__name__, command_parts)
+        mem_dump_path.unlink()
+        mem_dump_errors_path.unlink()
 
 
 @register_module("--winmem-files")
 class WinMemFiles(Module):
     DESC = "Windows memory files"
-    SPEC = [
+    SPEC = (
         ("file", "sysvol/pagefile.sys"),
         ("file", "sysvol/hiberfil.sys"),
         ("file", "sysvol/swapfile.sys"),
         ("file", "sysvol/windows/memory.dmp"),
         ("dir", "sysvol/windows/minidump"),
-    ]
+    )
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -588,7 +574,7 @@ class EventLogs(Module):
 
 @register_module("-t", "--tasks")
 class Tasks(Module):
-    SPEC = [
+    SPEC = (
         ("dir", "sysvol/windows/tasks"),
         ("dir", "sysvol/windows/system32/tasks"),
         ("dir", "sysvol/windows/syswow64/tasks"),
@@ -599,15 +585,13 @@ class Tasks(Module):
         ("file", "sysvol/windows/SchedLgU.txt"),
         ("file", "sysvol/windows/tasks/SchedLgU.txt"),
         ("file", "sysvol/winnt/tasks/SchedLgU.txt"),
-    ]
+    )
 
 
 @register_module("-ad", "--active-directory")
 class ActiveDirectory(Module):
     DESC = "Active Directory data (policies, scripts, etc.)"
-    SPEC = [
-        ("dir", "sysvol/windows/sysvol/domain"),
-    ]
+    SPEC = (("dir", "sysvol/windows/sysvol/domain"),)
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -616,16 +600,14 @@ class ActiveDirectory(Module):
         for reg_key in target.registry.iterkeys(key):
             try:
                 spec.add(("dir", reg_key.value("SysVol").value))
-            except Exception:
+            except Exception:  # noqa: PERF203
                 pass
         return spec
 
 
 @register_module("-nt", "--ntds")
 class NTDS(Module):
-    SPEC = [
-        ("dir", "sysvol/windows/NTDS"),
-    ]
+    SPEC = (("dir", "sysvol/windows/NTDS"),)
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -649,31 +631,29 @@ class NTDS(Module):
 @register_module("--etl")
 class ETL(Module):
     DESC = "interesting ETL files"
-    SPEC = [
-        ("glob", "sysvol/Windows/System32/WDI/LogFiles/*.etl"),
-    ]
+    SPEC = (("glob", "sysvol/Windows/System32/WDI/LogFiles/*.etl"),)
 
 
 @register_module("--recents")
 class Recents(Module):
     DESC = "Windows recently used files artifacts"
-    SPEC = [
+    SPEC = (
         ("dir", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
         ("dir", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
         ("glob", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk", from_user_home),
         ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
         ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
-    ]
+    )
 
 
 @register_module("--startup")
 class Startup(Module):
     DESC = "Windows Startup folder"
-    SPEC = [
+    SPEC = (
         ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
         ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
-    ]
+    )
 
 
 def recyclebin_filter(path: fsutil.TargetPath) -> bool:
@@ -726,9 +706,7 @@ class RecycleBin(Module):
 @register_module("--drivers")
 class Drivers(Module):
     DESC = "installed drivers"
-    SPEC = [
-        ("glob", "sysvol/windows/system32/drivers/*.sys"),
-    ]
+    SPEC = (("glob", "sysvol/windows/system32/drivers/*.sys"),)
 
 
 @register_module("--exchange")
@@ -765,7 +743,7 @@ class Exchange(Module):
                             ),
                         ]
                     )
-                except Exception:
+                except Exception:  # noqa: PERF203
                     pass
         return spec
 
@@ -774,7 +752,7 @@ class Exchange(Module):
 class MSSQL(Module):
     DESC = "MSSQL error logs"
 
-    SPEC = [("glob", "/var/opt/mssql/log/errorlog*")]
+    SPEC = ("glob", "/var/opt/mssql/log/errorlog*")
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple[str, str]]:
@@ -805,15 +783,13 @@ class IIS(Module):
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        spec = set(
-            [
-                ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-                ("glob", "sysvol\\Windows.old\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-                ("glob", "sysvol\\inetpub\\logs\\LogFiles\\*.log"),
-                ("glob", "sysvol\\inetpub\\logs\\LogFiles\\W3SVC*\\*.log"),
-                ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
-            ]
-        )
+        spec = {
+            ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
+            ("glob", "sysvol\\Windows.old\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
+            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\*.log"),
+            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\W3SVC*\\*.log"),
+            ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
+        }
         iis_plugin = iis.IISLogsPlugin(target)
         spec.update([("file", log_path) for _, log_path in iis_plugin.iter_log_format_path_pairs()])
         return spec
@@ -822,51 +798,45 @@ class IIS(Module):
 @register_module("--prefetch")
 class Prefetch(Module):
     DESC = "Windows Prefetch files"
-    SPEC = [
-        ("dir", "sysvol/windows/prefetch"),
-    ]
+    SPEC = (("dir", "sysvol/windows/prefetch"),)
 
 
 @register_module("--appcompat")
 class Appcompat(Module):
     DESC = "Windows Amcache and RecentFileCache"
-    SPEC = [
-        ("dir", "sysvol/windows/appcompat"),
-    ]
+    SPEC = (("dir", "sysvol/windows/appcompat"),)
 
 
 @register_module("--pca")
 class PCA(Module):
     DESC = "Windows Program Compatibility Assistant"
-    SPEC = [
-        ("dir", "sysvol/windows/pca"),
-    ]
+    SPEC = (("dir", "sysvol/windows/pca"),)
 
 
 @register_module("--syscache")
 class Syscache(Module):
     DESC = "Windows Syscache hive and log files"
-    SPEC = [
+    SPEC = (
         ("file", "sysvol/System Volume Information/Syscache.hve"),
         ("glob", "sysvol/System Volume Information/Syscache.hve.LOG*"),
-    ]
+    )
 
 
 @register_module("--win-notifications")
 class WindowsNotifications(Module):
     DESC = "Windows Push Notifications Database files."
-    SPEC = [
+    SPEC = (
         # Old Win7/Win10 version of the file
         ("file", "AppData/Local/Microsoft/Windows/Notifications/appdb.dat", from_user_home),
         # New version of the file
         ("file", "AppData/Local/Microsoft/Windows/Notifications/wpndatabase.db", from_user_home),
-    ]
+    )
 
 
 @register_module("--bits")
 class BITS(Module):
     DESC = "Background Intelligent Transfer Service (BITS) queue/log DB"
-    SPEC = [
+    SPEC = (
         # Pre-Win10 the BITS DB files are called qmgr[01].dat, in Win10 it is
         # called qmgr.db and its transaction logs edb.log and edb.log[0-2]
         # Win 2000/XP/2003 path
@@ -878,15 +848,13 @@ class BITS(Module):
         # Win 10 files
         ("file", "sysvol/ProgramData/Microsoft/Network/Downloader/qmgr.db"),
         ("glob", "sysvol/ProgramData/Microsoft/Network/Downloader/edb.log*"),
-    ]
+    )
 
 
 @register_module("--wbem")
 class WBEM(Module):
     DESC = "Windows WBEM (WMI) database files"
-    SPEC = [
-        ("dir", "sysvol/windows/system32/wbem/Repository"),
-    ]
+    SPEC = (("dir", "sysvol/windows/system32/wbem/Repository"),)
 
 
 @register_module("--dhcp")
@@ -905,17 +873,17 @@ class DHCP(Module):
 @register_module("--dns")
 class DNS(Module):
     DESC = "Windows Server DNS files"
-    SPEC = [
+    SPEC = (
         ("glob", "sysvol/windows/system32/config/netlogon.*"),
         ("dir", "sysvol/windows/system32/dns"),
-    ]
+    )
 
 
 @register_module("--win-dns-cache")
 @local_module
 class WinDnsClientCache(Module):
     DESC = "The contents of Windows DNS client cache"
-    SPEC = [
+    SPEC = (
         (
             "command",
             # Powershell.exe understands a subcommand passed as single string parameter,
@@ -925,40 +893,36 @@ class WinDnsClientCache(Module):
                 "get-dnsclientcache",
             ),
         ),
-    ]
+    )
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
 
 @register_module("--powershell")
 class PowerShell(Module):
     DESC = "Windows PowerShell Artefacts"
-    SPEC = [
-        ("dir", "AppData/Roaming/Microsoft/Windows/PowerShell", from_user_home),
-    ]
+    SPEC = (("dir", "AppData/Roaming/Microsoft/Windows/PowerShell", from_user_home),)
 
 
 @register_module("--thumbnail-cache")
 class ThumbnailCache(Module):
     DESC = "Windows thumbnail db artifacts"
-    SPEC = [
-        ("glob", "AppData/Local/Microsoft/Windows/Explorer/thumbcache_*", from_user_home),
-    ]
+    SPEC = (("glob", "AppData/Local/Microsoft/Windows/Explorer/thumbcache_*", from_user_home),)
 
 
 @register_module("--text-editor")
 class TextEditor(Module):
     DESC = "text editor (un)saved tab contents"
     # Only Windows 11 notepad & Notepad++ tabs for now, but locations for other text editors may be added later.
-    SPEC = [
+    SPEC = (
         ("dir", "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/", from_user_home),
         ("dir", "AppData/Roaming/Notepad++/backup/", from_user_home),
-    ]
+    )
 
 
 @register_module("--misc")
 class Misc(Module):
     DESC = "miscellaneous Windows artefacts"
-    SPEC = [
+    SPEC = (
         ("file", "sysvol/windows/PFRO.log"),
         ("file", "sysvol/windows/setupapi.log"),
         ("file", "sysvol/windows/setupapidev.log"),
@@ -979,13 +943,13 @@ class Misc(Module):
         # Windows Search DB - Windows Search Database Roaming
         ("glob", "AppData/Roaming/Microsoft/Search/Data/Applications/S-1-*/*", from_user_home),
         ("dir", "sysvol/Windows/SoftwareDistribution/DataStore"),
-    ]
+    )
 
 
 @register_module("--av")
 class AV(Module):
     DESC = "various antivirus logs"
-    SPEC = [
+    SPEC = (
         # AVG
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/log"),
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report"),
@@ -1096,13 +1060,13 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
-    ]
+    )
 
 
 @register_module("--quarantined")
 class QuarantinedFiles(Module):
     DESC = "files quarantined by various antivirus products"
-    SPEC = [
+    SPEC = (
         # Microsoft Defender
         # https://knez.github.io/posts/how-to-extract-quarantine-files-from-windows-defender/
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Quarantine"),
@@ -1124,24 +1088,29 @@ class QuarantinedFiles(Module):
         ("dir", "sysvol/ProgramData/Sophos/Safestore"),
         # HitmanPRO
         ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
-    ]
+    )
 
 
 @register_module("--edr")
 class EDR(Module):
     DESC = "various Endpoint Detection and Response (EDR) logs"
-    SPEC = [
+    SPEC = (
         # Carbon Black
         ("dir", "sysvol/ProgramData/CarbonBlack/Logs"),
-    ]
+    )
 
 
 @register_module("--history")
 class History(Module):
     DESC = "browser history from IE, Edge, Firefox, and Chrome"
-    DIR_COMBINATIONS = namedtuple("DirCombinations", ["root_dirs", "dir_extensions", "history_files"])
-    COMMON_DIR_COMBINATIONS = [
-        DIR_COMBINATIONS(
+
+    class DirCombinations(NamedTuple):
+        root_dirs: list[str]
+        dir_extensions: list[str]
+        history_files: list[str]
+
+    COMMON_DIR_COMBINATIONS = (
+        DirCombinations(
             [
                 # Chromium - RHEL/Ubuntu - DNF/apt
                 ".config/chromium",
@@ -1197,9 +1166,9 @@ class History(Module):
                 "Web Data",
             ],
         ),
-    ]
+    )
 
-    SPEC = [
+    SPEC = (
         # IE
         ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
         ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
@@ -1238,7 +1207,7 @@ class History(Module):
         ("glob", "Library/Safari/History.*", from_user_home),
         ("file", "Library/Safari/LastSession.plist", from_user_home),
         ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
-    ]
+    )
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -1256,7 +1225,7 @@ class History(Module):
 @register_module("--remoteaccess")
 class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
-    SPEC = [
+    SPEC = (
         # teamviewer
         ("glob", "sysvol/Program Files/TeamViewer/*.log"),
         ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
@@ -1280,17 +1249,17 @@ class RemoteAccess(Module):
         ("dir", "sysvol/ProgramData/TightVNC/Server/Logs"),
         # Remote desktop cache files
         ("dir", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
-    ]
+    )
 
 
 @register_module("--webhosting")
 class WebHosting(Module):
     DESC = "Web hosting software log files"
-    SPEC = [
+    SPEC = (
         # cPanel
         ("dir", "/usr/local/cpanel/logs"),
         ("file", ".lastlogin", from_user_home),
-    ]
+    )
 
 
 @register_module("--wer")
@@ -1320,17 +1289,17 @@ class WER(Module):
 
 @register_module("--etc")
 class Etc(Module):
-    SPEC = [
+    SPEC = (
         # In OS-X /etc is a symlink to /private/etc. To prevent collecting
         # duplicates, we only use the /etc directory here.
         ("dir", "/etc"),
         ("dir", "/usr/local/etc"),
-    ]
+    )
 
 
 @register_module("--boot")
 class Boot(Module):
-    SPEC = [
+    SPEC = (
         ("glob", "/boot/config*"),
         ("glob", "/boot/efi*"),
         ("glob", "/boot/grub*"),
@@ -1338,18 +1307,19 @@ class Boot(Module):
         ("glob", "/boot/system*"),
         # Proxmox specific file
         ("glob", "/boot/pve*"),
-    ]
+    )
 
 
 def private_key_filter(path: fsutil.TargetPath) -> bool:
     if path.is_file() and not path.is_symlink():
         with path.open("rt") as file:
             return "PRIVATE KEY" in file.readline()
+    return False
 
 
 @register_module("--home")
 class Home(Module):
-    SPEC = [
+    SPEC = (
         # Catches most shell related configuration files
         ("glob", ".*[akz]sh*", from_user_home),
         ("glob", "*/.*[akz]sh*", from_user_home),
@@ -1381,17 +1351,17 @@ class Home(Module):
         ("glob", "Library/Logs/*", from_user_home),
         ("glob", "Preferences/*", from_user_home),
         ("glob", "Library/Preferences/*", from_user_home),
-    ]
+    )
 
 
 @register_module("--ssh")
 @module_arg("--private-keys", action=argparse.BooleanOptionalAction, help="Add any private keys")
 class SSH(Module):
-    SPEC = [
+    SPEC = (
         ("glob", ".ssh/*", from_user_home),
         ("glob", "/etc/ssh/*"),
         ("glob", "sysvol/ProgramData/ssh/*"),
-    ]
+    )
 
     @classmethod
     def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
@@ -1409,7 +1379,7 @@ class SSH(Module):
 @register_module("--docker")
 class Docker(Module):
     DESC = "various Docker logs and configuration files"
-    SPEC = [
+    SPEC = (
         # Container log files
         ("glob", "/var/lib/docker/containers/*/*-json.log"),
         ("glob", "/var/lib/docker/containers/*/*.json"),
@@ -1423,12 +1393,12 @@ class Docker(Module):
         ("file", ".docker/daemon.json", from_user_home),
         # Repositories
         ("file", "/var/lib/docker/image/overlay2/repositories.json"),
-    ]
+    )
 
 
 @register_module("--var")
 class Var(Module):
-    SPEC = [
+    SPEC = (
         # In OS-X /var is a symlink to /private/var. To prevent collecting
         # duplicates, we only use the /var directory here.
         ("dir", "/var/log"),
@@ -1454,21 +1424,21 @@ class Var(Module):
         ("glob", "/private/var/folders/*/*/0/com.apple.notificationcenter/*/*"),
         # user specific cron on OS-X
         ("dir", "/usr/lib/cron"),
-    ]
+    )
 
 
 @register_module("--bsd")
 class BSD(Module):
-    SPEC = [
+    SPEC = (
         ("file", "/bin/freebsd-version"),
         ("dir", "/usr/ports"),
-    ]
+    )
 
 
 @register_module("--osx")
 class OSX(Module):
     DESC = "OS-X specific files and directories"
-    SPEC = [
+    SPEC = (
         # filesystem events
         ("dir", "/.fseventsd"),
         # kernel extensions
@@ -1490,16 +1460,16 @@ class OSX(Module):
         ("dir", "/Library/Preferences"),
         # DHCP settings
         ("dir", "/private/var/db/dhcpclient/leases"),
-    ]
+    )
 
 
 @register_module("--osx-applications-info")
 class OSXApplicationsInfo(Module):
     DESC = "OS-X info.plist from all installed applications"
-    SPEC = [
+    SPEC = (
         ("glob", "/Applications/*/Contents/Info.plist"),
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
-    ]
+    )
 
 
 @register_module("--bootbanks")
@@ -1537,7 +1507,7 @@ class Bootbanks(Module):
 @register_module("--esxi")
 class ESXi(Module):
     DESC = "ESXi interesting files"
-    SPEC = [
+    SPEC = (
         ("dir", "/scratch/log"),
         ("dir", "/locker/packages/var"),
         # ESXi 7
@@ -1545,7 +1515,7 @@ class ESXi(Module):
         ("dir", "/scratch/vmkdump"),
         # ESXi 6
         ("dir", "/scratch/vmware"),
-    ]
+    )
 
 
 @register_module("--vmfs")
@@ -1555,7 +1525,7 @@ class VMFS(Module):
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, mountpoint, uuid, name in iter_esxi_filesystems(target):
-            if not fs.__type__ == "vmfs":
+            if fs.__type__ != "vmfs":
                 continue
 
             log.info("Acquiring %s (%s)", mountpoint, name)
@@ -1569,9 +1539,7 @@ class VMFS(Module):
 @register_module("--activities-cache")
 class ActivitiesCache(Module):
     DESC = "user's activities caches"
-    SPEC = [
-        ("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),
-    ]
+    SPEC = (("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),)
 
 
 @register_module("--hashes")
@@ -1636,10 +1604,7 @@ class FileHashes(Module):
     def get_specs(cls, cli_args: argparse.Namespace) -> Iterator[tuple]:
         path_selectors = []
 
-        if cli_args.ext_to_hash:
-            extensions = cli_args.ext_to_hash
-        else:
-            extensions = cls.DEFAULT_EXTENSIONS
+        extensions = cli_args.ext_to_hash if cli_args.ext_to_hash else cls.DEFAULT_EXTENSIONS
 
         if cli_args.dir_to_hash or cli_args.glob_to_hash:
             if cli_args.glob_to_hash:
@@ -1651,10 +1616,7 @@ class FileHashes(Module):
         else:
             path_selectors.extend([("dir", (dir_path, extensions)) for dir_path in cls.DEFAULT_PATHS])
 
-        if cli_args.hash_func:
-            hash_funcs = cli_args.hash_func
-        else:
-            hash_funcs = cls.DEFAULT_HASH_FUNCS
+        hash_funcs = cli_args.hash_func if cli_args.hash_func else cls.DEFAULT_HASH_FUNCS
 
         return [(path_selector, hash_funcs) for path_selector in path_selectors]
 
@@ -1674,7 +1636,7 @@ class OpenHandles(Module):
 
     @classmethod
     def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        if not sys.platform == "win32":
+        if sys.platform != "win32":
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
@@ -1707,7 +1669,7 @@ def print_disks_overview(target: Target) -> None:
             for volume in disk.vs.volumes:
                 log.info("- %s", volume)
     except Exception:
-        log.error("Failed to iterate disks")
+        log.error("Failed to iterate disks")  # noqa: TRY400
     log.info("")
 
 
@@ -1717,7 +1679,7 @@ def print_volumes_overview(target: Target) -> None:
         for volume in target.volumes:
             log.info("%s", volume)
     except Exception:
-        log.error("Failed to iterate volumes")
+        log.error("Failed to iterate volumes")  # noqa: TRY400
     log.info("")
 
 
@@ -1752,7 +1714,7 @@ def _get_modules_for_profile(
     return modules_selected
 
 
-def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional[str] = None) -> list[str | Path]:
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
     acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
@@ -1830,13 +1792,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
     modules_selected.update(volatile_modules)
 
     if not modules_selected:
-        log.warn("NO modules selected!")
+        log.warning("NO modules selected!")
     else:
         log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
     local_only_modules = {name: module for name, module in modules_selected.items() if hasattr(module, "__local__")}
     if target.path.name != "local" and local_only_modules:
-        for name, module in local_only_modules.items():
+        for module in local_only_modules.values():
             modules_failed[module.__name__] = "Not running on a local target"
         log.error(
             "Can not use local-only modules with non-local targets. Skipping: %s",
@@ -1891,16 +1853,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
             spec = []
 
             if args.file:
-                for path in args.file:
-                    spec.append(("file", path.strip()))
+                spec.extend([("file", path.strip()) for path in args.file])
 
             if args.directory:
-                for path in args.directory:
-                    spec.append(("dir", path.strip()))
+                spec.extend([("dir", path.strip()) for path in args.directory])
 
             if args.glob:
-                for path in args.glob:
-                    spec.append(("glob", path.strip()))
+                spec.extend([("glob", path.strip()) for path in args.glob])
 
             collector.collect(spec, module_name=CLI_ARGS_MODULE)
             modules_successful.append(CLI_ARGS_MODULE)
@@ -1908,14 +1867,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: Optional
 
         # Run modules (sort first based on execution order)
         modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
-        count = 0
-        for name, mod in modules_selected:
+        for count, (name, mod) in enumerate(modules_selected):
             try:
                 mod.run(target, args, collector)
 
                 modules_successful.append(mod.__name__)
             except Exception:
-                log.error("Error while running module %s", name, exc_info=True)
+                log.exception("Error while running module %s", name)
                 modules_failed[mod.__name__] = get_formatted_exception()
 
             acquire_gui.progress = (acquire_gui.shard // len(modules_selected)) * count
@@ -1968,14 +1926,14 @@ def upload_files(paths: list[str | Path], upload_plugin: UploaderPlugin, no_prox
     try:
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
-        log.error('Upload FAILED for files: "%s". See log file for details.', " ".join(map(str, paths)))
+        log.error('Upload FAILED for files: "%s". See log file for details.', " ".join(map(str, paths)))  # noqa: TRY400
         raise
     else:
         log.info("Upload succeeded.")
 
 
 class WindowsProfile:
-    MINIMAL = [
+    MINIMAL = (
         NTFS,
         EventLogs,
         Registry,
@@ -1986,8 +1944,8 @@ class WindowsProfile:
         PCA,
         Misc,
         Startup,
-    ]
-    DEFAULT = [
+    )
+    DEFAULT = (
         *MINIMAL,
         ETL,
         Recents,
@@ -2002,8 +1960,8 @@ class WindowsProfile:
         ActiveDirectory,
         RemoteAccess,
         ActivitiesCache,
-    ]
-    FULL = [
+    )
+    FULL = (
         *DEFAULT,
         History,
         NTDS,
@@ -2014,84 +1972,84 @@ class WindowsProfile:
         TextEditor,
         Docker,
         MSSQL,
-    ]
+    )
 
 
 class LinuxProfile:
-    MINIMAL = [
+    MINIMAL = (
         Etc,
         Boot,
         Home,
         SSH,
         Var,
-    ]
+    )
     DEFAULT = MINIMAL
-    FULL = [
+    FULL = (
         *DEFAULT,
         Docker,
         History,
         WebHosting,
         MSSQL,
-    ]
+    )
 
 
 class BsdProfile:
-    MINIMAL = [
+    MINIMAL = (
         Etc,
         Boot,
         Home,
         SSH,
         Var,
         BSD,
-    ]
+    )
     DEFAULT = MINIMAL
     FULL = MINIMAL
 
 
 class ESXiProfile:
-    MINIMAL = [
+    MINIMAL = (
         Bootbanks,
         ESXi,
         SSH,
-    ]
-    DEFAULT = [
+    )
+    DEFAULT = (
         *MINIMAL,
         VMFS,
-    ]
+    )
     FULL = DEFAULT
 
 
 class OSXProfile:
-    MINIMAL = [
+    MINIMAL = (
         Etc,
         Home,
         Var,
         OSX,
         OSXApplicationsInfo,
-    ]
+    )
     DEFAULT = MINIMAL
-    FULL = [
+    FULL = (
         *DEFAULT,
         History,
         SSH,
         Docker,
-    ]
+    )
 
 
 class ProxmoxProfile:
-    MINIMAL = [
+    MINIMAL = (
         Etc,
         Boot,
         Home,
         SSH,
         Var,
-    ]
+    )
     DEFAULT = MINIMAL
-    FULL = [
+    FULL = (
         *DEFAULT,
         History,
         WebHosting,
-    ]
+    )
 
 
 PROFILES = {
@@ -2124,7 +2082,7 @@ PROFILES = {
 
 
 class VolatileProfile:
-    DEFAULT = [
+    DEFAULT = (
         Devices,
         Netstat,
         WinProcesses,
@@ -2132,11 +2090,11 @@ class VolatileProfile:
         WinArpCache,
         WinRDPSessions,
         WinDnsClientCache,
-    ]
-    EXTENSIVE = [
+    )
+    EXTENSIVE = (
         Proc,
         Sys,
-    ]
+    )
 
 
 VOLATILE = {
@@ -2160,7 +2118,7 @@ VOLATILE = {
 }
 
 
-def exit_success(default_args: list[str]):
+def exit_success(default_args: list[str]) -> NoReturn:
     log.info("Acquire finished successful")
     log.info("Arguments: %s", " ".join(sys.argv[1:]))
     log.info("Default Arguments: %s", " ".join(default_args))
@@ -2168,7 +2126,7 @@ def exit_success(default_args: list[str]):
     sys.exit(0)
 
 
-def exit_failure(default_args: list[str]):
+def exit_failure(default_args: list[str]) -> NoReturn:
     log.error("Acquire FAILED")
     log.error("Arguments: %s", " ".join(sys.argv[1:]))
     log.error("Default Arguments: %s", " ".join(default_args))
@@ -2232,9 +2190,9 @@ def main() -> None:
         if args.upload:
             try:
                 upload_files(args.upload, args.upload_plugin, args.no_proxy)
-            except Exception as err:
+            except Exception:
                 acquire_gui.message("Failed to upload files")
-                log.exception(err)
+                log.exception("")
                 exit_failure(args.config.get("arguments"))
             exit_success(args.config.get("arguments"))
 
@@ -2268,17 +2226,17 @@ def main() -> None:
                 else:
                     files_to_upload = acquire_children_and_targets(target, args)
         except Exception:
-            log.error("Failed to acquire target: %s", target_name)
+            log.error("Failed to acquire target: %s", target_name)  # noqa: TRY400
             if not is_user_admin():
-                log.error("Try re-running as administrator/root")
+                log.error("Try re-running as administrator/root")  # noqa: TRY400
                 acquire_gui.message("This application must be run as administrator.")
             raise
 
         files_to_upload = sort_files(files_to_upload)
 
-    except Exception as err:
-        log.error("Acquiring artifacts FAILED")
-        log.exception(err)
+    except Exception:
+        log.error("Acquiring artifacts FAILED")  # noqa: TRY400
+        log.exception("")
         acquire_successful = False
     else:
         log.info("Acquiring artifacts succeeded")
@@ -2304,9 +2262,9 @@ def main() -> None:
             acquire_gui.finish()
             acquire_gui.wait_for_quit()
 
-    except Exception as err:
+    except Exception:
         acquire_successful = False
-        log.exception(err)
+        log.exception("")
 
     if acquire_successful:
         exit_success(args.config.get("arguments"))
@@ -2350,7 +2308,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> li
             files.extend(acquire_target(target, args, args.start_time))
 
         except Exception:
-            log.error("Failed to acquire main target")
+            log.error("Failed to acquire main target")  # noqa: TRY400
             acquire_gui.message("Failed to acquire target")
             acquire_gui.wait_for_quit()
             raise
@@ -2377,7 +2335,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> li
     return files
 
 
-def sort_files(files: list[Union[str, Path]]) -> list[Path]:
+def sort_files(files: list[str | Path]) -> list[Path]:
     log_files: list[Path] = []
     tar_paths: list[Path] = []
     report_paths: list[Path] = []

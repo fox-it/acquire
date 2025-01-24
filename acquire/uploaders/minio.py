@@ -1,7 +1,11 @@
-from pathlib import Path
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from acquire.uploaders.plugin import UploaderPlugin
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class MinIO(UploaderPlugin):
@@ -24,7 +28,7 @@ class MinIO(UploaderPlugin):
         if not all((self.endpoint, self.access_id, self.access_key, self.bucket_name)):
             raise ValueError("Invalid cloud upload configuration")
 
-    def prepare_client(self, paths: list[Path], proxies: Optional[dict[str, str]] = None) -> Any:
+    def prepare_client(self, paths: list[Path], proxies: dict[str, str] | None = None) -> Any:
         """Prepares a Minio client used to upload files.
 
         Args:

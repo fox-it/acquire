@@ -54,12 +54,55 @@ dev = [
 acquire = "acquire.acquire:main"
 acquire-decrypt = "acquire.tools.decrypter:main"
 
-[tool.black]
+[tool.ruff]
 line-length = 120
+required-version = ">=0.9.0"
 
-[tool.isort]
-profile = "black"
-known_first_party = ["acquire"]
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "UP",
+  "YTT",
+  "ANN",
+  "B",
+  "C4",
+  "DTZ",
+  "T10",
+  "FA",
+  "ISC",
+  "G",
+  "INP",
+  "PIE",
+  "PYI",
+  "PT",
+  "Q",
+  "RSE",
+  "RET",
+  "SLOT",
+  "SIM",
+  "TID",
+  "TCH",
+  "PTH",
+  "PLC",
+  "TRY",
+  "FLY",
+  "PERF",
+  "FURB",
+  "RUF",
+]
+ignore = ["E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/docs/**" = ["INP001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["acquire"]
 
 [tool.setuptools]
 license-files = ["LICENSE", "COPYRIGHT"]

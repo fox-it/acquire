@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
@@ -6,7 +8,7 @@ from acquire.acquire import sort_files
 
 
 @pytest.mark.parametrize(
-    "input, expected_output",
+    ("input", "expected_output"),
     [
         (
             ["test.log", "test.tar"],
@@ -26,5 +28,5 @@ from acquire.acquire import sort_files
         ),
     ],
 )
-def test_file_sorting(input: list[str], expected_output: list[str]):
+def test_file_sorting(input: list[str], expected_output: list[str]) -> None:
     assert sort_files(input) == expected_output

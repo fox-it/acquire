@@ -17,8 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty as QueueEmptyError
 from queue import Queue
-from threading import Event
-from typing import BinaryIO, Iterator
+from typing import TYPE_CHECKING, BinaryIO
 from urllib import request
 from urllib.error import HTTPError
 from urllib.parse import urljoin
@@ -60,6 +59,10 @@ from acquire.crypt import (
     c_acquire,
     key_fingerprint,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from threading import Event
 
 log = logging.getLogger(__name__)
 
@@ -118,7 +121,7 @@ class EncryptedFile(AlignedStream):
 
         super().__init__(size)
 
-    def seekable(self):
+    def seekable(self) -> bool:
         return False
 
     def seek(self, pos: int, whence: int = io.SEEK_CUR) -> int:
@@ -163,9 +166,8 @@ class EncryptedFile(AlignedStream):
                 length -= read_size
 
             return self.cipher.decrypt(b"".join(result))
-        else:
-            read_size = max(0, min(length, self.size - offset))
-            return self.cipher.decrypt(self.fh.read(read_size))
+        read_size = max(0, min(length, self.size - offset))
+        return self.cipher.decrypt(self.fh.read(read_size))
 
     def chunks(self, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
         while True:
@@ -222,7 +224,9 @@ class EncryptedFile(AlignedStream):
         return datetime.fromtimestamp(self.file_header.timestamp, timezone.utc)
 
 
-def decrypt_header(header, fingerprint: bytes, key_file: Path | None = None, key_server: str | None = None) -> bytes:
+def decrypt_header(
+    header: bytes, fingerprint: bytes, key_file: Path | None = None, key_server: str | None = None
+) -> bytes:
     if not key_file and not key_server:
         raise ValueError("Need either key file or key server")
 
@@ -231,22 +235,19 @@ def decrypt_header(header, fingerprint: bytes, key_file: Path | None = None, key
         if key_fingerprint(rsa_key.public_key()) != fingerprint:
             raise ValueError("Key doesn't match fingerprint")
         return PKCS1_OAEP.new(rsa_key).decrypt(header)
-    else:
-        data = json.dumps({"fingerprint": fingerprint.hex(), "header": base64.b64encode(header).decode()}).encode(
-            "utf-8"
-        )
+    data = json.dumps({"fingerprint": fingerprint.hex(), "header": base64.b64encode(header).decode()}).encode("utf-8")
 
-        url = urljoin(key_server, "/api/v1/decrypt")
-        req = request.Request(url, data, headers={"Content-Type": "application/json"})
-        try:
-            resp = request.urlopen(req)
-        except HTTPError as e:
-            if e.code == 404:
-                raise ValueError("Unknown key fingerprint")
-            raise ValueError(f"Failed to decrypt header: {e}")
-        result = json.loads(resp.read())
+    url = urljoin(key_server, "/api/v1/decrypt")
+    req = request.Request(url, data, headers={"Content-Type": "application/json"})
+    try:
+        resp = request.urlopen(req)
+    except HTTPError as e:
+        if e.code == 404:
+            raise ValueError("Unknown key fingerprint")
+        raise ValueError(f"Failed to decrypt header: {e}")
+    result = json.loads(resp.read())
 
-        return base64.b64decode(result["header"])
+    return base64.b64decode(result["header"])
 
 
 def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.Queue) -> bool:
@@ -257,7 +258,7 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
     # If suffixes of the out_path do not correspond with the in_path suffixes (minus ".enc"),
     # we're probably dealing with a special custom filename. Therefore, do not check for the existence of the
     # decompressed filename
-    if not out_path.suffixes == in_path.suffixes[:-1]:
+    if out_path.suffixes != in_path.suffixes[:-1]:
         return False
 
     # Check if acquire file is compressed (Path("file.tar.gz.enc").stem -> "file.tar.gz")
@@ -309,7 +310,7 @@ def worker(
 
                     for chunk in ef.chunks():
                         if stop_event.is_set():
-                            raise ValueError("stopping")
+                            raise ValueError("stopping")  # noqa: TRY301
                         outfh.write(chunk)
                         _update(status_queue, task_id, advance=len(chunk))
                     ef.verify()
@@ -469,7 +470,7 @@ def main() -> int:
                         task_id, args, kwargs = args
                         if progress:
                             progress.update(task_id, *args, **kwargs)
-                except (QueueEmptyError, KeyboardInterrupt):
+                except (QueueEmptyError, KeyboardInterrupt):  # noqa: PERF203
                     (progress.console.log if progress else log.info)("Stopping...")
                     stop_event.set()
                     executor.shutdown(wait=True, cancel_futures=True)
@@ -517,9 +518,10 @@ def show_duplicates(output_directory: Path, files: list[Path]) -> None:
     )
     log.warning(
         "Two or more encrypted files have the same name. "
-        f"This will skip decrypting the file if it already exists in '{output_directory}'\n"
-        f"The files with the same names are:\n"
-        f"{duplicates}"
+        "This will skip decrypting the file if it already exists in '%s'\n"
+        "The files with the same names are:\n%s",
+        output_directory,
+        duplicates,
     )
 
 
@@ -531,7 +533,7 @@ def find_enc_files(files: list[Path]) -> list[Path]:
         elif path.is_dir():
             encrypted_files.extend(path.rglob("*.enc"))
         else:
-            log.info(f"File {path!r} does not have the .enc extension. skipping.")
+            log.info("File %r does not have the .enc extension. skipping", path)
     return encrypted_files
 
 

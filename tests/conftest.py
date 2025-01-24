@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import io
+from pathlib import Path
 from typing import BinaryIO
 
 import pytest
@@ -36,6 +39,5 @@ def mock_target(mock_fs: VirtualFilesystem) -> Target:
 
 
 @pytest.fixture
-def public_key() -> bytes:
-    with open("tests/data/public_key.pem", "r") as f:
-        return f.read()
+def public_key() -> str:
+    return Path("tests/data/public_key.pem").read_text()
