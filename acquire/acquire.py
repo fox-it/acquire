@@ -302,6 +302,18 @@ class Proc(Module):
         collector.collect(spec, follow=False, volatile=True)
 
 
+@register_module("--proc-net")
+@local_module
+class ProcNet(Module):
+    DESC = "Procfs network files (live systems only)"
+    EXEC_ORDER = ExecutionOrder.BOTTOM
+
+    @classmethod
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
+        spec = [("dir", "/proc/net")]
+        collector.collect(spec, follow=False, volatile=True)
+
+
 @register_module("-n", "--ntfs")
 class NTFS(Module):
     DESC = "NTFS filesystem metadata"
@@ -2090,27 +2102,28 @@ class VolatileProfile:
         WinArpCache,
         WinRDPSessions,
         WinDnsClientCache,
+        ProcNet,
     )
-    EXTENSIVE = (
+    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
+    "full": {
+        "windows": VolatileProfile.DEFAULT,
+        "linux": VolatileProfile.FULL,
+        "bsd": VolatileProfile.FULL,
+        "esxi": VolatileProfile.FULL,
+        "osx": [],
+        "proxmox": [],
+    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
         "linux": [],
         "bsd": [],
         "esxi": [],
-        "osx": [],
-        "proxmox": [],
-    },
-    "extensive": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.EXTENSIVE,
-        "bsd": VolatileProfile.EXTENSIVE,
-        "esxi": VolatileProfile.EXTENSIVE,
         "osx": [],
         "proxmox": [],
     },
