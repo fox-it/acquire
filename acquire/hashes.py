@@ -162,7 +162,8 @@ def collect_hashes(
     Walk through the paths, calculate hashes and return details per path.
 
     Spec contains a path selector and a list of hash functions to compute against the paths.
-    For example:
+    For example::
+
         [
             ("dir", ("sysvol/Windows/", ("exe", "dll", "sys"))),
             (HashFunc.MD5, HashFunc.SHA1)

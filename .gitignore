@@ -9,6 +9,6 @@ __pycache__/
 build/
 
 acquire/version.py
-tests/docs/api
-tests/docs/build
+tests/_docs/api
+tests/_docs/build
 .tox/

@@ -60,7 +60,7 @@ def test_zip_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
     zip_output.write_entry(entry_name, entry)
     zip_output.close()
 
-    encrypted_stream = EncryptedFile(zip_output.path.open("rb"), Path("tests/data/private_key.pem"))
+    encrypted_stream = EncryptedFile(zip_output.path.open("rb"), Path("tests/_data/private_key.pem"))
     decrypted_path = tmp_path / "decrypted.zip"
     # Direct streaming is not an option because zipfile needs seek when reading from encrypted files directly
     Path(decrypted_path).write_bytes(encrypted_stream.read())
