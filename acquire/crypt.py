@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 from datetime import datetime, timezone
 from typing import BinaryIO
 
 from dissect.cstruct import cstruct
+
+try:
+    import _pystandalone
+
+    HAS_PYSTANDALONE = True
+except ImportError:
+    HAS_PYSTANDALONE = False
 
 try:
     from Crypto.Cipher import AES, PKCS1_OAEP
@@ -74,16 +82,26 @@ class EncryptedStream(io.RawIOBase):
     """
 
     def __init__(self, fh: BinaryIO, public_key: str):
-        if not HAS_PYCRYPTODOME:
-            raise ImportError("PyCryptodome is not available")
+        if not HAS_PYSTANDALONE and not HAS_PYCRYPTODOME:
+            raise ImportError("Neither _pystandalone nor PyCryptodome are available")
 
         self.fh = fh
 
-        key = get_random_bytes(32)
-        iv = get_random_bytes(12)
-        self.cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
-
-        rsa = PKCS1_OAEP.new(RSA.import_key(public_key))
+        if HAS_PYSTANDALONE:
+            try:
+                key = _pystandalone.rand_bytes(32)
+                iv = _pystandalone.rand_bytes(12)
+            except Exception:
+                # Fallback if pystandalone does not work
+                key = os.urandom(32)
+                iv = os.urandom(12)
+            self.cipher = _pystandalone.aes_256_gcm(key, iv)
+            rsa = _pystandalone.rsa(public_key)
+        else:
+            key = get_random_bytes(32)
+            iv = get_random_bytes(12)
+            self.cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+            rsa = PKCS1_OAEP.new(RSA.import_key(public_key))
 
         plain_header = c_acquire.header(
             magic=HEADER_MAGIC,
