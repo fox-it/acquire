@@ -56,7 +56,7 @@ def test_tar_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
     tar_output.write_entry(entry_name, entry)
     tar_output.close()
 
-    encrypted_stream = EncryptedFile(tar_output.path.open("rb"), Path("tests/data/private_key.pem"))
+    encrypted_stream = EncryptedFile(tar_output.path.open("rb"), Path("tests/_data/private_key.pem"))
     decrypted_path = tmp_path / "decrypted.tar"
     # Direct streaming is not an option because tarfile needs seek when reading from encrypted files directly
     Path(decrypted_path).write_bytes(encrypted_stream.read())

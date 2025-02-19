@@ -40,4 +40,4 @@ def mock_target(mock_fs: VirtualFilesystem) -> Target:
 
 @pytest.fixture
 def public_key() -> str:
-    return Path("tests/data/public_key.pem").read_text()
+    return Path("tests/_data/public_key.pem").read_text()

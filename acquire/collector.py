@@ -330,13 +330,10 @@ class Collector:
                          used.
             base: A different base path to use to store the file, it is prepended to the given or
                   generated ``outpath``.
-            volatile: When this flag is set, the collection of a number of artefacts is done
-                      slightly different:
-                      - symlinks at the end of a path will not be collected,
-                      - empty directories will be collected,
-                      - files will be collected in a slower but more robust way, any errors while
-                        reading the bytes will not fail the collection of the file and all bytes
-                        already retrieved will be stored.
+            volatile: When this flag is set, the collection of a number of artefacts is performed slightly different.
+                      Symlinks at the end of a path will not be collected, empty directories will be collected,
+                      files will be collected in a slower but more robust way, any errors while reading the bytes
+                      will not fail the collection of the file and all bytes already retrieved will be stored.
             seen_paths: A list of normalized path strings, used when calling this function
                         recursively to collect directories to break out of symlink loops.
         """
