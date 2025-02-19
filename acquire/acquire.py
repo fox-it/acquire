@@ -1213,7 +1213,7 @@ class History(Module):
         # Firefox - RHEL/Ubuntu - snap
         ("glob", "snap/firefox/common/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Brave - Ubuntu - snap
-        ("glob", "snap/brave/[0-9]*/.config/BraveSoftware/**"),
+        ("glob", "snap/brave/[0-9]*/.config/BraveSoftware/**", from_user_home),
         # Safari - macOS
         ("file", "Library/Safari/Bookmarks.plist", from_user_home),
         ("file", "Library/Safari/Downloads.plist", from_user_home),
