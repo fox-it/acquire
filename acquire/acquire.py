@@ -764,7 +764,7 @@ class Exchange(Module):
 class MSSQL(Module):
     DESC = "MSSQL error logs"
 
-    SPEC = ("glob", "/var/opt/mssql/log/errorlog*")
+    SPEC = (("glob", "/var/opt/mssql/log/errorlog*"),)
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple[str, str]]:
