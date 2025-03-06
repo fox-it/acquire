@@ -967,11 +967,16 @@ class AV(Module):
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report"),
         ("dir", "sysvol/ProgramData/AVG/Antivirus/log"),
         ("dir", "sysvol/ProgramData/AVG/Antivirus/report"),
+        ("dir", "sysvol/ProgramData/AVG/Persistent Data/Antivirus/Logs"),
+        ("file", "sysvol/ProgramData/AVG/Antivirus/FileInfo2.db"),
+        ("file", "sysvol/ProgramData/AVG/Antivirus/lsdb2.json"),
         # Avast
         ("dir", "sysvol/Documents And Settings/All Users/Application Data/Avast Software/Avast/Log"),
         ("dir", "sysvol/ProgramData/Avast Software/Avast/Log"),
         ("dir", "Avast Software/Avast/Log", from_user_home),
         ("file", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
+        ("dir", "sysvol/ProgramData/Avast Software/Persistent Data/Logs"),
+        ("dir", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
         # Avira
         ("dir", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
         ("dir", "sysvol/ProgramData/Avira/Security/Logs"),
@@ -996,6 +1001,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/ESET/ESET Security/Logs"),
         ("dir", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
         ("dir", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
+        ("dir", "AppData/Local/ESET/ESET Security/Quarantine", from_user_home),
         # Emsisoft
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
@@ -1028,6 +1034,7 @@ class AV(Module):
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs"),
         ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs"),
         ("dir", "sysvol/Program Files (x86)/McAfee/DLP/WCF Service/Log"),
+        # McAfee ePO
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Apache2/Logs"),
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events"),
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug"),
@@ -1043,6 +1050,7 @@ class AV(Module):
         # Sophos
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
+        ("dir", "sysvol/ProgramData/Sophos/Logs"),
         # Symantec
         (
             "dir",
@@ -1058,6 +1066,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/TotalAV/logs"),
         # Trendmicro
         ("glob", "sysvol/Program Files*/Trend Micro"),
+        ("dir", "sysvol/ProgramData/Trend Micro"),
         # VIPRE
         ("dir", "sysvol/ProgramData/VIPRE Business Agent/Logs"),
         ("dir", "AppData/Roaming/VIPRE Business", from_user_home),
@@ -1072,6 +1081,9 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
+        ("file", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log")
+        # Microsoft Safety Scanner
+        ("file", "sysvol/Windows/Debug/msert.log"),
     )
 
 
