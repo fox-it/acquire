@@ -1081,7 +1081,7 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
-        ("file", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log")
+        ("file", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("file", "sysvol/Windows/Debug/msert.log"),
     )
