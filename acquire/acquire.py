@@ -86,9 +86,7 @@ ACQUIRE_BANNER = rf"""
  \__,_|\___\__, |\__,_|_|_|  \___|
   by Fox-IT   |_|             v{VERSION}
   part of NCC Group
-"""[
-    1:
-]
+"""[1:]
 
 MODULES = {}
 MODULE_LOOKUP = {}
@@ -137,9 +135,7 @@ def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
 
 
 def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
-    yield from itertools.chain(
-        target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target)
-    )
+    yield from itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target))
 
 
 MISC_MAPPING = {
@@ -161,9 +157,7 @@ def from_user_home(target: Target, path: str) -> Iterator[str]:
         yield user_dir.joinpath(path).as_posix()
 
 
-def iter_ntfs_filesystems(
-    target: Target,
-) -> Iterator[tuple[ntfs.NtfsFilesystem, str | None, str, str]]:
+def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str | None, str, str]]:
     mount_lookup = defaultdict(list)
     for mount, fs in target.fs.mounts.items():
         mount_lookup[fs].append(mount)
@@ -194,9 +188,7 @@ def iter_ntfs_filesystems(
         yield fs, main_mountpoint, name, mountpoints
 
 
-def iter_esxi_filesystems(
-    target: Target,
-) -> Iterator[tuple[Filesystem, str, str, str | None]]:
+def iter_esxi_filesystems(target: Target) -> Iterator[tuple[Filesystem, str, str, str | None]]:
     for mount, fs in target.fs.mounts.items():
         if not mount.startswith("/vmfs/volumes/"):
             continue
@@ -264,9 +256,7 @@ class Module:
     EXEC_ORDER = ExecutionOrder.DEFAULT
 
     @classmethod
-    def run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         desc = cls.DESC or cls.__name__.lower()
         log.info("*** Acquiring %s", desc)
 
@@ -280,15 +270,11 @@ class Module:
             cls._run(target, cli_args, collector)
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         pass
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         pass
 
 
@@ -299,9 +285,7 @@ class Sys(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         spec = [("dir", "/sys")]
         collector.collect(spec, follow=False, volatile=True)
 
@@ -313,9 +297,7 @@ class Proc(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         spec = [("dir", "/proc")]
         collector.collect(spec, follow=False, volatile=True)
 
@@ -327,9 +309,7 @@ class ProcNet(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         spec = [("dir", "/proc/net")]
         collector.collect(spec, follow=False, volatile=True)
 
@@ -339,9 +319,7 @@ class NTFS(Module):
     DESC = "NTFS filesystem metadata"
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring from %s as %s (%s)", fs, name, mountpoints)
 
@@ -366,9 +344,7 @@ class NTFS(Module):
             if isinstance(journal, RunlistStream):
                 i = 0
                 while journal.runlist[i][0] is None:
-                    journal.seek(
-                        journal.runlist[i][1] * journal.block_size, io.SEEK_CUR
-                    )
+                    journal.seek(journal.runlist[i][1] * journal.block_size, io.SEEK_CUR)
                     i += 1
                 size = journal.size - journal.tell()
             else:
@@ -394,28 +370,16 @@ class Registry(Module):
         ("glob", "sysvol/System Volume Information/_restore*/RP*/snapshot/_REGISTRY_*"),
         ("glob", "ntuser.dat*", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/UsrClass.dat*", from_user_home),
-        (
-            "glob",
-            "Local Settings/Application Data/Microsoft/Windows/UsrClass.dat*",
-            from_user_home,
-        ),
+        ("glob", "Local Settings/Application Data/Microsoft/Windows/UsrClass.dat*", from_user_home),
     )
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # Glob all hives to include e.g. .LOG files and .regtrans-ms files.
         files = []
         for hive in cls.HIVES:
             pattern = f"sysvol/windows/system32/config/{hive}*"
-            files.extend(
-                [
-                    ("file", entry)
-                    for entry in target.fs.path().glob(pattern)
-                    if entry.is_file()
-                ]
-            )
+            files.extend([("file", entry) for entry in target.fs.path().glob(pattern) if entry.is_file()])
         return files
 
 
@@ -434,14 +398,10 @@ class Devices(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         try:
             lines = _windows_get_devices()
-            collector.output.write_bytes(
-                "QueryDosDeviceA.txt", "\n".join(lines).encode("utf-8")
-            )
+            collector.output.write_bytes("QueryDosDeviceA.txt", "\n".join(lines).encode("utf-8"))
             collector.report.add_command_collected(cls.__name__, ["QueryDosDeviceA"])
         except Exception:
             collector.report.add_command_failed(cls.__name__, ["QueryDosDeviceA"])
@@ -465,11 +425,7 @@ class WinProcEnv(Module):
         (
             "command",
             (
-                [
-                    "PowerShell",
-                    "-command",
-                    "Get-Process | ForEach-Object {$_.StartInfo.EnvironmentVariables}",
-                ],
+                ["PowerShell", "-command", "Get-Process | ForEach-Object {$_.StartInfo.EnvironmentVariables}"],
                 "win-process-env-vars",
             ),
         ),
@@ -484,9 +440,7 @@ class WinArpCache(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         if float(target.ntversion) < 6.2:
             commands = [
                 # < Windows 10
@@ -507,17 +461,13 @@ class WinRDPSessions(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         # where.exe instead of where, just in case the client runs in PS instead of CMD
         # by default where hides qwinsta on 32-bit systems because qwinsta is only 64-bit, but with recursive /R search
         # we can still manage to find it and by passing the exact path Windows will launch a 64-bit process
         # on systems capable of doing that.
         qwinsta = subprocess.run(
-            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"],
-            capture_output=True,
-            text=True,
+            ["where.exe", "/R", os.environ["WINDIR"], "qwinsta.exe"], capture_output=True, text=True
         ).stdout.split("\n")[0]
         return [
             ("command", ([qwinsta, "/VM"], "win-rdp-sessions")),
@@ -531,9 +481,7 @@ class WinMemDump(Module):
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         winpmem_file_name = "winpmem.exe"
         winpmem_exec = shutil.which(winpmem_file_name)
 
@@ -560,14 +508,9 @@ class WinMemDump(Module):
             output_base = fsutil.join(collector.base, collector.COMMAND_OUTPUT_BASE)
 
         mem_dump_output_path = fsutil.join(output_base, mem_dump_path.name)
-        mem_dump_errors_output_path = fsutil.join(
-            output_base, mem_dump_errors_path.name
-        )
+        mem_dump_errors_output_path = fsutil.join(output_base, mem_dump_errors_path.name)
 
-        with (
-            mem_dump_path.open(mode="wb") as mem_dump_fh,
-            mem_dump_errors_path.open(mode="wb") as mem_dump_errors_fh,
-        ):
+        with mem_dump_path.open(mode="wb") as mem_dump_fh, mem_dump_errors_path.open(mode="wb") as mem_dump_errors_fh:
             try:
                 # The shell parameter must be set to False, as otherwise the
                 # output from stdout is not piped into the filehandle.
@@ -609,9 +552,7 @@ class WinMemFiles(Module):
     )
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
@@ -632,9 +573,7 @@ class EventLogs(Module):
     DESC = "event logs"
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         evt_log_paths = evt.EvtPlugin(target).get_logs(filename_glob="*.evt")
         for path in evt_log_paths:
@@ -667,9 +606,7 @@ class ActiveDirectory(Module):
     SPEC = (("dir", "sysvol/windows/sysvol/domain"),)
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
         for reg_key in target.registry.iterkeys(key):
@@ -685,9 +622,7 @@ class NTDS(Module):
     SPEC = (("dir", "sysvol/windows/NTDS"),)
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
@@ -717,11 +652,7 @@ class Recents(Module):
     SPEC = (
         ("dir", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
         ("dir", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
-        (
-            "glob",
-            "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk",
-            from_user_home,
-        ),
+        ("glob", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk", from_user_home),
         ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
         ("glob", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/*.lnk"),
@@ -733,11 +664,7 @@ class Startup(Module):
     DESC = "Windows Startup folder"
     SPEC = (
         ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
-        (
-            "dir",
-            "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
-            from_user_home,
-        ),
+        ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
     )
 
 
@@ -760,9 +687,7 @@ class RecycleBin(Module):
     DESC = "recycle bin metadata and data files"
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         large_files_filter = None if cli_args.large_files else recyclebin_filter
 
         if large_files_filter:
@@ -775,9 +700,7 @@ class RecycleBin(Module):
 
         with collector.file_filter(large_files_filter):
             for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
-                log.info(
-                    "Acquiring recycle bin from %s as %s (%s)", fs, name, mountpoints
-                )
+                log.info("Acquiring recycle bin from %s as %s (%s)", fs, name, mountpoints)
 
                 for pattern in patterns:
                     if main_mountpoint is not None:
@@ -803,9 +726,7 @@ class Exchange(Module):
     DESC = "interesting Exchange configuration files"
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         key = "HKLM\\SOFTWARE\\Microsoft\\ExchangeServer"
@@ -846,17 +767,13 @@ class MSSQL(Module):
     SPEC = (("glob", "/var/opt/mssql/log/errorlog*"),)
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple[str, str]]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple[str, str]]:
         log_paths = set()
 
         if not target.has_function("registry"):
             return
 
-        for reg_key in target.registry.glob_ext(
-            "HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\*"
-        ):
+        for reg_key in target.registry.glob_ext("HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\*"):
             try:
                 log_paths.add(reg_key.value("ErrorDumpDir").value)
             except Exception:
@@ -877,9 +794,7 @@ class IIS(Module):
     DESC = "IIS logs"
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = {
             ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
             ("glob", "sysvol\\Windows.old\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
@@ -888,12 +803,7 @@ class IIS(Module):
             ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
         }
         iis_plugin = iis.IISLogsPlugin(target)
-        spec.update(
-            [
-                ("file", log_path)
-                for _, log_path in iis_plugin.iter_log_format_path_pairs()
-            ]
-        )
+        spec.update([("file", log_path) for _, log_path in iis_plugin.iter_log_format_path_pairs()])
         return spec
 
 
@@ -929,17 +839,9 @@ class WindowsNotifications(Module):
     DESC = "Windows Push Notifications Database files."
     SPEC = (
         # Old Win7/Win10 version of the file
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Notifications/appdb.dat",
-            from_user_home,
-        ),
+        ("file", "AppData/Local/Microsoft/Windows/Notifications/appdb.dat", from_user_home),
         # New version of the file
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Notifications/wpndatabase.db",
-            from_user_home,
-        ),
+        ("file", "AppData/Local/Microsoft/Windows/Notifications/wpndatabase.db", from_user_home),
     )
 
 
@@ -951,10 +853,7 @@ class BITS(Module):
         # called qmgr.db and its transaction logs edb.log and edb.log[0-2]
         # Win 2000/XP/2003 path
         # (basically: \%ALLUSERSPROFILE%\Application Data\Microsoft\...)
-        (
-            "glob",
-            "sysvol/Documents and Settings/All Users/Application Data/Microsoft/Network/Downloader/qmgr*.dat",
-        ),
+        ("glob", "sysvol/Documents and Settings/All Users/Application Data/Microsoft/Network/Downloader/qmgr*.dat"),
         # Win Vista and higher path
         # (basically: \%ALLUSERSPROFILE%\Microsoft\...; %ALLUSERSPROFILE% == %PROGRAMDATA%)
         ("glob", "sysvol/ProgramData/Microsoft/Network/Downloader/qmgr*.dat"),
@@ -975,9 +874,7 @@ class DHCP(Module):
     DESC = "Windows Server DHCP files"
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DhcpServer\\Parameters"
         for reg_key in target.registry.iterkeys(key):
@@ -1004,11 +901,7 @@ class WinDnsClientCache(Module):
             # Powershell.exe understands a subcommand passed as single string parameter,
             # no need to split the subcommand in parts.
             (
-                [
-                    "powershell.exe",
-                    "-Command",
-                    "Get-DnsClientCache | ConvertTo-Csv -NoTypeInformation",
-                ],
+                ["powershell.exe", "-Command", "Get-DnsClientCache | ConvertTo-Csv -NoTypeInformation"],
                 "get-dnsclientcache",
             ),
         ),
@@ -1025,13 +918,7 @@ class PowerShell(Module):
 @register_module("--thumbnail-cache")
 class ThumbnailCache(Module):
     DESC = "Windows thumbnail db artifacts"
-    SPEC = (
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/Explorer/thumbcache_*",
-            from_user_home,
-        ),
-    )
+    SPEC = (("glob", "AppData/Local/Microsoft/Windows/Explorer/thumbcache_*", from_user_home),)
 
 
 @register_module("--text-editor")
@@ -1039,11 +926,7 @@ class TextEditor(Module):
     DESC = "text editor (un)saved tab contents"
     # Only Windows 11 notepad & Notepad++ tabs for now, but locations for other text editors may be added later.
     SPEC = (
-        (
-            "dir",
-            "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/",
-            from_user_home,
-        ),
+        ("dir", "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/", from_user_home),
         ("dir", "AppData/Roaming/Notepad++/backup/", from_user_home),
     )
 
@@ -1070,11 +953,7 @@ class Misc(Module):
         # Windows Search DB
         ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
         # Windows Search DB - Windows Search Database Roaming
-        (
-            "glob",
-            "AppData/Roaming/Microsoft/Search/Data/Applications/S-1-*/*",
-            from_user_home,
-        ),
+        ("glob", "AppData/Roaming/Microsoft/Search/Data/Applications/S-1-*/*", from_user_home),
         ("dir", "sysvol/Windows/SoftwareDistribution/DataStore"),
     )
 
@@ -1084,24 +963,15 @@ class AV(Module):
     DESC = "various antivirus logs"
     SPEC = (
         # AVG
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/log",
-        ),
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report",
-        ),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/log"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report"),
         ("dir", "sysvol/ProgramData/AVG/Antivirus/log"),
         ("dir", "sysvol/ProgramData/AVG/Antivirus/report"),
         ("dir", "sysvol/ProgramData/AVG/Persistent Data/Antivirus/Logs"),
         ("file", "sysvol/ProgramData/AVG/Antivirus/FileInfo2.db"),
         ("file", "sysvol/ProgramData/AVG/Antivirus/lsdb2.json"),
         # Avast
-        (
-            "dir",
-            "sysvol/Documents And Settings/All Users/Application Data/Avast Software/Avast/Log",
-        ),
+        ("dir", "sysvol/Documents And Settings/All Users/Application Data/Avast Software/Avast/Log"),
         ("dir", "sysvol/ProgramData/Avast Software/Avast/Log"),
         ("dir", "Avast Software/Avast/Log", from_user_home),
         ("file", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
@@ -1126,20 +996,11 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/Cylance/Optics/Log"),
         ("dir", "sysvol/Program Files/Cylance/Desktop/log"),
         # ESET
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs",
-        ),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs"),
         ("dir", "sysvol/ProgramData/ESET/ESET NOD32 Antivirus/Logs"),
         ("dir", "sysvol/ProgramData/ESET/ESET Security/Logs"),
-        (
-            "dir",
-            "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs",
-        ),
-        (
-            "dir",
-            "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine",
-        ),
+        ("dir", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
+        ("dir", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
         ("dir", "AppData/Local/ESET/ESET Security/Quarantine", from_user_home),
         # Emsisoft
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
@@ -1153,16 +1014,9 @@ class AV(Module):
         ("file", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
         ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Malwarebytes
-        (
-            "glob",
-            "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml",
-        ),
+        ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        (
-            "dir",
-            "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs",
-            from_user_home,
-        ),
+        ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
         ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
         ("dir", "Application Data/McAfee/DesktopProtection", from_user_home),
@@ -1175,30 +1029,15 @@ class AV(Module):
         ("dir", "sysvol/ProgramData/McAfee/Agent/logs"),
         ("dir", "sysvol/ProgramData/McAfee/datreputation/Logs"),
         ("dir", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents",
-        ),
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE",
-        ),
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs",
-        ),
-        (
-            "dir",
-            "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs",
-        ),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs"),
+        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs"),
         ("dir", "sysvol/Program Files (x86)/McAfee/DLP/WCF Service/Log"),
         # McAfee ePO
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Apache2/Logs"),
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events"),
-        (
-            "dir",
-            "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug",
-        ),
+        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug"),
         ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Server/Logs"),
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
@@ -1209,10 +1048,7 @@ class AV(Module):
         # SentinelOne
         ("dir", "sysvol/programdata/sentinel/logs"),
         # Sophos
-        (
-            "glob",
-            "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs",
-        ),
+        ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
         ("dir", "sysvol/ProgramData/Sophos/Logs"),
         # Symantec
@@ -1220,27 +1056,11 @@ class AV(Module):
             "dir",
             "sysvol/Documents and Settings/All Users/Application Data/Symantec/Symantec Endpoint Protection/Logs/AV",
         ),
-        (
-            "glob",
-            "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Logs",
-        ),
-        (
-            "dir",
-            "AppData/Local/Symantec/Symantec Endpoint Protection/Logs",
-            from_user_home,
-        ),
-        (
-            "dir",
-            "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx",
-        ),
-        (
-            "glob",
-            "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/CmnClnt/ccSubSDK",
-        ),
-        (
-            "glob",
-            "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/registrationInfo.xml",
-        ),
+        ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Logs"),
+        ("dir", "AppData/Local/Symantec/Symantec Endpoint Protection/Logs", from_user_home),
+        ("dir", "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
+        ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/CmnClnt/ccSubSDK"),
+        ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/registrationInfo.xml"),
         # TotalAV
         ("glob", "sysvol/Program Files*/TotalAV/logs"),
         ("dir", "sysvol/ProgramData/TotalAV/logs"),
@@ -1256,21 +1076,12 @@ class AV(Module):
         ("file", "sysvol/ProgramData/WRData/WRLog.log"),
         # Microsoft Windows Defender
         ("dir", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
-        (
-            "glob",
-            "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx",
-        ),
+        ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
         ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
-        (
-            "dir",
-            "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory",
-        ),
+        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
-        (
-            "file",
-            "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log",
-        ),
+        ("file", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("file", "sysvol/Windows/Debug/msert.log"),
     )
@@ -1288,10 +1099,7 @@ class QuarantinedFiles(Module):
             "dir",
             "sysvol/Documents and Settings/All Users/Application Data/Symantec/Symantec Endpoint Protection/Quarantine",
         ),
-        (
-            "glob",
-            "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Quarantine",
-        ),
+        ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Quarantine"),
         # Trend Micro
         # https://secret.inf.ufpr.br/papers/marcus_av_handson.pdf
         ("dir", "sysvol/ProgramData/Trend Micro/AMSP/quarantine"),
@@ -1392,82 +1200,26 @@ class History(Module):
         # IE - index.dat
         ("file", "Cookies/index.dat", from_user_home),
         ("file", "Local Settings/History/History.IE5/index.dat", from_user_home),
-        (
-            "glob",
-            "Local Settings/History/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "Local Settings/Temporary Internet Files/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat",
-            from_user_home,
-        ),
+        ("glob", "Local Settings/History/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "Local Settings/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("file", "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat", from_user_home),
+        ("glob", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat", from_user_home),
         ("file", "AppData/Roaming/Microsoft/Windows/Cookies/index.dat", from_user_home),
-        (
-            "file",
-            "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat",
-            from_user_home,
-        ),
-        (
-            "file",
-            "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat",
-            from_user_home,
-        ),
+        ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
+        ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
         # Firefox - Windows
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
-        (
-            "glob",
-            "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*",
-            from_user_home,
-        ),
-        (
-            "glob",
-            "Application Data/Mozilla/Firefox/Profiles/*/*.sqlite*",
-            from_user_home,
-        ),
+        ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
+        ("glob", "Application Data/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         # Firefox - macOS
         ("glob", "/Users/*/Library/Application Support/Firefox/Profiles/*/*.sqlite*"),
         # Firefox - RHEL/Ubuntu - Flatpak
-        (
-            "glob",
-            ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite*",
-            from_user_home,
-        ),
+        ("glob", ".var/app/org.mozilla.firefox/.mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - DNF/apt
         ("glob", ".mozilla/firefox/*/*.sqlite*", from_user_home),
         # Firefox - RHEL/Ubuntu - snap
@@ -1484,14 +1236,10 @@ class History(Module):
     )
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         for root_dirs, extension_dirs, history_files in cls.COMMON_DIR_COMBINATIONS:
-            for root_dir, extension_dir, history_file in product(
-                root_dirs, extension_dirs, history_files
-            ):
+            for root_dir, extension_dir, history_file in product(root_dirs, extension_dirs, history_files):
                 full_path = f"{root_dir}/{extension_dir}/{history_file}"
                 search_type = "glob" if "*" in full_path else "file"
 
@@ -1545,9 +1293,7 @@ class WER(Module):
     DESC = "WER (Windows Error Reporting) related files"
 
     @classmethod
-    def get_spec_additions(
-        cls, target: Target, cli_args: argparse.Namespace
-    ) -> Iterator[tuple]:
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
         for wer_dir in itertools.chain(
@@ -1635,9 +1381,7 @@ class Home(Module):
 
 
 @register_module("--ssh")
-@module_arg(
-    "--private-keys", action=argparse.BooleanOptionalAction, help="Add any private keys"
-)
+@module_arg("--private-keys", action=argparse.BooleanOptionalAction, help="Add any private keys")
 class SSH(Module):
     SPEC = (
         ("glob", ".ssh/*", from_user_home),
@@ -1646,9 +1390,7 @@ class SSH(Module):
     )
 
     @classmethod
-    def run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         # Acquire SSH configuration in sshd directories
 
         filter = None if cli_args.private_keys else private_key_filter
@@ -1718,28 +1460,27 @@ class BSD(Module):
         ("dir", "/usr/ports"),
     )
 
-
 @register_module("--applications")
 class Applications(Module):
-    SPEC = ("dir", "/usr/share/applications")("dir", "/usr/local/share/applications")(
-        "dir", "/var/lib/snapd/desktop/applications"
-    )("dir", "/var/lib/flatpak/exports/share/applications")(
-        "dir", ".local/share/applications", from_user_home
+    SPEC = (
+        ("dir", "/usr/share/applications")
+        ("dir", "/usr/local/share/applications")
+        ("dir", "/var/lib/snapd/desktop/applications")
+        ("dir", "/var/lib/flatpak/exports/share/applications")
+        ("dir", ".local/share/applications", from_user_home)
     )
-
 
 @register_module("--network")
 class Network(Module):
-    SPEC = ("dir", "/etc/systemd/network")("dir", "/run/systemd/network")(
-        "dir", "/usr/lib/systemd/network"
-    )("dir", "/usr/local/lib/systemd/network")(
-        "dir", "/etc/NetworkManager/system-connections"
-    )(
-        "dir", "/usr/lib/NetworkManager/system-connections"
-    )(
-        "dir", "/run/NetworkManager/system-connections"
+    SPEC = (
+        ("dir", "/etc/systemd/network")
+        ("dir", "/run/systemd/network")
+        ("dir", "/usr/lib/systemd/network")
+        ("dir", "/usr/local/lib/systemd/network")
+        ("dir", "/etc/NetworkManager/system-connections")
+        ("dir", "/usr/lib/NetworkManager/system-connections")
+        ("dir", "/run/NetworkManager/system-connections")
     )
-
 
 @register_module("--osx")
 class OSX(Module):
@@ -1783,9 +1524,7 @@ class Bootbanks(Module):
     DESC = "ESXi bootbanks"
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         # Both ESXi 6 and 7 compatible
         boot_dirs = {
             "boot": "BOOT",
@@ -1831,9 +1570,7 @@ class VMFS(Module):
     DESC = "ESXi VMFS metadata files"
 
     @classmethod
-    def _run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, mountpoint, uuid, name in iter_esxi_filesystems(target):
             if fs.__type__ != "vmfs":
                 continue
@@ -1860,17 +1597,9 @@ class ActivitiesCache(Module):
     choices=[h.value for h in HashFunc],
     help="Hash function to use",
 )
-@module_arg(
-    "--dir-to-hash", action="append", help="Hash only files in a provided directory"
-)
-@module_arg(
-    "--ext-to-hash",
-    action="append",
-    help="Hash only files with the extensions provided",
-)
-@module_arg(
-    "--glob-to-hash", action="append", help="Hash only files that match provided glob"
-)
+@module_arg("--dir-to-hash", action="append", help="Hash only files in a provided directory")
+@module_arg("--ext-to-hash", action="append", help="Hash only files with the extensions provided")
+@module_arg("--glob-to-hash", action="append", help="Hash only files that match provided glob")
 class FileHashes(Module):
     DESC = "file hashes"
 
@@ -1895,17 +1624,13 @@ class FileHashes(Module):
     MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB
 
     DEFAULT_FILE_FILTERS = (
-        functools.partial(
-            filter_out_by_path_match, re_pattern="^/(sysvol/)?Windows/WinSxS/"
-        ),
+        functools.partial(filter_out_by_path_match, re_pattern="^/(sysvol/)?Windows/WinSxS/"),
         functools.partial(filter_out_huge_files, max_size_bytes=MAX_FILE_SIZE_BYTES),
         functools.partial(filter_out_by_value_match, value=b"MZ", offsets=[0, 3]),
     )
 
     @classmethod
-    def run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         log.info("*** Acquiring file hashes")
 
         specs = cls.get_specs(cli_args)
@@ -1913,53 +1638,32 @@ class FileHashes(Module):
         with collector.bind_module(cls):
             start = time.time()
 
-            path_hashes = collect_hashes(
-                target, specs, path_filters=cls.DEFAULT_FILE_FILTERS
-            )
-            rows_count, csv_compressed_bytes = serialize_into_csv(
-                path_hashes, compress=True
-            )
+            path_hashes = collect_hashes(target, specs, path_filters=cls.DEFAULT_FILE_FILTERS)
+            rows_count, csv_compressed_bytes = serialize_into_csv(path_hashes, compress=True)
 
             collector.write_bytes(
                 f"{collector.base}/{collector.METADATA_BASE}/file-hashes.csv.gz",
                 csv_compressed_bytes,
             )
-            log.info(
-                "Hashing is done, %s files processed in %.2f secs",
-                rows_count,
-                (time.time() - start),
-            )
+            log.info("Hashing is done, %s files processed in %.2f secs", rows_count, (time.time() - start))
 
     @classmethod
     def get_specs(cls, cli_args: argparse.Namespace) -> Iterator[tuple]:
         path_selectors = []
 
-        extensions = (
-            cli_args.ext_to_hash if cli_args.ext_to_hash else cls.DEFAULT_EXTENSIONS
-        )
+        extensions = cli_args.ext_to_hash if cli_args.ext_to_hash else cls.DEFAULT_EXTENSIONS
 
         if cli_args.dir_to_hash or cli_args.glob_to_hash:
             if cli_args.glob_to_hash:
-                path_selectors.extend(
-                    [("glob", glob) for glob in cli_args.glob_to_hash]
-                )
+                path_selectors.extend([("glob", glob) for glob in cli_args.glob_to_hash])
 
             if cli_args.dir_to_hash:
-                path_selectors.extend(
-                    [
-                        ("dir", (dir_path, extensions))
-                        for dir_path in cli_args.dir_to_hash
-                    ]
-                )
+                path_selectors.extend([("dir", (dir_path, extensions)) for dir_path in cli_args.dir_to_hash])
 
         else:
-            path_selectors.extend(
-                [("dir", (dir_path, extensions)) for dir_path in cls.DEFAULT_PATHS]
-            )
+            path_selectors.extend([("dir", (dir_path, extensions)) for dir_path in cls.DEFAULT_PATHS])
 
-        hash_funcs = (
-            cli_args.hash_func if cli_args.hash_func else cls.DEFAULT_HASH_FUNCS
-        )
+        hash_funcs = cli_args.hash_func if cli_args.hash_func else cls.DEFAULT_HASH_FUNCS
 
         return [(path_selector, hash_funcs) for path_selector in path_selectors]
 
@@ -1978,13 +1682,9 @@ class OpenHandles(Module):
     DESC = "Open handles"
 
     @classmethod
-    def run(
-        cls, target: Target, cli_args: argparse.Namespace, collector: Collector
-    ) -> None:
+    def run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         if sys.platform != "win32":
-            log.error(
-                "Open Handles plugin can only run on Windows systems! Skipping..."
-            )
+            log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
         from acquire.dynamic.windows.collect import collect_open_handles
@@ -2032,21 +1732,15 @@ def print_volumes_overview(target: Target) -> None:
 
 def print_acquire_warning(target: Target) -> None:
     if target.os != "windows":
-        log.warning(
-            "========================================== WARNING =========================================="
-        )
+        log.warning("========================================== WARNING ==========================================")
         log.warning("")
         log.warning(
             "The support for operating system '%s' is experimental. Some artifacts may not yet be included and some ",
             target.os,
         )
-        log.warning(
-            "features may not work as expected. Please notify upstream for any missing artifacts or features."
-        )
+        log.warning("features may not work as expected. Please notify upstream for any missing artifacts or features.")
         log.warning("")
-        log.warning(
-            "========================================== WARNING =========================================="
-        )
+        log.warning("========================================== WARNING ==========================================")
 
 
 def _get_modules_for_profile(
@@ -2058,9 +1752,7 @@ def _get_modules_for_profile(
     modules_selected = {}
 
     if profile_name != "none":
-        if (
-            profile := profiles.get(profile_name, {}).get(operating_system)
-        ) is not None:
+        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
             for mod in profile:
                 modules_selected[mod.__modname__] = mod
         else:
@@ -2069,16 +1761,12 @@ def _get_modules_for_profile(
     return modules_selected
 
 
-def acquire_target(
-    target: Target, args: argparse.Namespace, output_ts: str | None = None
-) -> list[str | Path]:
+def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
     acquire_gui = GUI()
     files = []
     output_ts = output_ts or get_utc_now_str()
     if args.log_to_dir:
-        log_file = args.log_path.joinpath(
-            format_output_name("Unknown", output_ts, "log")
-        )
+        log_file = args.log_path.joinpath(format_output_name("Unknown", output_ts, "log"))
         # This will also rename the log file on disk, which was opened in main(), if the name is different
         reconfigure_log_file(log, log_file, delay=True)
     else:
@@ -2088,11 +1776,7 @@ def acquire_target(
     if log_file:
         files.append(log_file)
         if target.path.name == "local":
-            skip_list.add(
-                normalize_path(
-                    target, log_file, resolve_parents=True, preserve_case=False
-                )
-            )
+            skip_list.add(normalize_path(target, log_file, resolve_parents=True, preserve_case=False))
 
     print_disks_overview(target)
     print_volumes_overview(target)
@@ -2136,13 +1820,7 @@ def acquire_target(
     profile = args.profile
 
     # Set profile to default if no profile, modules, files, directories or globes were selected
-    if (
-        not profile
-        and not modules_selected
-        and not args.file
-        and not args.directory
-        and not args.glob
-    ):
+    if not profile and not modules_selected and not args.file and not args.directory and not args.glob:
         log.info("Using default collection profile")
         profile = "default"
         log.info("")
@@ -2156,10 +1834,7 @@ def acquire_target(
         volatile_profile = "none"
 
     volatile_modules = _get_modules_for_profile(
-        volatile_profile,
-        target.os,
-        VOLATILE,
-        "No collection set for OS '%s' with volatile profile '%s'",
+        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
 
@@ -2168,11 +1843,7 @@ def acquire_target(
     else:
         log.info("Modules selected: %s", ", ".join(sorted(modules_selected)))
 
-    local_only_modules = {
-        name: module
-        for name, module in modules_selected.items()
-        if hasattr(module, "__local__")
-    }
+    local_only_modules = {name: module for name, module in modules_selected.items() if hasattr(module, "__local__")}
     if target.path.name != "local" and local_only_modules:
         for module in local_only_modules.values():
             modules_failed[module.__name__] = "Not running on a local target"
@@ -2194,11 +1865,7 @@ def acquire_target(
         log.info("Logging to file %s", log_path)
         files = [log_file_handler.baseFilename]
         if target.path.name == "local":
-            skip_list = {
-                normalize_path(
-                    target, log_path, resolve_parents=True, preserve_case=False
-                )
-            }
+            skip_list = {normalize_path(target, log_path, resolve_parents=True, preserve_case=False)}
 
     output_path = args.output or args.output_file
     if output_path.is_dir():
@@ -2215,11 +1882,7 @@ def acquire_target(
     )
     files.append(output.path)
     if target.path.name == "local":
-        skip_list.add(
-            normalize_path(
-                target, output.path, resolve_parents=True, preserve_case=False
-            )
-        )
+        skip_list.add(normalize_path(target, output.path, resolve_parents=True, preserve_case=False))
 
     log.info("Writing output to %s", output.path)
     if skip_list:
@@ -2250,9 +1913,7 @@ def acquire_target(
             log.info("")
 
         # Run modules (sort first based on execution order)
-        modules_selected = sorted(
-            modules_selected.items(), key=lambda module: module[1].EXEC_ORDER
-        )
+        modules_selected = sorted(modules_selected.items(), key=lambda module: module[1].EXEC_ORDER)
         for count, (name, mod) in enumerate(modules_selected):
             try:
                 mod.run(target, args, collector)
@@ -2278,9 +1939,7 @@ def acquire_target(
     log.info(get_report_summary(collection_report))
 
     if not args.disable_report:
-        collection_report_serialized = (
-            collection_report.get_records_per_module_per_outcome(serialize_records=True)
-        )
+        collection_report_serialized = collection_report.get_records_per_module_per_outcome(serialize_records=True)
 
         execution_report = {
             "target": str(target),
@@ -2292,9 +1951,7 @@ def acquire_target(
         }
 
         if args.output:
-            report_file_name = format_output_name(
-                target.name, postfix=output_ts, ext="report.json"
-            )
+            report_file_name = format_output_name(target.name, postfix=output_ts, ext="report.json")
         else:
             report_file_name = f"{output_path.name}.report.json"
 
@@ -2308,9 +1965,7 @@ def acquire_target(
     return files
 
 
-def upload_files(
-    paths: list[str | Path], upload_plugin: UploaderPlugin, no_proxy: bool = False
-) -> None:
+def upload_files(paths: list[str | Path], upload_plugin: UploaderPlugin, no_proxy: bool = False) -> None:
     proxies = None if no_proxy else urllib.request.getproxies()
     log.debug("Proxies: %s (no_proxy = %s)", proxies, no_proxy)
 
@@ -2318,10 +1973,7 @@ def upload_files(
     try:
         upload_files_using_uploader(upload_plugin, paths, proxies)
     except Exception:
-        log.error(
-            'Upload FAILED for files: "%s". See log file for details.',
-            " ".join(map(str, paths)),
-        )  # noqa: TRY400
+        log.error('Upload FAILED for files: "%s". See log file for details.', " ".join(map(str, paths)))  # noqa: TRY400
         raise
     else:
         log.info("Upload succeeded.")
@@ -2550,9 +2202,7 @@ def main() -> None:
         # and no other action is done. Thus a log file specifically named
         # Upload_<date>.log is created
         file_prefix = "Upload" if args.upload else "Unknown"
-        log_file = args.log_path.joinpath(
-            format_output_name(file_prefix, args.start_time, "log")
-        )
+        log_file = args.log_path.joinpath(format_output_name(file_prefix, args.start_time, "log"))
     else:
         log_file = args.log_path
 
@@ -2571,9 +2221,7 @@ def main() -> None:
         # start GUI if requested through CLI / config
         flavour = None
         if args.gui == "always" or (
-            args.gui == "depends"
-            and os.environ.get("PYS_KEYSOURCE") == "prompt"
-            and len(sys.argv) == 1
+            args.gui == "depends" and os.environ.get("PYS_KEYSOURCE") == "prompt" and len(sys.argv) == 1
         ):
             flavour = platform.system()
         acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
@@ -2600,11 +2248,7 @@ def main() -> None:
 
         target_paths = []
         for target_path in args.targets:
-            target_path = (
-                args_to_uri([target_path], args.loader, rest)[0]
-                if args.loader
-                else target_path
-            )
+            target_path = args_to_uri([target_path], args.loader, rest)[0] if args.loader else target_path
             if target_path == "local":
                 target_query = {}
                 if args.force_fallback:
@@ -2691,9 +2335,7 @@ def load_child(target: Target, child_path: Path) -> None:
     return child
 
 
-def acquire_children_and_targets(
-    target: Target, args: argparse.Namespace
-) -> list[str | Path]:
+def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> list[str | Path]:
     if args.child:
         target = load_child(target, args.child)
 
