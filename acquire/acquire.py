@@ -140,7 +140,6 @@ def misc_macos_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
 
 MISC_MAPPING = {
     "macos": misc_macos_user_homes,
-    "osx": misc_macos_user_homes,  # legacy
     "windows": misc_windows_user_homes,
 }
 
