@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "dissect.cstruct>=4,<5",
-    "dissect.target>=3.7,<4",
+    "dissect.target>=3.22.dev,<4",  # TODO: update on release
 ]
 dynamic = ["version"]
 
@@ -41,7 +41,7 @@ full = [
     "pycryptodome",
     "requests",
     "rich",
-    "dissect.target[full]>=3.22,<4",
+    "dissect.target[full]>=3.22.dev,<4",  # TODO: update on release
     "requests_toolbelt",
 ]
 dev = [
