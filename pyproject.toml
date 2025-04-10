@@ -99,7 +99,7 @@ select = [
 ignore = ["E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/docs/**" = ["INP001"]
+"tests/_docs/**" = ["INP001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["acquire"]
