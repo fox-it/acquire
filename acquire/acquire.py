@@ -134,12 +134,12 @@ def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     yield from itertools.chain.from_iterable(home_dirs)
 
 
-def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+def misc_macos_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     yield from itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target))
 
 
 MISC_MAPPING = {
-    "osx": misc_osx_user_homes,
+    "macos": misc_macos_user_homes,
     "windows": misc_windows_user_homes,
 }
 
@@ -1461,9 +1461,9 @@ class BSD(Module):
     )
 
 
-@register_module("--osx")
-class OSX(Module):
-    DESC = "OS-X specific files and directories"
+@register_module("--macos")
+class MacOS(Module):
+    DESC = "macOS / OSX specific files and directories"
     SPEC = (
         # filesystem events
         ("dir", "/.fseventsd"),
@@ -1489,9 +1489,9 @@ class OSX(Module):
     )
 
 
-@register_module("--osx-applications-info")
-class OSXApplicationsInfo(Module):
-    DESC = "OS-X info.plist from all installed applications"
+@register_module("--macos-applications-info")
+class MacOSApplicationsInfo(Module):
+    DESC = "macOS / OSX info.plist from all installed applications"
     SPEC = (
         ("glob", "/Applications/*/Contents/Info.plist"),
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
@@ -2045,13 +2045,13 @@ class ESXiProfile:
     FULL = DEFAULT
 
 
-class OSXProfile:
+class MacOSProfile:
     MINIMAL = (
         Etc,
         Home,
         Var,
-        OSX,
-        OSXApplicationsInfo,
+        MacOS,
+        MacOSApplicationsInfo,
     )
     DEFAULT = MINIMAL
     FULL = (
@@ -2084,7 +2084,7 @@ PROFILES = {
         "linux": LinuxProfile.FULL,
         "bsd": BsdProfile.FULL,
         "esxi": ESXiProfile.FULL,
-        "osx": OSXProfile.FULL,
+        "macos": MacOSProfile.FULL,
         "proxmox": ProxmoxProfile.FULL,
     },
     "default": {
@@ -2092,7 +2092,7 @@ PROFILES = {
         "linux": LinuxProfile.DEFAULT,
         "bsd": BsdProfile.DEFAULT,
         "esxi": ESXiProfile.DEFAULT,
-        "osx": OSXProfile.DEFAULT,
+        "macos": MacOSProfile.DEFAULT,
         "proxmox": ProxmoxProfile.DEFAULT,
     },
     "minimal": {
@@ -2100,7 +2100,7 @@ PROFILES = {
         "linux": LinuxProfile.MINIMAL,
         "bsd": BsdProfile.MINIMAL,
         "esxi": ESXiProfile.MINIMAL,
-        "osx": OSXProfile.MINIMAL,
+        "macos": MacOSProfile.MINIMAL,
         "proxmox": ProxmoxProfile.MINIMAL,
     },
     "none": None,
@@ -2130,7 +2130,7 @@ VOLATILE = {
         "linux": VolatileProfile.FULL,
         "bsd": VolatileProfile.FULL,
         "esxi": VolatileProfile.FULL,
-        "osx": [],
+        "macos": [],
         "proxmox": [],
     },
     "default": {
@@ -2138,7 +2138,7 @@ VOLATILE = {
         "linux": [],
         "bsd": [],
         "esxi": [],
-        "osx": [],
+        "macos": [],
         "proxmox": [],
     },
     "none": None,

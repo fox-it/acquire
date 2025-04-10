@@ -5,4 +5,4 @@ API Reference
     :maxdepth: 1
     :glob:
 
-    /api/*/*/index
+    /api/*/index
