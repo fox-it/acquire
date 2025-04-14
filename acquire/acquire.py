@@ -1260,10 +1260,9 @@ class RemoteAccess(Module):
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
         ("dir", "sysvol/ProgramData/AnyDesk"),
-        ("glob", "AppData/Roaming/AnyDesk/*.trace", from_user_home),
-        ("glob", "AppData/Roaming/AnyDesk/*/*.trace", from_user_home),
+        ("dir", "AppData/Roaming/AnyDesk", from_user_home),
         # anydesk - Mac + Linux
-        ("glob", ".anydesk*/*.trace", from_user_home),
+        ("glob", ".anydesk*/*", from_user_home),
         ("file", "/var/log/anydesk.trace"),
         # zoho
         ("dir", "sysvol/ProgramData/ZohoMeeting/log"),
