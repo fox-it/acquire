@@ -1268,7 +1268,7 @@ class RemoteAccess(Module):
         ("dir", "sysvol/ProgramData/RustDesk"),
         ("dir", "AppData/Roaming/RustDesk/log/server/", from_user_home),
         # RustDesk - Mac + Linux
-        ("dir", ".local/share/logs/RustDesk/server/*", from_user_home),
+        ("dir", ".local/share/logs/RustDesk/server/", from_user_home),
         ("dir", "/var/log/RustDesk"),
         ("dir", "Library/Logs/RustDesk/Server", from_user_home),
         # zoho
