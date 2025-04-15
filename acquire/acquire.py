@@ -1264,6 +1264,13 @@ class RemoteAccess(Module):
         # anydesk - Mac + Linux
         ("glob", ".anydesk*/*", from_user_home),
         ("file", "/var/log/anydesk.trace"),
+        # RustDesk - Windows
+        ("dir", "sysvol/ProgramData/RustDesk"),
+        ("dir", "AppData/Roaming/RustDesk/log/server/", from_user_home),
+        # RustDesk - Mac + Linux
+        ("dir", ".local/share/logs/RustDesk/server/", from_user_home),
+        ("dir", "/var/log/RustDesk"),
+        ("dir", "Library/Logs/RustDesk/Server", from_user_home),
         # zoho
         ("dir", "sysvol/ProgramData/ZohoMeeting/log"),
         ("dir", "AppData/Local/ZohoMeeting/log", from_user_home),
