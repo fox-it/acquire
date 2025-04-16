@@ -4,7 +4,7 @@ import hashlib
 import io
 import os
 from datetime import datetime, timezone
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from dissect.cstruct import cstruct
 
@@ -151,9 +151,11 @@ class EncryptedStream(io.RawIOBase):
             self.cipher.clean()
 
 
-def key_fingerprint(pkey: PKCS1_OAEP.PKCS1OAEP_Cipher) -> bytes:
-    if isinstance(pkey, PKCS1_OAEP.PKCS1OAEP_Cipher):
-        pkey = pkey._key
-    der = pkey.export_key("DER")
-
+def key_fingerprint(pkey: PKCS1_OAEP.PKCS1OAEP_Cipher | Any) -> bytes:
+    if HAS_PYSTANDALONE:
+        der = pkey.der()
+    else:
+        if isinstance(pkey, PKCS_OAEP.PKCS10AEP_Cipher):
+            pkey = pkey._key
+        der = pkey.export_key("DER")
     return hashlib.sha256(der).digest()
