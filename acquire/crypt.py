@@ -155,7 +155,7 @@ def key_fingerprint(pkey: PKCS1_OAEP.PKCS1OAEP_Cipher | Any) -> bytes:
     if HAS_PYSTANDALONE:
         der = pkey.der()
     else:
-        if isinstance(pkey, PKCS1_OAEP.PKCS10AEP_Cipher):
+        if isinstance(pkey, PKCS1_OAEP.PKCS1OAEP_Cipher):
             pkey = pkey._key
         der = pkey.export_key("DER")
     return hashlib.sha256(der).digest()
