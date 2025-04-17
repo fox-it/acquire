@@ -2209,11 +2209,18 @@ def main() -> None:
             flavour = platform.system()
         acquire_gui = GUI(flavour=flavour, upload_available=args.auto_upload)
 
-        args.output, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
+        args.output, files, args.auto_upload, cancel = acquire_gui.wait_for_start(args)
         if cancel:
             log.info("Acquire cancelled")
             exit_success(args.config.get("arguments"))
         # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
+
+        if files:
+            if args.output:
+                args.file = files
+            else:
+                args.upload = files
+                args.auto_upload = False
 
         plugins_to_load = [("cloud", MinIO)]
         upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
@@ -2223,6 +2230,10 @@ def main() -> None:
         if args.upload:
             try:
                 upload_files(args.upload, args.upload_plugin, args.no_proxy)
+
+                if acquire_gui:
+                    acquire_gui.finish()
+                    acquire_gui.wait_for_quit()
             except Exception:
                 acquire_gui.message("Failed to upload files")
                 log.exception("")
