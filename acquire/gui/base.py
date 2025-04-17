@@ -20,6 +20,7 @@ class GUI:
 
     thread = None
     folder = None
+    files = None
     ready = False
     auto_upload = None
     upload_available = False
@@ -55,7 +56,7 @@ class GUI:
             raise GUIError("Shards have to be between 0-100")
         self._shard = shard
 
-    def wait_for_start(self, args: Namespace) -> tuple[str, bool, bool]:
+    def wait_for_start(self, args: Namespace) -> tuple[str, str, bool, bool]:
         """Starts GUI thread and waits for start button to be clicked."""
 
         def gui_thread() -> None:
@@ -65,7 +66,7 @@ class GUI:
         GUI.thread.start()
         while not self.ready and not self._closed:
             time.sleep(1)
-        return self.folder, self.auto_upload, self._closed
+        return self.folder, self.files, self.auto_upload, self._closed
 
     def message(self, message: str) -> None:
         """Starts GUI thread and waits for start button to be clicked."""
@@ -92,8 +93,8 @@ class Stub(GUI):
     def message(self, message: str) -> None:
         pass
 
-    def wait_for_start(self, args: Namespace) -> tuple[str, bool, bool]:
-        return args.output, args.auto_upload, False
+    def wait_for_start(self, args: Namespace) -> tuple[str, str, bool, bool]:
+        return args.output, None, args.auto_upload, False
 
     def wait_for_quit(self) -> None:
         pass
