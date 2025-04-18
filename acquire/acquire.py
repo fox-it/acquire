@@ -568,6 +568,29 @@ class WinMemFiles(Module):
         return spec
 
 
+@register_module("--cam-history")
+class CamHistory(Module):
+    DESC = "Capability Manager History"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        # Manualy read reg key as CamPlugin (cam.historY) is not in Dissect.Target yet.
+        # In the future the below code can be replaced by importing:
+        # from dissect.target.plugins.os.windows import CamPlugin
+        # cam_history_db_file = CamPlugin(target)._find_db()
+        CAP_DB_REG_PATH = (
+            "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\CapabilityUsageHistory"
+        )
+        DatabaseRoot = target.registry.key(CAP_DB_REG_PATH).value("DatabaseRoot").value
+        cam_history_db_file = target.fs.path(DatabaseRoot).joinpath("CapabilityAccessManager.db")
+
+        if cam_history_db_file.exists():
+            spec.add(("dir", cam_history_db_file.parent))
+        return spec
+
+
 @register_module("-e", "--eventlogs")
 class EventLogs(Module):
     DESC = "event logs"
@@ -1992,6 +2015,7 @@ class WindowsProfile:
         ActiveDirectory,
         RemoteAccess,
         ActivitiesCache,
+        CamHistory,
     )
     FULL = (
         *DEFAULT,
