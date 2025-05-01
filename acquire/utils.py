@@ -130,7 +130,13 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
 
     parser.add_argument("--disable-report", action="store_true", help="disable acquisition report file")
 
-    parser.add_argument("--child", help="only collect specific child")
+    parser.add_argument(
+        "--list-children",
+        action=argparse.BooleanOptionalAction,
+        help="list all children by index and path - does not collect anything",
+    )
+
+    parser.add_argument("--child", help="only collect specific child based on index or path, see --list-children")
     parser.add_argument(
         "--children",
         action=argparse.BooleanOptionalAction,
