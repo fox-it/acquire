@@ -2240,6 +2240,9 @@ def main() -> None:
                 if args.fallback:
                     target_query.update({"fallback-to-directory-fs": 1})
 
+                if args.enable_nfs:
+                    target_query.update({"enable-nfs": 1})
+
                 target_query = urllib.parse.urlencode(target_query)
                 target_path = f"{target_path}?{target_query}"
             target_paths.append(target_path)
