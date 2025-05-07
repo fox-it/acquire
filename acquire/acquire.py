@@ -24,6 +24,7 @@ from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
 from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils import args_to_uri
 from dissect.util.stream import RunlistStream
@@ -570,23 +571,15 @@ class WinMemFiles(Module):
 
 @register_module("--cam-history")
 class CamHistory(Module):
-    DESC = "Capability Manager History"
+    DESC = "Capability Manager History Database"
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
 
-        # Manualy read reg key as CamPlugin (cam.historY) is not in Dissect.Target yet.
-        # In the future the below code can be replaced by importing:
-        # from dissect.target.plugins.os.windows import CamPlugin
-        # cam_history_db_file = CamPlugin(target)._find_db()
-        CAP_DB_REG_PATH = (
-            "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\CapabilityUsageHistory"
-        )
-        DatabaseRoot = target.registry.key(CAP_DB_REG_PATH).value("DatabaseRoot").value
-        cam_history_db_file = target.fs.path(DatabaseRoot).joinpath("CapabilityAccessManager.db")
-
+        cam_history_db_file = CamPlugin(target)._find_db()
         if cam_history_db_file.exists():
+            # Collect all files from the db path, including .db-wal and .db-shm files.
             spec.add(("dir", cam_history_db_file.parent))
         return spec
 
@@ -2263,6 +2256,9 @@ def main() -> None:
 
                 if args.fallback:
                     target_query.update({"fallback-to-directory-fs": 1})
+
+                if args.enable_nfs:
+                    target_query.update({"enable-nfs": 1})
 
                 target_query = urllib.parse.urlencode(target_query)
                 target_path = f"{target_path}?{target_query}"
