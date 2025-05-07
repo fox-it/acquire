@@ -24,6 +24,7 @@ from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
 from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils import args_to_uri
 from dissect.util.stream import RunlistStream
@@ -565,6 +566,21 @@ class WinMemFiles(Module):
             spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
             spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
 
+        return spec
+
+
+@register_module("--cam-history")
+class CamHistory(Module):
+    DESC = "Capability Manager History Database"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        cam_history_db_file = CamPlugin(target)._find_db()
+        if cam_history_db_file and cam_history_db_file.exists():
+            # Collect all files from the db path, including .db-wal and .db-shm files.
+            spec.add(("dir", cam_history_db_file.parent))
         return spec
 
 
@@ -1992,6 +2008,7 @@ class WindowsProfile:
         ActiveDirectory,
         RemoteAccess,
         ActivitiesCache,
+        CamHistory,
     )
     FULL = (
         *DEFAULT,
