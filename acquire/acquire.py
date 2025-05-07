@@ -578,7 +578,7 @@ class CamHistory(Module):
         spec = set()
 
         cam_history_db_file = CamPlugin(target)._find_db()
-        if cam_history_db_file.exists():
+        if cam_history_db_file and cam_history_db_file.exists():
             # Collect all files from the db path, including .db-wal and .db-shm files.
             spec.add(("dir", cam_history_db_file.parent))
         return spec
