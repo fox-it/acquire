@@ -24,6 +24,7 @@ from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
 from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils import args_to_uri
 from dissect.util.stream import RunlistStream
@@ -134,12 +135,12 @@ def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     yield from itertools.chain.from_iterable(home_dirs)
 
 
-def misc_osx_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
+def misc_macos_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
     yield from itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target))
 
 
 MISC_MAPPING = {
-    "osx": misc_osx_user_homes,
+    "macos": misc_macos_user_homes,
     "windows": misc_windows_user_homes,
 }
 
@@ -565,6 +566,21 @@ class WinMemFiles(Module):
             spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
             spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
 
+        return spec
+
+
+@register_module("--cam-history")
+class CamHistory(Module):
+    DESC = "Capability Manager History Database"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        cam_history_db_file = CamPlugin(target)._find_db()
+        if cam_history_db_file and cam_history_db_file.exists():
+            # Collect all files from the db path, including .db-wal and .db-shm files.
+            spec.add(("dir", cam_history_db_file.parent))
         return spec
 
 
@@ -1260,11 +1276,17 @@ class RemoteAccess(Module):
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
         ("dir", "sysvol/ProgramData/AnyDesk"),
-        ("glob", "AppData/Roaming/AnyDesk/*.trace", from_user_home),
-        ("glob", "AppData/Roaming/AnyDesk/*/*.trace", from_user_home),
+        ("dir", "AppData/Roaming/AnyDesk", from_user_home),
         # anydesk - Mac + Linux
-        ("glob", ".anydesk*/*.trace", from_user_home),
+        ("glob", ".anydesk*/*", from_user_home),
         ("file", "/var/log/anydesk.trace"),
+        # RustDesk - Windows
+        ("dir", "sysvol/ProgramData/RustDesk"),
+        ("dir", "AppData/Roaming/RustDesk/log/server/", from_user_home),
+        # RustDesk - Mac + Linux
+        ("dir", ".local/share/logs/RustDesk/server/", from_user_home),
+        ("dir", "/var/log/RustDesk"),
+        ("dir", "Library/Logs/RustDesk/Server", from_user_home),
         # zoho
         ("dir", "sysvol/ProgramData/ZohoMeeting/log"),
         ("dir", "AppData/Local/ZohoMeeting/log", from_user_home),
@@ -1482,9 +1504,9 @@ class Network(Module):
         ("dir", "/run/NetworkManager/system-connections"),
     )
 
-@register_module("--osx")
-class OSX(Module):
-    DESC = "OS-X specific files and directories"
+@register_module("--macos")
+class MacOS(Module):
+    DESC = "macOS / OSX specific files and directories"
     SPEC = (
         # filesystem events
         ("dir", "/.fseventsd"),
@@ -1510,9 +1532,9 @@ class OSX(Module):
     )
 
 
-@register_module("--osx-applications-info")
-class OSXApplicationsInfo(Module):
-    DESC = "OS-X info.plist from all installed applications"
+@register_module("--macos-applications-info")
+class MacOSApplicationsInfo(Module):
+    DESC = "macOS / OSX info.plist from all installed applications"
     SPEC = (
         ("glob", "/Applications/*/Contents/Info.plist"),
         ("glob", "Applications/*/Contents/Info.plist", from_user_home),
@@ -2007,6 +2029,7 @@ class WindowsProfile:
         ActiveDirectory,
         RemoteAccess,
         ActivitiesCache,
+        CamHistory,
     )
     FULL = (
         *DEFAULT,
@@ -2068,13 +2091,13 @@ class ESXiProfile:
     FULL = DEFAULT
 
 
-class OSXProfile:
+class MacOSProfile:
     MINIMAL = (
         Etc,
         Home,
         Var,
-        OSX,
-        OSXApplicationsInfo,
+        MacOS,
+        MacOSApplicationsInfo,
     )
     DEFAULT = MINIMAL
     FULL = (
@@ -2107,7 +2130,7 @@ PROFILES = {
         "linux": LinuxProfile.FULL,
         "bsd": BsdProfile.FULL,
         "esxi": ESXiProfile.FULL,
-        "osx": OSXProfile.FULL,
+        "macos": MacOSProfile.FULL,
         "proxmox": ProxmoxProfile.FULL,
     },
     "default": {
@@ -2115,7 +2138,7 @@ PROFILES = {
         "linux": LinuxProfile.DEFAULT,
         "bsd": BsdProfile.DEFAULT,
         "esxi": ESXiProfile.DEFAULT,
-        "osx": OSXProfile.DEFAULT,
+        "macos": MacOSProfile.DEFAULT,
         "proxmox": ProxmoxProfile.DEFAULT,
     },
     "minimal": {
@@ -2123,7 +2146,7 @@ PROFILES = {
         "linux": LinuxProfile.MINIMAL,
         "bsd": BsdProfile.MINIMAL,
         "esxi": ESXiProfile.MINIMAL,
-        "osx": OSXProfile.MINIMAL,
+        "macos": MacOSProfile.MINIMAL,
         "proxmox": ProxmoxProfile.MINIMAL,
     },
     "none": None,
@@ -2153,7 +2176,7 @@ VOLATILE = {
         "linux": VolatileProfile.FULL,
         "bsd": VolatileProfile.FULL,
         "esxi": VolatileProfile.FULL,
-        "osx": [],
+        "macos": [],
         "proxmox": [],
     },
     "default": {
@@ -2161,7 +2184,7 @@ VOLATILE = {
         "linux": [],
         "bsd": [],
         "esxi": [],
-        "osx": [],
+        "macos": [],
         "proxmox": [],
     },
     "none": None,
@@ -2256,6 +2279,9 @@ def main() -> None:
 
                 if args.fallback:
                     target_query.update({"fallback-to-directory-fs": 1})
+
+                if args.enable_nfs:
+                    target_query.update({"enable-nfs": 1})
 
                 target_query = urllib.parse.urlencode(target_query)
                 target_path = f"{target_path}?{target_query}"

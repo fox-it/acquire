@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "dissect.cstruct>=4,<5",
-    "dissect.target>=3.7,<4",
+    "dissect.target>=3.22.dev,<4",  # TODO: update on release
 ]
 dynamic = ["version"]
 
@@ -41,13 +41,13 @@ full = [
     "pycryptodome",
     "requests",
     "rich",
-    "dissect.target[full]>=3.7,<4",
+    "dissect.target[full]>=3.22.dev,<4",  # TODO: update on release
     "requests_toolbelt",
 ]
 dev = [
     "acquire[full]",
     "dissect.cstruct>=4.0.dev,<5.0.dev",
-    "dissect.target[dev]>=3.7.dev,<4.0.dev",
+    "dissect.target[dev]>=3.22.dev,<4.0.dev",
 ]
 
 [project.scripts]
@@ -99,7 +99,7 @@ select = [
 ignore = ["E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/docs/**" = ["INP001"]
+"tests/_docs/**" = ["INP001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["acquire"]
