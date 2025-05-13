@@ -557,12 +557,12 @@ class WinMemFiles(Module):
         spec = set()
 
         page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
-        for reg_key in target.registry.iterkeys(page_key):
+        for reg_key in target.registry.keys(page_key):
             for page_path in reg_key.value("ExistingPageFiles").value:
                 spec.add(("file", target.resolve(page_path)))
 
         crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
-        for reg_key in target.registry.iterkeys(crash_key):
+        for reg_key in target.registry.keys(crash_key):
             spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
             spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
 
@@ -625,7 +625,7 @@ class ActiveDirectory(Module):
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             try:
                 spec.add(("dir", reg_key.value("SysVol").value))
             except Exception:  # noqa: PERF203
@@ -648,7 +648,7 @@ class NTDS(Module):
             ("file", "Database backup path"),
             ("dir", "Database log files path"),
         ]
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
@@ -746,7 +746,7 @@ class Exchange(Module):
         spec = set()
 
         key = "HKLM\\SOFTWARE\\Microsoft\\ExchangeServer"
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             for subkey in reg_key.subkeys():
                 try:
                     setup_key = subkey.subkey("Setup")
@@ -893,7 +893,7 @@ class DHCP(Module):
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DhcpServer\\Parameters"
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             spec.add(("dir", reg_key.value("DatabasePath").value))
         return spec
 
