@@ -14,10 +14,10 @@ def test_validate_module_spec(module: str) -> None:
         _type, collectable, *_ = spec
         if _type == "glob":
             data_in_spec.append((*spec, "*" in collectable))
-        elif _type == "path":
+        elif _type in "path":
             data_in_spec.append((*spec, "*" not in collectable))
         else:
-            assert False, "Only 'path' or 'glob' are allowed inside a spec"
+            assert _type == "command", "Only 'path', 'glob' or 'command' are allowed inside a spec"
 
     faulty_specs = list(filter(lambda x: x[-1] is False, data_in_spec))
     formatted_specs = "\n".join([f"({spec[0]!r}, {spec[1]!r}) was faulty" for spec in faulty_specs])
