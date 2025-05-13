@@ -11,11 +11,13 @@ from acquire.acquire import MODULES
 def test_validate_module_spec(module: str) -> None:
     data_in_spec = []
     for spec in MODULES[module].SPEC:
-        type, collectable, *_ = spec
-        if type == "glob":
+        _type, collectable, *_ = spec
+        if _type == "glob":
             data_in_spec.append((*spec, "*" in collectable))
-        else:
+        elif _type == "path":
             data_in_spec.append((*spec, "*" not in collectable))
+        else:
+            assert False, "Only 'path' or 'glob' are allowed inside a spec"
 
     faulty_specs = list(filter(lambda x: x[-1] is False, data_in_spec))
     formatted_specs = "\n".join([f"({spec[0]!r}, {spec[1]!r}) was faulty" for spec in faulty_specs])
