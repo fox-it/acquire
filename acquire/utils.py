@@ -156,10 +156,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument(
         "--enable-nfs",
         action=argparse.BooleanOptionalAction,
-        help=(
-            "mount nfs shares by connecting to the nfs server of the share."
-            "Only supported with target 'local'"
-        ),
+        help=("mount nfs shares by connecting to the nfs server of the share.Only supported with target 'local'"),
     )
 
     parser.add_argument(
