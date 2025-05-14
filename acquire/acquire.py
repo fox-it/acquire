@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 import warnings
 from collections import defaultdict
-from itertools import product
+from itertools import chain, product
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
 
@@ -820,7 +820,7 @@ class IIS(Module):
             ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
         }
         iis_plugin = iis.IISLogsPlugin(target)
-        spec.update([("path", log_path) for _, log_path in iis_plugin.iter_log_format_path_pairs()])
+        spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
         return spec
 
 
