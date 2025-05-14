@@ -2228,7 +2228,9 @@ def main() -> None:
 
         if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
             warnings.warn(
-                "--file and --dir is deprecated and will be removed in acquire 3.22", DeprecationWarning, stacklevel=2
+                "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
+                DeprecationWarning,
+                stacklevel=2,
             )
 
         # start GUI if requested through CLI / config
