@@ -14,7 +14,7 @@ def test_validate_module_spec(module: str) -> None:
         type_, collectable, *_ = spec
         if type_ == "glob":
             data_in_spec.append((*spec, "*" in collectable))
-        elif type_ in "path":
+        elif type_ == "path":
             data_in_spec.append((*spec, "*" not in collectable))
         else:
             assert type_ == "command", "Only 'path', 'glob' or 'command' are allowed inside a spec"
