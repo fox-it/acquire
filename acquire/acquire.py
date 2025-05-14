@@ -1706,6 +1706,15 @@ class OpenHandles(Module):
             log.info("Collecting open handles is done.")
 
 
+@register_module("--dpapi")
+class DPAPI(Module):
+    SPEC = (
+        ("path", "sysvol/Windows/System32/Microsoft/Protect"),
+        ("path", "AppData/Roaming/Microsoft/Protect", from_user_home),
+        ("path", "Application Data/Microsoft/Protect", from_user_home),
+    )
+
+
 def print_disks_overview(target: Target) -> None:
     log.info("// Disks")
     try:
@@ -2009,6 +2018,7 @@ class WindowsProfile:
         RemoteAccess,
         ActivitiesCache,
         CamHistory,
+        DPAPI,
     )
     FULL = (
         *DEFAULT,
