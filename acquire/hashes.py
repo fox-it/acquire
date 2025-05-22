@@ -165,8 +165,8 @@ def collect_hashes(
     For example::
 
         [
-            ("dir", ("sysvol/Windows/", ("exe", "dll", "sys"))),
-            (HashFunc.MD5, HashFunc.SHA1)
+            ("path", ("sysvol/Windows/", ("exe", "dll", "sys"))),
+            (HashFunc.MD5, HashFunc.SHA1),
         ]
     """
 

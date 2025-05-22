@@ -35,9 +35,9 @@ def test_one_config_default_argument(acquire_parser_args: Namespace) -> None:
     assert acquire_parser_args.force_fallback
 
 
-@pytest.mark.parametrize(("config", "argument_list"), [(["-f", "test"], ["-f", "best"])])
+@pytest.mark.parametrize(("config", "argument_list"), [(["--path", "test"], ["--path", "best"])])
 def test_config_default_argument_override(acquire_parser_args: Namespace) -> None:
-    assert acquire_parser_args.file == ["best"]
+    assert acquire_parser_args.path == ["best"]
 
 
 @pytest.mark.parametrize(("config", "argument_list"), [([], ["target1", "target2"])])
