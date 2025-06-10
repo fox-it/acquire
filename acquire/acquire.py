@@ -1828,6 +1828,9 @@ def _get_modules_for_profile(
 
     if (profile := profile_os.get(target.os)) is None:
         for os_plugin in target._os_plugin.mro():
+            if not hasattr(os_plugin, "__os__"):
+                continue
+
             if os_plugin.__os__ is None:
                 continue
 
