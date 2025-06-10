@@ -1814,21 +1814,36 @@ def print_acquire_warning(target: Target) -> None:
 
 
 def _get_modules_for_profile(
+    target: Target,
     profile_name: str,
-    operating_system: str,
     profiles: dict[str, dict[str, list[type[Module]]]],
     err_msg: str,
 ) -> dict[str, type[Module]]:
-    modules_selected = {}
+    if profile_name == "none":
+        return {}
 
-    if profile_name != "none":
-        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
-            for mod in profile:
-                modules_selected[mod.__modname__] = mod
-        else:
-            log.error(err_msg, operating_system, profile_name)
+    if (profile_os := profiles.get(profile_name)) is None:
+        log.error("No profile found named %s", profile_name)
+        return {}
 
-    return modules_selected
+    if (profile := profile_os.get(target.os)) is None:
+        for os_plugin in target._os_plugin.mro():
+            if os_plugin.__os__ is None:
+                continue
+
+            if profile := profile_os.get(os_plugin.__os__):
+                break
+
+    if not profile:
+        log.error(err_msg, target.os, profile_name)
+        return {}
+
+    selected_modules = {}
+
+    for mod in profile:
+        selected_modules[mod.__modname__] = mod
+
+    return selected_modules
 
 
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
@@ -1896,7 +1911,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         log.info("")
 
     normal_modules = _get_modules_for_profile(
-        profile, target.os, PROFILES, "No collection set for OS '%s' with profile '%s'"
+        target, profile, PROFILES, "No collection set for OS '%s' with profile '%s'"
     )
     modules_selected.update(normal_modules)
 
@@ -1904,7 +1919,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         volatile_profile = "none"
 
     volatile_modules = _get_modules_for_profile(
-        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
+        target, volatile_profile, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
 
