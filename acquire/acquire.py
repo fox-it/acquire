@@ -338,7 +338,14 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc/net/")]
+        # With network namespaces, /proc/net is a references to /proc/<pid>/net,
+        # It contains the same information as /proc/net, however it only shows the information from the
+        # namespace where the process is the member of.
+        # TODO: Research about network namespaces
+        spec = [
+            ("path", "/proc/net/"),
+            ("path", "/proc/self/net/"),
+        ]
         collector.collect(spec, follow=False, volatile=True)
 
 
