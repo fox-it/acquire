@@ -24,6 +24,7 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
+from dissect.target.plugin import OSPlugin
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
@@ -1827,14 +1828,12 @@ def _get_modules_for_profile(
         return {}
 
     if (profile := profile_os.get(target.os)) is None:
-        for os_plugin in target._os_plugin.mro():
-            if not hasattr(os_plugin, "__os__"):
-                continue
+        instance, _ = target._functions["os"]
+        for klass in target._os_plugin.mro():
+            if klass is OSPlugin:
+                break
 
-            if os_plugin.__os__ is None:
-                continue
-
-            if profile := profile_os.get(os_plugin.__os__):
+            if profile := profile_os.get(klass.os.__get__(instance)):
                 break
 
     if not profile:
