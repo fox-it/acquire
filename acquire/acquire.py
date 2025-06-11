@@ -281,6 +281,11 @@ class Module:
 
 
 @register_module("--sys")
+@module_arg(
+    "--full-sys",
+    action=argparse.BooleanOptionalAction,
+    help="Collect the whole /sys directory",
+)
 @local_module
 class Sys(Module):
     DESC = "Sysfs files (live systems only)"
@@ -288,11 +293,18 @@ class Sys(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/sys")]
+        spec_path = "/sys" if cli_args.full else "/sys/module"
+        spec = [("path", spec_path)]
+
         collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("--proc")
+@module_arg(
+    "--full-proc",
+    action=argparse.BooleanOptionalAction,
+    help="Collect the whole /proc directory",
+)
 @local_module
 class Proc(Module):
     DESC = "Procfs files (live systems only)"
@@ -300,8 +312,22 @@ class Proc(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc")]
+        if cli_args.full_proc:
+            spec = [("path", "/proc")]
+        else:
+            spec = [
+                ("path", "/proc/sys/kernel/hostname"),
+                ("path", "/proc/uptime"),
+                ("path", "/proc/stat"),
+            ]
+            spec = itertools.chain(spec, cls._get_proc_specs(target))
         collector.collect(spec, follow=False, volatile=True)
+
+    @classmethod
+    def _get_proc_specs(cls, target: Target) -> Iterator[tuple[str, str]]:
+        pid_paths = ["status", "stat", "environ"]
+        for proc, part in itertools.product(target.proc.iter_proc(), pid_paths):
+            yield ("path", proc / part)
 
 
 @register_module("--proc-net")
@@ -312,7 +338,7 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc/net")]
+        spec = [("path", "/proc/net/")]
         collector.collect(spec, follow=False, volatile=True)
 
 
