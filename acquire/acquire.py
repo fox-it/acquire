@@ -1483,27 +1483,30 @@ class BSD(Module):
         ("path", "/usr/ports"),
     )
 
+
 @register_module("--applications")
 class Applications(Module):
     SPEC = (
-        ("dir", "/usr/share/applications"),
-        ("dir", "/usr/local/share/applications"),
-        ("dir", "/var/lib/snapd/desktop/applications"),
-        ("dir", "/var/lib/flatpak/exports/share/applications"),
-        ("dir", ".local/share/applications", from_user_home),
+        ("path", "/usr/share/applications"),
+        ("path", "/usr/local/share/applications"),
+        ("path", "/var/lib/snapd/desktop/applications"),
+        ("path", "/var/lib/flatpak/exports/share/applications"),
+        ("path", ".local/share/applications", from_user_home),
     )
+
 
 @register_module("--network")
 class Network(Module):
     SPEC = (
-        ("dir", "/etc/systemd/network"),
-        ("dir", "/run/systemd/network"),
-        ("dir", "/usr/lib/systemd/network"),
-        ("dir", "/usr/local/lib/systemd/network"),
-        ("dir", "/etc/NetworkManager/system-connections"),
-        ("dir", "/usr/lib/NetworkManager/system-connections"),
-        ("dir", "/run/NetworkManager/system-connections"),
+        ("path", "/etc/systemd/network"),
+        ("path", "/run/systemd/network"),
+        ("path", "/usr/lib/systemd/network"),
+        ("path", "/usr/local/lib/systemd/network"),
+        ("path", "/etc/NetworkManager/system-connections"),
+        ("path", "/usr/lib/NetworkManager/system-connections"),
+        ("path", "/run/NetworkManager/system-connections"),
     )
+
 
 @register_module("--macos")
 class MacOS(Module):
