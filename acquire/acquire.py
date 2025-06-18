@@ -284,16 +284,16 @@ class Module:
 @module_arg(
     "--full-sys",
     action=argparse.BooleanOptionalAction,
-    help="Collect the whole /sys directory",
+    help="acquire all Sysfs (/sys) entries",
 )
 @local_module
 class Sys(Module):
-    DESC = "Sysfs files (live systems only)"
+    DESC = "all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset. Use --full-sys to acquire all entries."
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec_path = "/sys" if cli_args.full else "/sys/module"
+        spec_path = "/sys" if cli_args.full_sys else "/sys/module"
         spec = [("path", spec_path)]
 
         collector.collect(spec, follow=False, volatile=True)
@@ -303,11 +303,11 @@ class Sys(Module):
 @module_arg(
     "--full-proc",
     action=argparse.BooleanOptionalAction,
-    help="Collect the whole /proc directory",
+    help="acquire all Procfs (/proc) entries",
 )
 @local_module
 class Proc(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = "all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset. Use --full-proc to acquire all entries."
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
