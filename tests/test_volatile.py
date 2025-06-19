@@ -7,7 +7,7 @@ import pytest
 from acquire.volatilestream import timeout
 
 
-def test_timeout() -> None:
+def test_volatile_stream_timeout() -> None:
     def snooze() -> None:
         sleep(10)
 

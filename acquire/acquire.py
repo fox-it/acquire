@@ -2181,29 +2181,20 @@ class VolatileProfile:
         WinRDPSessions,
         WinDnsClientCache,
         ProcNet,
-    )
-    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
-    "full": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.FULL,
-        "bsd": VolatileProfile.FULL,
-        "esxi": VolatileProfile.FULL,
-        "macos": [],
-        "proxmox": [],
-    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
-        "linux": [],
-        "bsd": [],
-        "esxi": [],
+        "linux": VolatileProfile.DEFAULT,
+        "bsd": VolatileProfile.DEFAULT,
+        "esxi": VolatileProfile.DEFAULT,
         "macos": [],
-        "proxmox": [],
+        # proxmox is debian based
+        "proxmox": VolatileProfile.DEFAULT,
     },
     "none": None,
 }
