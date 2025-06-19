@@ -288,7 +288,8 @@ class Module:
 )
 @local_module
 class Sys(Module):
-    DESC = "all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset. Use --full-sys to acquire all entries."
+    DESC = """all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset.
+    Use --full-sys to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
@@ -307,7 +308,8 @@ class Sys(Module):
 )
 @local_module
 class Proc(Module):
-    DESC = "all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset. Use --full-proc to acquire all entries."
+    DESC = """all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset.
+    Use --full-proc to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
