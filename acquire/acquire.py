@@ -2265,6 +2265,12 @@ def main() -> None:
                 DeprecationWarning,
                 stacklevel=2,
             )
+        if "--proc-net" in sys.argv:
+            warnings.warn(
+                "--proc-net will be deprecated in favor of --proc, and will be removed in acquire 3.23",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         # start GUI if requested through CLI / config
         flavour = None
