@@ -1828,12 +1828,8 @@ def _get_modules_for_profile(
         return {}
 
     if (profile := profile_os.get(target.os)) is None:
-        instance, _ = target._functions["os"]
-        for klass in target._os_plugin.mro():
-            if klass is OSPlugin:
-                break
-
-            if profile := profile_os.get(klass.os.__get__(instance)):
+        for os in target.os_tree():
+            if profile := profile_os.get(os):
                 break
 
     if not profile:
