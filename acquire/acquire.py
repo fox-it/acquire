@@ -24,7 +24,6 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
-from dissect.target.plugin import OSPlugin
 from dissect.target.plugins.apps.webserver import iis
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
@@ -1830,7 +1829,7 @@ def _get_modules_for_profile(
     if (profile := profile_os.get(target.os)) is None:
         for os in target.os_tree():
             if profile := profile_os.get(os):
-                log.info("No profile for %s, using %s instead", target.os, os)
+                log.info("No collection set for OS %r with profile %r, using the one for OS %r instead", target.os, profile_name, os)
                 break
 
     if not profile:
