@@ -1830,6 +1830,7 @@ def _get_modules_for_profile(
     if (profile := profile_os.get(target.os)) is None:
         for os in target.os_tree():
             if profile := profile_os.get(os):
+                log.info("No profile for %s, using %s instead", target.os, os)
                 break
 
     if not profile:
