@@ -1906,6 +1906,10 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
     if output_path.is_dir():
         output_dir = format_output_name(target.name, output_ts)
         output_path = output_path.joinpath(output_dir)
+
+    if "output_prefix" in args.config:
+        output_path = output_path.with_name(args.config.get("output_prefix") + output_path.name)
+
     output_path = output_path.resolve()
 
     output = OUTPUTS[args.output_type](
