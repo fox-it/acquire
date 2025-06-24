@@ -2286,7 +2286,7 @@ def main() -> None:
             )
         if "--proc-net" in sys.argv:
             warnings.warn(
-                "--proc-net will be deprecated in favor of --proc, and will be removed in acquire 3.23",
+                "--proc-net will be merged with --proc and will be removed in acquire 3.23",
                 DeprecationWarning,
                 stacklevel=2,
             )
