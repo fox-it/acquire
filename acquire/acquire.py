@@ -1829,7 +1829,12 @@ def _get_modules_for_profile(
     if (profile := profile_os.get(target.os)) is None:
         for os in target.os_tree():
             if profile := profile_os.get(os):
-                log.info("No collection set for OS %r with profile %r, using the one for OS %r instead", target.os, profile_name, os)
+                log.info(
+                    "No collection set for OS %r with profile %r, using the one for OS %r instead",
+                    target.os,
+                    profile_name,
+                    os,
+                )
                 break
 
     if not profile:
