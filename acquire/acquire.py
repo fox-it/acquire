@@ -281,27 +281,55 @@ class Module:
 
 
 @register_module("--sys")
+@module_arg(
+    "--full-sys",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Sysfs (/sys) entries",
+)
 @local_module
 class Sys(Module):
-    DESC = "Sysfs files (live systems only)"
+    DESC = """all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset.
+    Use --full-sys to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/sys")]
+        spec_path = "/sys" if cli_args.full_sys else "/sys/module"
+        spec = [("path", spec_path)]
+
         collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("--proc")
+@module_arg(
+    "--full-proc",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Procfs (/proc) entries",
+)
 @local_module
 class Proc(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = """all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset.
+    Use --full-proc to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc")]
+        if cli_args.full_proc:
+            spec = [("path", "/proc")]
+        else:
+            spec = [
+                ("path", "/proc/sys/kernel/hostname"),
+                ("path", "/proc/uptime"),
+                ("path", "/proc/stat"),
+            ]
+            spec = itertools.chain(spec, cls._get_proc_specs(target))
         collector.collect(spec, follow=False, volatile=True)
+
+    @classmethod
+    def _get_proc_specs(cls, target: Target) -> Iterator[tuple[str, str]]:
+        pid_paths = ["status", "stat", "environ"]
+        for proc, part in itertools.product(target.proc.iter_proc(), pid_paths):
+            yield ("path", proc / part)
 
 
 @register_module("--proc-net")
@@ -312,7 +340,14 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc/net")]
+        # With network namespaces, /proc/net is a references to /proc/<pid>/net,
+        # It contains the same information as /proc/net, however it only shows the information from the
+        # namespace where the process is the member of.
+        # TODO: Research about network namespaces
+        spec = [
+            ("path", "/proc/net/"),
+            ("path", "/proc/self/net/"),
+        ]
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -2174,29 +2209,20 @@ class VolatileProfile:
         WinRDPSessions,
         WinDnsClientCache,
         ProcNet,
-    )
-    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
-    "full": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.FULL,
-        "bsd": VolatileProfile.FULL,
-        "esxi": VolatileProfile.FULL,
-        "macos": [],
-        "proxmox": [],
-    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
-        "linux": [],
-        "bsd": [],
-        "esxi": [],
+        "linux": VolatileProfile.DEFAULT,
+        "bsd": VolatileProfile.DEFAULT,
+        "esxi": VolatileProfile.DEFAULT,
         "macos": [],
-        "proxmox": [],
+        # proxmox is debian based
+        "proxmox": VolatileProfile.DEFAULT,
     },
     "none": None,
 }
@@ -2255,6 +2281,12 @@ def main() -> None:
         if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
             warnings.warn(
                 "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if "--proc-net" in sys.argv:
+            warnings.warn(
+                "--proc-net will be merged with --proc and will be removed in acquire 3.23",
                 DeprecationWarning,
                 stacklevel=2,
             )
