@@ -1519,6 +1519,30 @@ class BSD(Module):
     )
 
 
+@register_module("--applications")
+class Applications(Module):
+    SPEC = (
+        ("path", "/usr/share/applications"),
+        ("path", "/usr/local/share/applications"),
+        ("path", "/var/lib/snapd/desktop/applications"),
+        ("path", "/var/lib/flatpak/exports/share/applications"),
+        ("path", ".local/share/applications", from_user_home),
+    )
+
+
+@register_module("--network")
+class Network(Module):
+    SPEC = (
+        ("path", "/etc/systemd/network"),
+        ("path", "/run/systemd/network"),
+        ("path", "/usr/lib/systemd/network"),
+        ("path", "/usr/local/lib/systemd/network"),
+        ("path", "/etc/NetworkManager/system-connections"),
+        ("path", "/usr/lib/NetworkManager/system-connections"),
+        ("path", "/run/NetworkManager/system-connections"),
+    )
+
+
 @register_module("--macos")
 class MacOS(Module):
     DESC = "macOS / OSX specific files and directories"
@@ -2078,6 +2102,8 @@ class LinuxProfile:
     DEFAULT = MINIMAL
     FULL = (
         *DEFAULT,
+        Applications,
+        Network,
         Docker,
         History,
         WebHosting,
