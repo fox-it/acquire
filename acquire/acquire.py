@@ -101,12 +101,14 @@ log_file_handler = None
 logging.lastResort = None
 logging.raiseExceptions = False
 
+
 def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
-        return (user_home.joinpath(path).as_posix() for user_home in target.user_details.all_home_dirs())
+        return (user_home.joinpath(path).as_posix() for user_home in target.user_details.all_home_paths)
     except Exception as e:
         log.warning("Error occurred when requesting all user homes")
         log.debug("", exc_info=e)
+
 
 def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str | None, str, str]]:
     mount_lookup = defaultdict(list)
