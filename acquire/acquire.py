@@ -281,27 +281,55 @@ class Module:
 
 
 @register_module("--sys")
+@module_arg(
+    "--full-sys",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Sysfs (/sys) entries",
+)
 @local_module
 class Sys(Module):
-    DESC = "Sysfs files (live systems only)"
+    DESC = """all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset.
+    Use --full-sys to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/sys")]
+        spec_path = "/sys" if cli_args.full_sys else "/sys/module"
+        spec = [("path", spec_path)]
+
         collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("--proc")
+@module_arg(
+    "--full-proc",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Procfs (/proc) entries",
+)
 @local_module
 class Proc(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = """all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset.
+    Use --full-proc to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc")]
+        if cli_args.full_proc:
+            spec = [("path", "/proc")]
+        else:
+            spec = [
+                ("path", "/proc/sys/kernel/hostname"),
+                ("path", "/proc/uptime"),
+                ("path", "/proc/stat"),
+            ]
+            spec = itertools.chain(spec, cls._get_proc_specs(target))
         collector.collect(spec, follow=False, volatile=True)
+
+    @classmethod
+    def _get_proc_specs(cls, target: Target) -> Iterator[tuple[str, str]]:
+        pid_paths = ["status", "stat", "environ"]
+        for proc, part in itertools.product(target.proc.iter_proc(), pid_paths):
+            yield ("path", proc / part)
 
 
 @register_module("--proc-net")
@@ -312,7 +340,14 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc/net")]
+        # With network namespaces, /proc/net is a references to /proc/<pid>/net,
+        # It contains the same information as /proc/net, however it only shows the information from the
+        # namespace where the process is the member of.
+        # TODO: Research about network namespaces
+        spec = [
+            ("path", "/proc/net/"),
+            ("path", "/proc/self/net/"),
+        ]
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -1779,21 +1814,39 @@ def print_acquire_warning(target: Target) -> None:
 
 
 def _get_modules_for_profile(
+    target: Target,
     profile_name: str,
-    operating_system: str,
     profiles: dict[str, dict[str, list[type[Module]]]],
     err_msg: str,
 ) -> dict[str, type[Module]]:
-    modules_selected = {}
+    if profile_name == "none":
+        return {}
 
-    if profile_name != "none":
-        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
-            for mod in profile:
-                modules_selected[mod.__modname__] = mod
-        else:
-            log.error(err_msg, operating_system, profile_name)
+    if (profile_os := profiles.get(profile_name)) is None:
+        log.error("No profile found named %s", profile_name)
+        return {}
 
-    return modules_selected
+    if (profile := profile_os.get(target.os)) is None:
+        for os in target.os_tree():
+            if profile := profile_os.get(os):
+                log.info(
+                    "No collection set for OS %r with profile %r, using the one for OS %r instead",
+                    target.os,
+                    profile_name,
+                    os,
+                )
+                break
+
+    if not profile:
+        log.error(err_msg, target.os, profile_name)
+        return {}
+
+    selected_modules = {}
+
+    for mod in profile:
+        selected_modules[mod.__modname__] = mod
+
+    return selected_modules
 
 
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
@@ -1861,7 +1914,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         log.info("")
 
     normal_modules = _get_modules_for_profile(
-        profile, target.os, PROFILES, "No collection set for OS '%s' with profile '%s'"
+        target, profile, PROFILES, "No collection set for OS '%s' with profile '%s'"
     )
     modules_selected.update(normal_modules)
 
@@ -1869,7 +1922,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         volatile_profile = "none"
 
     volatile_modules = _get_modules_for_profile(
-        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
+        target, volatile_profile, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
 
@@ -2178,29 +2231,20 @@ class VolatileProfile:
         WinRDPSessions,
         WinDnsClientCache,
         ProcNet,
-    )
-    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
-    "full": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.FULL,
-        "bsd": VolatileProfile.FULL,
-        "esxi": VolatileProfile.FULL,
-        "macos": [],
-        "proxmox": [],
-    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
-        "linux": [],
-        "bsd": [],
-        "esxi": [],
+        "linux": VolatileProfile.DEFAULT,
+        "bsd": VolatileProfile.DEFAULT,
+        "esxi": VolatileProfile.DEFAULT,
         "macos": [],
-        "proxmox": [],
+        # proxmox is debian based
+        "proxmox": VolatileProfile.DEFAULT,
     },
     "none": None,
 }
@@ -2259,6 +2303,12 @@ def main() -> None:
         if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
             warnings.warn(
                 "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if "--proc-net" in sys.argv:
+            warnings.warn(
+                "--proc-net will be merged with --proc and will be removed in acquire 3.23",
                 DeprecationWarning,
                 stacklevel=2,
             )
