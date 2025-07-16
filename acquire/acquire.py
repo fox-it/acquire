@@ -1333,6 +1333,9 @@ class RemoteAccess(Module):
         ("path", "sysvol/ProgramData/TightVNC/Server/Logs"),
         # Remote desktop cache files
         ("path", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
+        # Splashtop
+        ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
+        ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
     )
 
 
