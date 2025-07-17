@@ -1645,7 +1645,7 @@ class Bootbanks(Module):
             dir_path = target.fs.path(boot_dir)
             if dir_path.is_symlink() and dir_path.exists():
                 dst = dir_path.readlink()
-                fs = dst.get().top.fs
+                fs = dst.get().entries.top.fs
                 boot_fs[fs] = boot_vol
 
         for fs, mountpoint, uuid, _ in iter_esxi_filesystems(target):
