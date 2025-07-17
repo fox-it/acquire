@@ -1906,8 +1906,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
     for name, mod in MODULES.items():
         name_slug = name.lower()
         # check if module was set in the arguments provided
-        mod_arg = getattr(args, name_slug)
-        if mod_arg is True:
+        if (mod_arg := getattr(args, name_slug)) is True:
             modules_selected[name] = mod
         elif mod_arg is False:
             modules_disabled.append(name)
