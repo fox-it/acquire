@@ -1333,6 +1333,9 @@ class RemoteAccess(Module):
         ("path", "sysvol/ProgramData/TightVNC/Server/Logs"),
         # Remote desktop cache files
         ("path", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
+        # Splashtop
+        ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
+        ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
     )
 
 
@@ -1897,13 +1900,16 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
     print_acquire_warning(target)
 
     modules_selected = {}
+    modules_disabled = []
     modules_successful = []
     modules_failed = {}
     for name, mod in MODULES.items():
         name_slug = name.lower()
         # check if module was set in the arguments provided
-        if getattr(args, name_slug):
+        if (mod_arg := getattr(args, name_slug)) is True:
             modules_selected[name] = mod
+        elif mod_arg is False:
+            modules_disabled.append(name)
 
     profile = args.profile
 
@@ -1925,6 +1931,10 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         target, volatile_profile, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
+
+    # Filter modules that are explicitly disabled
+    for name in modules_disabled:
+        modules_selected.pop(name, None)
 
     if not modules_selected:
         log.warning("NO modules selected!")
