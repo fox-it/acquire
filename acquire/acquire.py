@@ -858,6 +858,20 @@ class IIS(Module):
         spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
         return spec
 
+@register_module("--spse")
+class SPSE(Module):
+    DESC = "Windows Share Point Server (SPSE) logs"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\16.0\\WSS"
+
+        for reg_key in target.registry.keys(key):
+            spec.add(("path", reg_key.value("LogDir").value))
+
+        return spec
+
 
 @register_module("--prefetch")
 class Prefetch(Module):
@@ -2113,6 +2127,7 @@ class WindowsProfile:
         WindowsNotifications,
         SSH,
         IIS,
+        SPSE,
         TextEditor,
         Docker,
         MSSQL,
