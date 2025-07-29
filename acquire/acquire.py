@@ -866,10 +866,13 @@ class SPSE(Module):
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
-        key = "HKLM\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\16.0\\WSS"
+        key = "HKLM\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\*\\WSS"
 
-        for reg_key in target.registry.keys(key):
-            spec.add(("path", reg_key.value("LogDir").value))
+        for reg_key in target.registry.glob_ext(key):
+            try:
+                spec.add(("path", reg_key.value("LogDir").value))
+            except Exception:
+                pass
 
         return spec
 
