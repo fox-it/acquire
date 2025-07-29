@@ -858,6 +858,7 @@ class IIS(Module):
         spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
         return spec
 
+
 @register_module("--spse")
 class SPSE(Module):
     DESC = "Windows Share Point Server (SPSE) logs"
