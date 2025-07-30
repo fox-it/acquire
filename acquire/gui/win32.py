@@ -15,9 +15,11 @@ from ctypes import (
     c_void_p,
     cast,
     create_string_buffer,
+    create_unicode_buffer,
     get_last_error,
     sizeof,
     string_at,
+    wstring_at
 )
 from ctypes import wintypes as w
 from pathlib import Path
@@ -144,6 +146,37 @@ class ITEMIDLIST(Structure):
     _fields_ = (("mkid", SHITEMID),)
 
 
+class OPENFILENAME(Structure):
+    _fields_ = (
+        ("lStructSize", w.DWORD),
+        ("hwndOwner", w.HWND),
+        ("hInstance", w.HINSTANCE),
+        ("lpstrFilter", w.LPWSTR),
+        ("lpstrCustomFilter", w.LPWSTR),
+        ("nMaxCustFilter", w.DWORD),
+        ("nFilterIndex", w.DWORD),
+        ("lpstrFile", w.LPWSTR),
+        ("nMaxFile", w.DWORD),
+        ("lpstrFileTitle", w.LPWSTR),
+        ("nMaxFileTitle", w.DWORD),
+        ("lpstrInitialDir", w.LPWSTR),
+        ("lpstrTitle", w.LPWSTR),
+        ("Flags", w.DWORD),
+        ("nFileOffset", w.WORD),
+        ("nFileExtension", w.WORD),
+        ("lpstrDefExt", w.LPWSTR),
+        ("lCustData", w.LPARAM),
+        ("lpfnHook", w.LPVOID),
+        ("lpTemplateName", w.LPWSTR),
+        ("pvReserved", w.LPVOID),
+        ("dwReserved", w.DWORD),
+        ("FlagsEx", w.DWORD),
+    )
+
+comdlg32 = WinDLL("comdlg32", use_last_error=True)
+comdlg32.GetOpenFileNameW.argtypes = (POINTER(OPENFILENAME),)
+comdlg32.GetOpenFileNameW.restype = w.BOOL
+
 kernel32 = WinDLL("kernel32", use_last_error=True)
 kernel32.GetModuleHandleW.argtypes = (w.LPCWSTR,)
 kernel32.GetModuleHandleW.restype = w.HMODULE
@@ -244,13 +277,16 @@ class Win32(GUI):
 
     start_button = None
     choose_folder_button = None
+    choose_files_button = None
 
     input_field = None
     checkbox = None
     reveal_text = None
     label = None
-    info = None
     upload_label = None
+    info = None
+    file_info = None
+    file_label = None
     progress_bar = None
     image = None
 
@@ -293,6 +329,14 @@ class Win32(GUI):
     def choose_folder(self) -> None:
         if self._closed:
             return
+        
+        if self.folder:
+            self.folder = None
+            user32.SetWindowTextA(self.label, b"No path selected...")
+            user32.SetWindowTextA(self.choose_folder_button, b"Choose folder")
+            if not self.files:
+                user32.EnableWindow(self.start_button, False)
+            return
 
         browseinfo = BROWSEINFOA()
         browseinfo.hwndOwner = self.hwnd
@@ -310,10 +354,53 @@ class Win32(GUI):
         if pathstr:
             self.folder = Path(pathstr)
             user32.SetWindowTextA(self.label, string_at(path))
+            user32.SetWindowTextA(self.choose_folder_button, b"Clear folder")
             user32.EnableWindow(self.start_button, True)
 
         # Caller is responsible for freeing this memory.
         ole32.CoTaskMemFree(choice)
+
+    def choose_files(self) -> None:
+        if self._closed:
+            return
+        
+        if self.files:
+            self.files = None
+            user32.SetWindowTextA(self.file_label, b"No file(s) selected...")
+            user32.SetWindowTextA(self.choose_files_button, b"Choose files")
+            if not self.folder:
+                user32.EnableWindow(self.start_button, False)
+            return
+
+        buffer_size = 4096
+        buffer = create_unicode_buffer(buffer_size)
+
+        ofn = OPENFILENAME()
+        ofn.lStructSize = sizeof(OPENFILENAME)
+        ofn.hwndOwner = self.hwnd
+        ofn.lpstrFile = cast(buffer, w.LPWSTR)
+        ofn.nMaxFile = sizeof(buffer)
+        ofn.lpstrFilter = "All Files\0*.*\0Text Files\0*.txt\0\0"
+        ofn.nFilterIndex = 1
+        ofn.Flags = 0x00002000 | 0x00080000 | 0x00000200
+ 
+        if comdlg32.GetOpenFileNameW(byref(ofn)):
+            raw_data = string_at(buffer, buffer_size * 2).decode("utf-16le").strip("\0")
+            parts = raw_data.split("\0")
+            
+            if len(parts) > 1:
+                dir_path, *file_list = parts
+                selected_paths = [f"{dir_path}\\{file}" for file in file_list]
+            else:
+                selected_paths = [parts[0]]
+
+            if selected_paths:
+                self.files = [path for path in selected_paths if path]
+                user32.SetWindowTextA(self.file_label, f"{len(self.files)} file(s) selected".encode("utf-8"))
+                user32.SetWindowTextA(self.choose_files_button, b"Clear file(s)") 
+                user32.EnableWindow(self.start_button, True)
+        else:
+            print("User cancelled file selection")
 
     def show(self) -> None:
         if self._closed:
@@ -389,18 +476,31 @@ class Win32(GUI):
             0, "static", "Acquire output folder:", WS_CHILD | WS_VISIBLE, 20, 20, 200, 20, hwnd, 0, 0, 0
         )
         self.label = user32.CreateWindowExW(
-            0, "static", "No path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 400, 25, hwnd, 0, 0, 0
+            0, "static", "No path selected...", WS_CHILD | WS_VISIBLE, 20, 40, 300, 25, hwnd, 0, 0, 0
         )
+
+        self.file_info = user32.CreateWindowExW(
+            0, "static", "Select files(s) to collect:", WS_CHILD | WS_VISIBLE, 20, 130, 250, 20, hwnd, 0, 0, 0
+        )
+
         self.choose_folder_button = user32.CreateWindowExW(
             0, "Button", "Choose folder", WS_CHILD | WS_VISIBLE | WS_BORDER | BS_FLAT, 450, 35, 120, 32, hwnd, 0, 0, 0
         )
+        self.choose_files_button = user32.CreateWindowExW(
+            0, "Button", "Choose files", WS_CHILD | WS_VISIBLE | WS_BORDER | BS_FLAT, 450, 145, 120, 32, hwnd, 0, 0, 0
+        )
+
+        self.file_label = user32.CreateWindowExW(
+            0, "static", "No file(s) selected...", WS_CHILD | WS_VISIBLE, 20, 150, 300, 25, hwnd, 0, 0, 0
+        )
+
         self.start_button = user32.CreateWindowExW(
             0,
             "Button",
             "Start",
             WS_CHILD | WS_VISIBLE | WS_BORDER | WS_DISABLED | BS_FLAT,
             250,
-            100,
+            250,
             100,
             32,
             hwnd,
@@ -408,12 +508,16 @@ class Win32(GUI):
             0,
             0,
         )
+
         if hFont:
             SendMessage(self.info, WM_SETFONT, hFont, 1)
+            SendMessage(self.file_info, WM_SETFONT, hFont, 1)
             SendMessage(self.start_button, WM_SETFONT, hFont, 1)
             SendMessage(self.choose_folder_button, WM_SETFONT, hFont, 1)
+            SendMessage(self.choose_files_button, WM_SETFONT, hFont, 1)
             SendMessage(self.label, WM_SETFONT, hFont, 1)
-
+            SendMessage(self.file_label, WM_SETFONT, hFont, 1)
+           
         msg = w.MSG()
         while user32.GetMessageW(byref(msg), None, 0, 0) != 0:
             user32.TranslateMessage(byref(msg))
@@ -427,6 +531,10 @@ class Win32(GUI):
                 event = HIWORD(wParam)
                 if event == BN_CLICKED:
                     self.choose_folder()
+            elif lParam == self.choose_files_button:
+                event = HIWORD(wParam)
+                if event == BN_CLICKED:
+                    self.choose_files()
             elif lParam == self.start_button:
                 user32.EnableWindow(self.start_button, False)
                 user32.EnableWindow(self.choose_folder_button, False)
@@ -447,7 +555,7 @@ class Win32(GUI):
                 user32.DestroyWindow(hwnd)
             return 0
 
-        if message == WM_CTLCOLORSTATIC and lParam in [self.upload_label, self.info]:
+        if message == WM_CTLCOLORSTATIC and lParam in [self.upload_label, self.info, self.file_info]:
             return gdi32.GetStockObject(WHITE_BRUSH)
 
         if message == WM_DESTROY:
