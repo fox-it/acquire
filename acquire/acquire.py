@@ -871,7 +871,7 @@ class SharePoint(Module):
         for reg_key in target.registry.glob_ext(key):
             try:
                 spec.add(("path", reg_key.value("LogDir").value))
-            except Exception:
+            except Exception:  # noqa: PERF203
                 pass
 
         return spec
