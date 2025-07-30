@@ -859,9 +859,9 @@ class IIS(Module):
         return spec
 
 
-@register_module("--spse")
-class SPSE(Module):
-    DESC = "Windows Share Point Server (SPSE) logs"
+@register_module("--sharepoint")
+class SharePoint(Module):
+    DESC = "Windows SharePoint Server logs"
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -2131,7 +2131,7 @@ class WindowsProfile:
         WindowsNotifications,
         SSH,
         IIS,
-        SPSE,
+        SharePoint,
         TextEditor,
         Docker,
         MSSQL,
