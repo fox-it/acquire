@@ -859,6 +859,24 @@ class IIS(Module):
         return spec
 
 
+@register_module("--sharepoint")
+class SharePoint(Module):
+    DESC = "Windows SharePoint Server logs"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\*\\WSS"
+
+        for reg_key in target.registry.glob_ext(key):
+            try:
+                spec.add(("path", reg_key.value("LogDir").value))
+            except Exception:  # noqa: PERF203
+                pass
+
+        return spec
+
+
 @register_module("--prefetch")
 class Prefetch(Module):
     DESC = "Windows Prefetch files"
@@ -2113,6 +2131,7 @@ class WindowsProfile:
         WindowsNotifications,
         SSH,
         IIS,
+        SharePoint,
         TextEditor,
         Docker,
         MSSQL,
