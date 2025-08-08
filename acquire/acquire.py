@@ -359,8 +359,15 @@ class NTFS(Module):
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring from %s as %s (%s)", fs, name, mountpoints)
+            filenames = [
+                "$MFT",
+                "$Boot",
+                "$Secure:$SII",
+                "$Secure:$SDS",
+                "$LogFile",
+            ]
 
-            for filename in ("$MFT", "$Boot", "$Secure:$SDS"):
+            for filename in filenames:
                 if main_mountpoint is not None:
                     path = fsutil.join(main_mountpoint, filename)
                     collector.collect_path(path)
@@ -372,6 +379,7 @@ class NTFS(Module):
                     collector.collect_file_raw(filename, fs, name)
 
             cls.collect_usnjrnl(collector, fs, name)
+            cls.collect_rmmetadata(collector, fs, name)
 
     @classmethod
     def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
@@ -389,12 +397,26 @@ class NTFS(Module):
 
             return (journal, size)
 
-        collector.collect_file_raw(
-            "$Extend/$Usnjrnl:$J",
-            fs,
-            name,
-            file_accessor=usnjrnl_accessor,
-        )
+        for filename in ("$Extend/$Usnjrnl:$J", "$Extend/$Usnjrnl:$Max"):
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+                file_accessor=usnjrnl_accessor,
+            )
+
+    @classmethod
+    def collect_rmmetadata(cls, collector: Collector, fs: Filesystem, name: str) -> None:
+        filenames = [
+            "$Extend/$RmMetadata/$TxfLog/$T",
+            "$Extend/$RmMetadata/$TxfLog/$Tops:$T",
+        ]
+        for filename in filenames:
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+            )
 
 
 @register_module("-r", "--registry")
@@ -1322,11 +1344,15 @@ class History(Module):
 class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
-        # teamviewer
+        # teamviewer - Windows
         ("glob", "sysvol/Program Files/TeamViewer/*.log"),
+        ("glob", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
         ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("glob", "/var/log/teamviewer*/*.log"),
+        ("glob", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
+        ("glob", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        # teamviewer - Mac + Linux
+        ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
         ("path", "sysvol/ProgramData/AnyDesk"),
@@ -1335,12 +1361,11 @@ class RemoteAccess(Module):
         ("glob", ".anydesk*/*", from_user_home),
         ("path", "/var/log/anydesk.trace"),
         # RustDesk - Windows
-        ("path", "sysvol/ProgramData/RustDesk"),
-        ("path", "AppData/Roaming/RustDesk/log/server/", from_user_home),
+        ("path", "AppData/Roaming/RustDesk/log/", from_user_home),
         # RustDesk - Mac + Linux
-        ("path", ".local/share/logs/RustDesk/server/", from_user_home),
-        ("path", "/var/log/RustDesk"),
-        ("path", "Library/Logs/RustDesk/Server", from_user_home),
+        ("path", ".local/share/logs/RustDesk/", from_user_home),
+        ("path", "/var/log/RustDesk/"),
+        ("path", "Library/Logs/RustDesk/", from_user_home),
         # zoho
         ("path", "sysvol/ProgramData/ZohoMeeting/log"),
         ("path", "AppData/Local/ZohoMeeting/log", from_user_home),
