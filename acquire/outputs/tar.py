@@ -4,6 +4,7 @@ import io
 import shutil
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
+from unittest.mock import patch
 
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
@@ -34,6 +35,7 @@ def copyfileobj(
 
     blocks, remainder = divmod(length, bufsize)
     for _ in range(blocks):
+        # Already prevents "long reads" because it reads at max bufsize bytes at a time
         buf = src.read(bufsize)
         if len(buf) < bufsize:
             # raise exception("unexpected end of data")
@@ -42,6 +44,7 @@ def copyfileobj(
         dst.write(buf)
 
     if remainder != 0:
+        # Already prevents "long reads" because it reads at max bufsize bytes at a time
         buf = src.read(remainder)
         if len(buf) < remainder:
             # raise exception("unexpected end of data")
@@ -49,9 +52,6 @@ def copyfileobj(
             buf += b"\x00" * (remainder - len(buf))
         dst.write(buf)
     return
-
-
-tarfile.copyfileobj = copyfileobj
 
 
 class TarOutput(Output):
@@ -139,7 +139,8 @@ class TarOutput(Output):
             if stat:
                 info.mtime = stat.st_mtime
 
-        self.tar.addfile(info, fh)
+        with patch("tarfile.copyfileobj", copyfileobj):
+            self.tar.addfile(info, fh)
 
     def close(self) -> None:
         """Closes the tar file."""
