@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import shutil
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -13,6 +14,44 @@ if TYPE_CHECKING:
     from dissect.target.filesystem import FilesystemEntry
 
 TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
+
+
+def copyfileobj(
+    src: BinaryIO, dst: BinaryIO, length: int | None = None, _: Exception = OSError, bufsize: int | None = None
+) -> None:
+    """
+    Patched version of the copyfileobj function from the Python stdlib (tarfile.py),
+    to handle cases where the source file is actually shorter than expected.
+    By patching the missing bytes with zeroes, we avoid raising an exception
+    and potentially corrupting the tar file.
+    """
+    bufsize = bufsize or 16 * 1024
+    if length == 0:
+        return
+    if length is None:
+        shutil.copyfileobj(src, dst, bufsize)
+        return
+
+    blocks, remainder = divmod(length, bufsize)
+    for _ in range(blocks):
+        buf = src.read(bufsize)
+        if len(buf) < bufsize:
+            # raise exception("unexpected end of data")
+            # PATCH; instead of raising an exception, pad the data to the desired length
+            buf += b"\x00" * (bufsize - len(buf))
+        dst.write(buf)
+
+    if remainder != 0:
+        buf = src.read(remainder)
+        if len(buf) < remainder:
+            # raise exception("unexpected end of data")
+            # PATCH; instead of raising an exception, pad the data to the desired length
+            buf += b"\x00" * (remainder - len(buf))
+        dst.write(buf)
+    return
+
+
+tarfile.copyfileobj = copyfileobj
 
 
 class TarOutput(Output):
