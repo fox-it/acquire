@@ -82,7 +82,7 @@ def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_ke
 
     content = b"some text"
 
-    content_padded = content[:-5] + b"\x00" * 5
+    content_padded = content[:-5] + tarfile.NUL * 5
     file = ShrinkingFile(content)
 
     tar_output = TarOutput(tmp_path / "race.tar", encrypt=True, public_key=public_key)
