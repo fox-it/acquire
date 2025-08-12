@@ -4,6 +4,8 @@ import io
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
 
+from dissect.target.filesystems.ntfs import NtfsFilesystem
+
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
 
@@ -11,7 +13,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from dissect.target.filesystem import FilesystemEntry
-
 TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
 
 
@@ -100,7 +101,9 @@ class TarOutput(Output):
             if stat:
                 info.mtime = stat.st_mtime
                 if (
-                    stat.st_blksize
+                    # Skip NTFS filesystems as st_blksize and st_blocks are not reliable
+                    not isinstance(entry.fs, NtfsFilesystem)
+                    and stat.st_blksize
                     and stat.st_blocks
                     and stat.st_size
                     and stat.st_size - (stat.st_blksize * stat.st_blocks) > stat.st_blksize
