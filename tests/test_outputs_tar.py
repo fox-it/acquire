@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import io
 import tarfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
+from dissect.target import Target
+from dissect.target.filesystem import VirtualFile, VirtualFilesystem
 
+from acquire.collector import ArtifactType, Collector
 from acquire.outputs import TarOutput
 from acquire.tools.decrypter import EncryptedFile
-
-if TYPE_CHECKING:
-    from dissect.target.filesystem import VirtualFilesystem
 
 
 @pytest.fixture(params=[(True, "gzip"), (True, "bzip2"), (True, "xz"), (False, None)])
@@ -63,3 +63,37 @@ def test_tar_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
 
     with tarfile.open(name=decrypted_path, mode="r") as tar_file:
         assert entry.open().read() == tar_file.extractfile(entry_name).read()
+
+
+def test_tar_output_collector_skip_large_sparse(tmp_path: Path) -> None:
+    # Create a temporary sparse file
+    sparse_file_path = tmp_path / "sparse_file"
+    with sparse_file_path.open("wb") as f:
+        f.seek(11 * 1024**3)  # Seek to 11GB
+        f.write(b"FOX")
+
+    fs = VirtualFilesystem(case_sensitive=False)
+    fs.makedirs("/var/log/")
+    fs.map_file("/var/log/lastlog", sparse_file_path)
+    fs.map_file_entry("/var/log/henk1", VirtualFile(fs, "henk1", io.BytesIO(b"content")))
+    fs.map_file_entry("/var/log/henk2", VirtualFile(fs, "henk2", io.BytesIO(b"content")))
+
+    target = Target()
+    target.fs.mount("/", fs)
+    target.filesystems.add(fs)
+    target.os = "fake"
+
+    output_tar = tmp_path / "output.tar.gz"
+
+    collector = Collector(target, TarOutput(output_tar))
+    # While doing this, the sparse file will error out due to size threshold
+    collector.collect([[ArtifactType.DIR, "/var/log/"]], "DUMMY")
+    collector.close()
+
+    with tarfile.open(name=output_tar, mode="r") as tar_file:
+        assert len(tar_file.getnames()) == 2, "Only two files should be present in the tar."
+        assert "lastlog" not in tar_file.getnames(), "Sparse file should be skipped due to size threshold."
+        assert tar_file.getmember("fs/var/log/henk1")
+        assert tar_file.getmember("fs/var/log/henk2")
+        with pytest.raises(KeyError):
+            tar_file.getmember("fs/var/log/lastlog")

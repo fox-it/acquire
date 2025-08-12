@@ -99,6 +99,14 @@ class TarOutput(Output):
 
             if stat:
                 info.mtime = stat.st_mtime
+                if (
+                    stat.st_blksize
+                    and stat.st_blocks
+                    and stat.st_size
+                    and stat.st_size - (stat.st_blksize * stat.st_blocks) > stat.st_blksize
+                    and stat.st_size > 10 * 1024**3
+                ):  # 10 GB threshold
+                    raise Exception("Skipping large (>10GB) sparse file.")  # noqa: TRY002
 
         self.tar.addfile(info, fh)
 
