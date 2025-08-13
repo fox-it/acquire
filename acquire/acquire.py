@@ -1113,6 +1113,7 @@ class AV(Module):
         # McAfee
         ("path", "Application Data/McAfee/DesktopProtection", from_user_home),
         ("path", "sysvol/ProgramData/McAfee/DesktopProtection"),
+        ("path", "sysvol/ProgramData/McAfee/Endpoint Security/ATP"),
         ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
         ("path", "sysvol/ProgramData/Mcafee/VirusScan"),
