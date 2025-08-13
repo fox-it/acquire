@@ -25,7 +25,7 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
-from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.apps.webserver import iis, webserver
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils.cli import args_to_uri
@@ -870,15 +870,23 @@ class IIS(Module):
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        spec = {
-            ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\Windows.old\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\*.log"),
-            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
-        }
-        iis_plugin = iis.IISLogsPlugin(target)
-        spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
+        warnings.warn(
+            "--iis is deprecated in favor of --webserver-logs and will be removed in acquire ???",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return WebserverLog.get_spec_additions(cls, target, cli_args)
+
+
+@register_module("--webserver-log")
+class WebserverLog(Module):
+    DESC = "IIS, Nginx and Apache logs"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        webserver_plugin = webserver.WebserverPlugin(target)
+        spec.update(("path", log_path) for log_path in webserver_plugin._iter_log_paths())
         return spec
 
 
