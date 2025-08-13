@@ -1639,24 +1639,24 @@ class Bootbanks(Module):
             "bootbank": "BOOTBANK1",
             "altbootbank": "BOOTBANK2",
         }
-        boot_fs = {}
+        boot_fs = []  # List of tuples of bootbank paths and volume names
 
         for boot_dir, boot_vol in boot_dirs.items():
             dir_path = target.fs.path(boot_dir)
             if dir_path.is_symlink() and dir_path.exists():
                 dst = dir_path.readlink()
-                fs = dst.get().entries.top.fs
-                boot_fs[fs] = boot_vol
+                boot_fs.append((dst, boot_vol))
 
-        for fs, mountpoint, uuid, _ in iter_esxi_filesystems(target):
-            if fs in boot_fs:
-                name = boot_fs[fs]
-                log.info("Acquiring %s (%s)", mountpoint, name)
-                mountpoint_len = len(mountpoint)
-                base = f"fs/{uuid}:{name}"
-                for path in target.fs.path(mountpoint).rglob("*"):
-                    outpath = path.as_posix()[mountpoint_len:]
-                    collector.collect_path(path, outpath=outpath, base=base)
+        for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
+            for bootbank_path, boot_vol in boot_fs:
+                if bootbank_path.samefile(mountpoint):
+                    log.info("Acquiring %s (%s)", mountpoint, boot_vol)
+                    mountpoint_len = len(mountpoint)
+                    base = f"fs/{uuid}:{boot_vol}"
+                    for path in target.fs.path(mountpoint).rglob("*"):
+                        outpath = path.as_posix()[mountpoint_len:]
+                        collector.collect_path(path, outpath=outpath, base=base)
+                    break
 
 
 @register_module("--esxi")
