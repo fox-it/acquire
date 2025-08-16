@@ -25,7 +25,7 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
-from dissect.target.plugins.apps.webserver import iis, webserver
+from dissect.target.plugins.apps.webserver.webserver import WebserverPlugin
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils.cli import args_to_uri
@@ -880,13 +880,21 @@ class IIS(Module):
 
 @register_module("--webserver-log")
 class WebserverLog(Module):
-    DESC = "IIS, Nginx and Apache logs"
+    DESC = "Various webserver logs"
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
-        webserver_plugin = webserver.WebserverPlugin(target)
-        spec.update(("path", log_path) for log_path in webserver_plugin._iter_log_paths())
+
+        for subclass in WebserverPlugin.__subclasses__():
+            if not hasattr(subclass, "_log_paths"):
+                continue
+
+            webserver = subclass(target)
+            for log_path in webserver._log_paths():
+                print(f"NEW PATH: {log_path}")
+                spec.add(("path", log_path))
+
         return spec
 
 
