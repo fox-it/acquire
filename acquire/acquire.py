@@ -892,7 +892,6 @@ class WebserverLog(Module):
 
             webserver = subclass(target)
             for log_path in webserver._log_paths():
-                print(f"NEW PATH: {log_path}")
                 spec.add(("path", log_path))
 
         return spec
