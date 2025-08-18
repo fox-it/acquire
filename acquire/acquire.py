@@ -25,7 +25,10 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
-from dissect.target.plugins.apps.webserver.webserver import WebserverPlugin
+from dissect.target.plugins.apps.webserver.apache import ApachePlugin
+from dissect.target.plugins.apps.webserver.caddy import CaddyPlugin
+from dissect.target.plugins.apps.webserver.iis import IISLogsPlugin
+from dissect.target.plugins.apps.webserver.nginx import NginxPlugin
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils.cli import args_to_uri
@@ -885,8 +888,14 @@ class WebserverLog(Module):
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
+        subclasses = [
+            ApachePlugin,
+            CaddyPlugin,
+            IISLogsPlugin,
+            NginxPlugin,
+        ]
 
-        for subclass in WebserverPlugin.__subclasses__():
+        for subclass in subclasses:
             if subclass.__name__ == "IISLogsPlugin" and target.os != "windows":
                 continue
 
