@@ -1649,7 +1649,9 @@ class Bootbanks(Module):
 
         for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
             for bootbank_path, boot_vol in boot_fs:
-                if bootbank_path.samefile(mountpoint):
+                # samefile fails on python 3.9 (https://github.com/fox-it/dissect.target/issues/1289)
+                # but support for 3.9 gets dropped soon
+                if bootbank_path.samefile(target.fs.path(mountpoint)):
                     log.info("Acquiring %s (%s)", mountpoint, boot_vol)
                     mountpoint_len = len(mountpoint)
                     base = f"fs/{uuid}:{boot_vol}"
