@@ -129,7 +129,6 @@ class TarOutput(Output):
                 # Prevents "long reads" because it reads at max bufsize bytes at a time
                 buf = fh.read(bufsize)
                 if len(buf) < bufsize:
-                    # raise exception("unexpected end of data")
                     # PATCH; instead of raising an exception, pad the data to the desired length
                     buf += tarfile.NUL * (bufsize - len(buf))
                 self.tar.fileobj.write(buf)
@@ -138,7 +137,6 @@ class TarOutput(Output):
                 # Prevents "long reads" because it reads at max bufsize bytes at a time
                 buf = fh.read(remainder)
                 if len(buf) < remainder:
-                    # raise exception("unexpected end of data")
                     # PATCH; instead of raising an exception, pad the data to the desired length
                     buf += tarfile.NUL * (remainder - len(buf))
                 self.tar.fileobj.write(buf)
