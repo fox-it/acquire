@@ -281,27 +281,55 @@ class Module:
 
 
 @register_module("--sys")
+@module_arg(
+    "--full-sys",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Sysfs (/sys) entries",
+)
 @local_module
 class Sys(Module):
-    DESC = "Sysfs files (live systems only)"
+    DESC = """all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset.
+    Use --full-sys to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/sys")]
+        spec_path = "/sys" if cli_args.full_sys else "/sys/module"
+        spec = [("path", spec_path)]
+
         collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("--proc")
+@module_arg(
+    "--full-proc",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Procfs (/proc) entries",
+)
 @local_module
 class Proc(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = """all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset.
+    Use --full-proc to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc")]
+        if cli_args.full_proc:
+            spec = [("path", "/proc")]
+        else:
+            spec = [
+                ("path", "/proc/sys/kernel/hostname"),
+                ("path", "/proc/uptime"),
+                ("path", "/proc/stat"),
+            ]
+            spec = itertools.chain(spec, cls._get_proc_specs(target))
         collector.collect(spec, follow=False, volatile=True)
+
+    @classmethod
+    def _get_proc_specs(cls, target: Target) -> Iterator[tuple[str, str]]:
+        pid_paths = ["status", "stat", "environ"]
+        for proc, part in itertools.product(target.proc.iter_proc(), pid_paths):
+            yield ("path", proc / part)
 
 
 @register_module("--proc-net")
@@ -312,7 +340,14 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("path", "/proc/net")]
+        # With network namespaces, /proc/net is a references to /proc/<pid>/net,
+        # It contains the same information as /proc/net, however it only shows the information from the
+        # namespace where the process is the member of.
+        # TODO: Research about network namespaces
+        spec = [
+            ("path", "/proc/net/"),
+            ("path", "/proc/self/net/"),
+        ]
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -324,8 +359,15 @@ class NTFS(Module):
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring from %s as %s (%s)", fs, name, mountpoints)
+            filenames = [
+                "$MFT",
+                "$Boot",
+                "$Secure:$SII",
+                "$Secure:$SDS",
+                "$LogFile",
+            ]
 
-            for filename in ("$MFT", "$Boot", "$Secure:$SDS"):
+            for filename in filenames:
                 if main_mountpoint is not None:
                     path = fsutil.join(main_mountpoint, filename)
                     collector.collect_path(path)
@@ -337,6 +379,7 @@ class NTFS(Module):
                     collector.collect_file_raw(filename, fs, name)
 
             cls.collect_usnjrnl(collector, fs, name)
+            cls.collect_rmmetadata(collector, fs, name)
 
     @classmethod
     def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
@@ -354,12 +397,26 @@ class NTFS(Module):
 
             return (journal, size)
 
-        collector.collect_file_raw(
-            "$Extend/$Usnjrnl:$J",
-            fs,
-            name,
-            file_accessor=usnjrnl_accessor,
-        )
+        for filename in ("$Extend/$Usnjrnl:$J", "$Extend/$Usnjrnl:$Max"):
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+                file_accessor=usnjrnl_accessor,
+            )
+
+    @classmethod
+    def collect_rmmetadata(cls, collector: Collector, fs: Filesystem, name: str) -> None:
+        filenames = [
+            "$Extend/$RmMetadata/$TxfLog/$T",
+            "$Extend/$RmMetadata/$TxfLog/$Tops:$T",
+        ]
+        for filename in filenames:
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+            )
 
 
 @register_module("-r", "--registry")
@@ -824,6 +881,24 @@ class IIS(Module):
         return spec
 
 
+@register_module("--sharepoint")
+class SharePoint(Module):
+    DESC = "Windows SharePoint Server logs"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\*\\WSS"
+
+        for reg_key in target.registry.glob_ext(key):
+            try:
+                spec.add(("path", reg_key.value("LogDir").value))
+            except Exception:  # noqa: PERF203
+                pass
+
+        return spec
+
+
 @register_module("--prefetch")
 class Prefetch(Module):
     DESC = "Windows Prefetch files"
@@ -1038,6 +1113,7 @@ class AV(Module):
         # McAfee
         ("path", "Application Data/McAfee/DesktopProtection", from_user_home),
         ("path", "sysvol/ProgramData/McAfee/DesktopProtection"),
+        ("path", "sysvol/ProgramData/McAfee/Endpoint Security/ATP"),
         ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
         ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
         ("path", "sysvol/ProgramData/Mcafee/VirusScan"),
@@ -1269,11 +1345,15 @@ class History(Module):
 class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
-        # teamviewer
+        # teamviewer - Windows
         ("glob", "sysvol/Program Files/TeamViewer/*.log"),
+        ("path", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
         ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("glob", "/var/log/teamviewer*/*.log"),
+        ("path", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        # teamviewer - Mac + Linux
+        ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
         ("path", "sysvol/ProgramData/AnyDesk"),
@@ -1282,12 +1362,11 @@ class RemoteAccess(Module):
         ("glob", ".anydesk*/*", from_user_home),
         ("path", "/var/log/anydesk.trace"),
         # RustDesk - Windows
-        ("path", "sysvol/ProgramData/RustDesk"),
-        ("path", "AppData/Roaming/RustDesk/log/server/", from_user_home),
+        ("path", "AppData/Roaming/RustDesk/log/", from_user_home),
         # RustDesk - Mac + Linux
-        ("path", ".local/share/logs/RustDesk/server/", from_user_home),
-        ("path", "/var/log/RustDesk"),
-        ("path", "Library/Logs/RustDesk/Server", from_user_home),
+        ("path", ".local/share/logs/RustDesk/", from_user_home),
+        ("path", "/var/log/RustDesk/"),
+        ("path", "Library/Logs/RustDesk/", from_user_home),
         # zoho
         ("path", "sysvol/ProgramData/ZohoMeeting/log"),
         ("path", "AppData/Local/ZohoMeeting/log", from_user_home),
@@ -1298,6 +1377,9 @@ class RemoteAccess(Module):
         ("path", "sysvol/ProgramData/TightVNC/Server/Logs"),
         # Remote desktop cache files
         ("path", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
+        # Splashtop
+        ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
+        ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
     )
 
 
@@ -1484,6 +1566,30 @@ class BSD(Module):
     )
 
 
+@register_module("--applications")
+class Applications(Module):
+    SPEC = (
+        ("path", "/usr/share/applications"),
+        ("path", "/usr/local/share/applications"),
+        ("path", "/var/lib/snapd/desktop/applications"),
+        ("path", "/var/lib/flatpak/exports/share/applications"),
+        ("path", ".local/share/applications", from_user_home),
+    )
+
+
+@register_module("--network")
+class Network(Module):
+    SPEC = (
+        ("path", "/etc/systemd/network"),
+        ("path", "/run/systemd/network"),
+        ("path", "/usr/lib/systemd/network"),
+        ("path", "/usr/local/lib/systemd/network"),
+        ("path", "/etc/NetworkManager/system-connections"),
+        ("path", "/usr/lib/NetworkManager/system-connections"),
+        ("path", "/run/NetworkManager/system-connections"),
+    )
+
+
 @register_module("--macos")
 class MacOS(Module):
     DESC = "macOS / OSX specific files and directories"
@@ -1533,24 +1639,26 @@ class Bootbanks(Module):
             "bootbank": "BOOTBANK1",
             "altbootbank": "BOOTBANK2",
         }
-        boot_fs = {}
+        boot_fs = []  # List of tuples of bootbank paths and volume names
 
         for boot_dir, boot_vol in boot_dirs.items():
             dir_path = target.fs.path(boot_dir)
             if dir_path.is_symlink() and dir_path.exists():
                 dst = dir_path.readlink()
-                fs = dst.get().top.fs
-                boot_fs[fs] = boot_vol
+                boot_fs.append((dst, boot_vol))
 
-        for fs, mountpoint, uuid, _ in iter_esxi_filesystems(target):
-            if fs in boot_fs:
-                name = boot_fs[fs]
-                log.info("Acquiring %s (%s)", mountpoint, name)
-                mountpoint_len = len(mountpoint)
-                base = f"fs/{uuid}:{name}"
-                for path in target.fs.path(mountpoint).rglob("*"):
-                    outpath = path.as_posix()[mountpoint_len:]
-                    collector.collect_path(path, outpath=outpath, base=base)
+        for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
+            for bootbank_path, boot_vol in boot_fs:
+                # samefile fails on python 3.9 (https://github.com/fox-it/dissect.target/issues/1289)
+                # but support for 3.9 gets dropped soon
+                if bootbank_path.samefile(target.fs.path(mountpoint)):
+                    log.info("Acquiring %s (%s)", mountpoint, boot_vol)
+                    mountpoint_len = len(mountpoint)
+                    base = f"fs/{uuid}:{boot_vol}"
+                    for path in target.fs.path(mountpoint).rglob("*"):
+                        outpath = path.as_posix()[mountpoint_len:]
+                        collector.collect_path(path, outpath=outpath, base=base)
+                    break
 
 
 @register_module("--esxi")
@@ -1755,21 +1863,39 @@ def print_acquire_warning(target: Target) -> None:
 
 
 def _get_modules_for_profile(
+    target: Target,
     profile_name: str,
-    operating_system: str,
     profiles: dict[str, dict[str, list[type[Module]]]],
     err_msg: str,
 ) -> dict[str, type[Module]]:
-    modules_selected = {}
+    if profile_name == "none":
+        return {}
 
-    if profile_name != "none":
-        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
-            for mod in profile:
-                modules_selected[mod.__modname__] = mod
-        else:
-            log.error(err_msg, operating_system, profile_name)
+    if (profile_os := profiles.get(profile_name)) is None:
+        log.error("No profile found named %s", profile_name)
+        return {}
 
-    return modules_selected
+    if (profile := profile_os.get(target.os)) is None:
+        for os in target.os_tree():
+            if profile := profile_os.get(os):
+                log.info(
+                    "No collection set for OS %r with profile %r, using the one for OS %r instead",
+                    target.os,
+                    profile_name,
+                    os,
+                )
+                break
+
+    if not profile:
+        log.error(err_msg, target.os, profile_name)
+        return {}
+
+    selected_modules = {}
+
+    for mod in profile:
+        selected_modules[mod.__modname__] = mod
+
+    return selected_modules
 
 
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
@@ -1820,13 +1946,16 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
     print_acquire_warning(target)
 
     modules_selected = {}
+    modules_disabled = []
     modules_successful = []
     modules_failed = {}
     for name, mod in MODULES.items():
         name_slug = name.lower()
         # check if module was set in the arguments provided
-        if getattr(args, name_slug):
+        if (mod_arg := getattr(args, name_slug)) is True:
             modules_selected[name] = mod
+        elif mod_arg is False:
+            modules_disabled.append(name)
 
     profile = args.profile
 
@@ -1837,7 +1966,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         log.info("")
 
     normal_modules = _get_modules_for_profile(
-        profile, target.os, PROFILES, "No collection set for OS '%s' with profile '%s'"
+        target, profile, PROFILES, "No collection set for OS '%s' with profile '%s'"
     )
     modules_selected.update(normal_modules)
 
@@ -1845,9 +1974,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         volatile_profile = "none"
 
     volatile_modules = _get_modules_for_profile(
-        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
+        target, volatile_profile, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
+
+    # Filter modules that are explicitly disabled
+    for name in modules_disabled:
+        modules_selected.pop(name, None)
 
     if not modules_selected:
         log.warning("NO modules selected!")
@@ -2026,6 +2159,7 @@ class WindowsProfile:
         WindowsNotifications,
         SSH,
         IIS,
+        SharePoint,
         TextEditor,
         Docker,
         MSSQL,
@@ -2043,6 +2177,8 @@ class LinuxProfile:
     DEFAULT = MINIMAL
     FULL = (
         *DEFAULT,
+        Applications,
+        Network,
         Docker,
         History,
         WebHosting,
@@ -2148,29 +2284,20 @@ class VolatileProfile:
         WinRDPSessions,
         WinDnsClientCache,
         ProcNet,
-    )
-    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
-    "full": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.FULL,
-        "bsd": VolatileProfile.FULL,
-        "esxi": VolatileProfile.FULL,
-        "macos": [],
-        "proxmox": [],
-    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
-        "linux": [],
-        "bsd": [],
-        "esxi": [],
+        "linux": VolatileProfile.DEFAULT,
+        "bsd": VolatileProfile.DEFAULT,
+        "esxi": VolatileProfile.DEFAULT,
         "macos": [],
-        "proxmox": [],
+        # proxmox is debian based
+        "proxmox": VolatileProfile.DEFAULT,
     },
     "none": None,
 }
@@ -2229,6 +2356,12 @@ def main() -> None:
         if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
             warnings.warn(
                 "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if "--proc-net" in sys.argv:
+            warnings.warn(
+                "--proc-net will be merged with --proc and will be removed in acquire 3.23",
                 DeprecationWarning,
                 stacklevel=2,
             )
