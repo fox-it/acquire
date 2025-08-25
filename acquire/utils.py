@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dissect.target.helpers import keychain
+from dissect.target.tools.utils import _OverrideRequiredAction, list_children
 
 from acquire.outputs import (
     COMPRESSION_METHODS,
@@ -56,6 +57,8 @@ def _create_profile_information(profiles: dict) -> str:
         desc += "\n"
 
     return desc
+
+
 
 
 def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> argparse.ArgumentParser:
@@ -140,10 +143,9 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("--disable-report", action="store_true", help="disable acquisition report file")
 
     parser.add_argument(
-        "--list-children",
-        action=argparse.BooleanOptionalAction,
-        help="list all children by index and path - does not collect anything",
+        "--list-children", action=_OverrideRequiredAction, help="list all children indices and paths, then exit"
     )
+    parser.add_argument("--recursive", action="store_true", help="make --list-children behave recursively")
 
     parser.add_argument("--child", help="only collect specific child based on index or path, see --list-children")
     parser.add_argument(
@@ -219,6 +221,11 @@ def parse_acquire_args(
     """
     args, rest = parser.parse_known_args()
     _merge_args_and_config(parser, args, config)
+
+    if args.list_children:
+        # List found children on targets and exit
+        list_children(args)
+        parser.exit(0)
 
     return args, rest
 

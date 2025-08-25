@@ -2419,12 +2419,6 @@ def main() -> None:
                 target_name = target.name
                 log.info("Loading target %s", target_name)
                 log.info(target)
-                # Check if we are just listing children and not collecting
-                if args.list_children:
-                    log.info(f"Listing children on Target: %s", target.name)
-                    for index, child in enumerate(target.list_children()):
-                        log.info(f"- Found child #%s: type=%s, path=%s", index, child.type, child.path)
-                    exit_success(args.config.get("arguments"))
                 if target.os == "esxi" and target.name == "local":
                     # Loader found that we are running on an esxi host
                     # Perform operations to "enhance" memory
