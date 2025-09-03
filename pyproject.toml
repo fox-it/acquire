@@ -41,13 +41,13 @@ full = [
     "pycryptodome",
     "requests",
     "rich",
-    "dissect.target[full]>=3.23.dev,<4", #TODO: Remove during release
+    "dissect.target[full]>=3.23.1,<4",
     "requests_toolbelt",
 ]
 dev = [
     "acquire[full]",
     "dissect.cstruct>=4.0.dev,<5.0.dev",
-    "dissect.target[dev]>=3.23.dev,<4.0.dev", #TODO: Remove during release
+    "dissect.target[dev]>=3.23.1,<4.0.dev",
 ]
 
 [project.scripts]
