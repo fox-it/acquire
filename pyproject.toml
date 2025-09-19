@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "acquire"
 description = "A tool to quickly gather forensic artifacts from disk images or a live system into a lightweight container"
 readme = "README.md"
-requires-python = "~=3.9"
+requires-python = ">=3.10"
 license.text = "Affero General Public License v3"
 authors = [
   {name = "Dissect Team", email = "dissect@fox-it.com"}
