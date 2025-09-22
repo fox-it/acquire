@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import pytest
@@ -9,6 +9,9 @@ import pytest
 from acquire.uploaders.minio import MinIO
 from acquire.uploaders.plugin import upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.fixture

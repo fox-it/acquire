@@ -18,7 +18,7 @@ import warnings
 from collections import defaultdict
 from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
+from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
 from dissect.target import Target
 from dissect.target.filesystems import ntfs
@@ -63,7 +63,7 @@ from acquire.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
 
@@ -1797,8 +1797,8 @@ class OpenHandles(Module):
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
-        from acquire.dynamic.windows.collect import collect_open_handles
-        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+        from acquire.dynamic.windows.collect import collect_open_handles  # noqa: PLC0415
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv  # noqa: PLC0415
 
         log.info("*** Acquiring open handles")
 
