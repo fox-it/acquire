@@ -50,6 +50,26 @@ dev = [
     "dissect.target[dev]>=3.23.dev,<4.0.dev",
 ]
 
+[dependency-groups]
+test = [
+    "pytest",
+]
+lint = [
+    "ruff==0.13.1",
+    "vermin",
+]
+build = [
+    "build",
+]
+debug = [
+    "ipdb",
+]
+dev = [
+    {include-group = "test"},
+    {include-group = "lint"},
+    {include-group = "debug"},
+]
+
 [project.scripts]
 acquire = "acquire.acquire:main"
 acquire-decrypt = "acquire.tools.decrypter:main"
