@@ -30,7 +30,7 @@ class GUI:
             cls = Stub
             if str(flavour).lower() == "windows":
                 # create a basic Win32 GUI
-                from acquire.gui.win32 import Win32
+                from acquire.gui.win32 import Win32  # noqa: PLC0415
 
                 cls = Win32
             GUI._instance = super().__new__(cls)
