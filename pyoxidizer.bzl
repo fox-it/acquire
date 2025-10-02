@@ -1,5 +1,5 @@
 def make_exe():
-    dist = default_python_distribution(flavor=VARS["flavor"])
+    dist = default_python_distribution(flavor=VARS["flavor"], python_version="3.10")
 
     policy = dist.make_python_packaging_policy()
     policy.bytecode_optimize_level_two = True
@@ -12,7 +12,7 @@ def make_exe():
     python_config.run_module = "acquire.acquire"
 
     exe = dist.to_python_executable(
-        name="acquire",
+        name="acquire-" + BUILD_TARGET_TRIPLE,
         packaging_policy=policy,
         config=python_config,
     )
@@ -30,6 +30,7 @@ def make_exe():
         "dissect.hypervisor",
         "dissect.ntfs",
         "dissect.regf",
+        "dissect.sql",
         "dissect.squashfs",
         "dissect.target",
         "dissect.util",

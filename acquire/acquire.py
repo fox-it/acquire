@@ -75,7 +75,6 @@ except ImportError:
     CONFIG = defaultdict(lambda: None)
 
 
-VERSION = version
 ACQUIRE_BANNER = rf"""
                        _
   __ _  ___ __ _ _   _(_)_ __ ___
