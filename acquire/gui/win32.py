@@ -83,13 +83,12 @@ PBM_SETRANGE32 = WM_USER + 6
 PBS_SMOOTH = 0x01
 BN_CLICKED = 0
 BM_SETCHECK = 241
-WHITE_BRUSH = 0
 WM_CTLCOLORSTATIC = 312
 SS_LEFT = 0
 
 
 class WNDCLASSW(Structure):
-    _fields_ = [
+    _fields_ = (
         ("style", w.UINT),
         ("lpfnWndProc", WNDPROC),
         ("cbClsExtra", c_int),
@@ -100,29 +99,29 @@ class WNDCLASSW(Structure):
         ("hbrBackground", w.HBRUSH),
         ("lpszMenuName", w.LPCWSTR),
         ("lpszClassName", w.LPCWSTR),
-    ]
+    )
 
 
 class PAINTSTRUCT(Structure):
-    _fields_ = [
+    _fields_ = (
         ("hdc", w.HDC),
         ("fErase", w.BOOL),
         ("rcPaint", w.RECT),
         ("fRestore", w.BOOL),
         ("fIncUpdate", w.BOOL),
         ("rgbReserved", w.BYTE * 32),
-    ]
+    )
 
 
 class INITCOMMONCONTROLSEX(Structure):
-    _fields_ = [
+    _fields_ = (
         ("dwSize", w.DWORD),
         ("dwICC", w.DWORD),
-    ]
+    )
 
 
 class BROWSEINFOA(Structure):
-    _fields_ = [
+    _fields_ = (
         ("hwndOwner", w.HWND),
         ("pidlRoot", w.LPVOID),
         ("pszDisplayName", w.LPSTR),
@@ -131,20 +130,18 @@ class BROWSEINFOA(Structure):
         ("lpfn", BFFCALLBACK),
         ("lParam", w.LPARAM),
         ("iImage", c_int),
-    ]
+    )
 
 
 class SHITEMID(Structure):
-    _fields_ = [
+    _fields_ = (
         ("cb", w.USHORT),
         ("abID", w.BYTE),
-    ]
+    )
 
 
 class ITEMIDLIST(Structure):
-    _fields_ = [
-        ("mkid", SHITEMID),
-    ]
+    _fields_ = (("mkid", SHITEMID),)
 
 
 kernel32 = WinDLL("kernel32", use_last_error=True)

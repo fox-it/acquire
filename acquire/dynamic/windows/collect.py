@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING
 
 from acquire.dynamic.windows.exceptions import AccessDeniedError
 from acquire.dynamic.windows.handles import Handle, get_handles
@@ -9,6 +11,9 @@ from acquire.dynamic.windows.ntdll import (
     open_directory_object,
     query_directory_object,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 log = getLogger(__name__)
 
@@ -39,7 +44,7 @@ def collect_named_objects(path: str = "\\") -> list[NamedObject]:
     return named_objects
 
 
-def collect_open_handles(handle_types: Optional[list[NamedObject]] = None) -> Iterable[Handle]:
+def collect_open_handles(handle_types: list[NamedObject] | None = None) -> Iterator[Handle]:
     """Collect open handles
 
     Collect open handles and optionally provide a list to explicitly collect specific types of handles.
@@ -52,6 +57,6 @@ def collect_open_handles(handle_types: Optional[list[NamedObject]] = None) -> It
             if not handle_types or NamedObjectType(handle.handle_type) in handle_types:
                 yield handle
         # Continue if an invalid NamedObjectType is observed
-        except ValueError:
-            log.warning(f"Observed an unknown NamedObjectType: {handle.handle_type if handle else None}")
+        except ValueError:  # noqa: PERF203
+            log.warning("Observed an unknown NamedObjectType: %s", handle.handle_type if handle else None)
             continue

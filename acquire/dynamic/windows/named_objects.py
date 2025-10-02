@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from acquire.dynamic.windows.types import OBJECT_DIRECTORY_INFORMATION
+if TYPE_CHECKING:
+    from acquire.dynamic.windows.types import OBJECT_DIRECTORY_INFORMATION
 
 
 class NamedObjectType(Enum):
@@ -42,8 +44,8 @@ class NamedObjectType(Enum):
 
 class NamedObject:
     __slots__ = [
-        "root",
         "name",
+        "root",
         "type_name",
     ]
 

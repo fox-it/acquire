@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import io
 from pathlib import Path
-from typing import BinaryIO, Optional, Union
-
-from dissect.target.filesystem import FilesystemEntry
+from typing import TYPE_CHECKING, BinaryIO
 
 from acquire.volatilestream import VolatileStream
+
+if TYPE_CHECKING:
+    from dissect.target.filesystem import FilesystemEntry
 
 
 class Output:
@@ -20,8 +23,8 @@ class Output:
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]],
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path | None,
+        size: int | None = None,
     ) -> None:
         """Write a file-like object to the output.
 
@@ -31,13 +34,13 @@ class Output:
             entry: The optional filesystem entry to write.
             size: The optional file size in bytes of the entry to write.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def write_entry(
         self,
         output_path: str,
-        entry: Union[FilesystemEntry, Path],
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path,
+        size: int | None = None,
     ) -> None:
         """Write a filesystem entry to the output.
 
@@ -56,8 +59,8 @@ class Output:
         self,
         output_path: str,
         data: bytes,
-        entry: Optional[Union[FilesystemEntry, Path]] = None,
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path | None = None,
+        size: int | None = None,
     ) -> None:
         """Write raw bytes to the output format.
 
@@ -74,8 +77,8 @@ class Output:
     def write_volatile(
         self,
         output_path: str,
-        entry: Union[FilesystemEntry, Path],
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path,
+        size: int | None = None,
     ) -> None:
         """Write a filesystem entry to the output.
 
@@ -100,4 +103,4 @@ class Output:
 
     def close(self) -> None:
         """Closes the output."""
-        raise NotImplementedError()
+        raise NotImplementedError

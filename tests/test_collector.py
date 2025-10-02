@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import errno
-from typing import Optional
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from dissect.target import Target
 from dissect.target.exceptions import (
     FileNotFoundError,
     NotADirectoryError,
@@ -14,12 +15,14 @@ from dissect.target.helpers.fsutil import TargetPath
 
 from acquire.collector import ArtifactType, CollectionReport, Collector
 
+if TYPE_CHECKING:
+    from dissect.target import Target
+
 
 @pytest.fixture
 def mock_collector(mock_target: Target) -> Collector:
     with patch("acquire.outputs.base.Output", autospec=True) as mock_output:
-        collector = Collector(mock_target, mock_output)
-        return collector
+        return Collector(mock_target, mock_output)
 
 
 MOCK_SEEN_PATHS = set()
@@ -27,7 +30,7 @@ MOCK_MODULE_NAME = "DUMMY"
 
 
 @pytest.mark.parametrize(
-    "path_str, expected",
+    ("path_str", "expected"),
     [
         ("some/path", "/some/path"),
         ("/some/path", "/some/path"),
@@ -44,12 +47,12 @@ def test_collection_report__uniq_path(mock_target: Target, path_str: str, expect
 
 
 def test_collector_collect_no_module_name(mock_collector: Collector) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Module name must be provided or Collector needs to be bound to a module"):
         mock_collector.collect([[ArtifactType.PATH, "/some/path"]])
 
 
 def test_collector_collect_invalid_artifact_type(mock_collector: Collector) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown artifact type"):
         mock_collector.collect([["dummy_type", "/some/path"]], MOCK_MODULE_NAME)
 
 
@@ -62,17 +65,19 @@ def test_collector_collect_transform_func(mock_collector: Collector) -> None:
 
 
 @pytest.mark.parametrize(
-    "spec, collect_func",
+    ("spec", "collect_func"),
     [
-        ([ArtifactType.FILE, "/some/path"], "collect_path"),
-        ([ArtifactType.DIR, "/some/path"], "collect_path"),
-        ([ArtifactType.SYMLINK, "/some/path"], "collect_path"),
-        ([ArtifactType.PATH, "/some/path"], "collect_path"),
-        ([ArtifactType.GLOB, "/some/glob*"], "collect_glob"),
-        ([ArtifactType.COMMAND, [["./some", "--command"], "output_file"]], "collect_command_output"),
+        ((ArtifactType.FILE, "/some/path"), "collect_path"),
+        ((ArtifactType.DIR, "/some/path"), "collect_path"),
+        ((ArtifactType.SYMLINK, "/some/path"), "collect_path"),
+        ((ArtifactType.PATH, "/some/path"), "collect_path"),
+        ((ArtifactType.GLOB, "/some/glob*"), "collect_glob"),
+        ((ArtifactType.COMMAND, (["./some", "--command"], "output_file")), "collect_command_output"),
     ],
 )
-def test_collector_collect(mock_collector: Collector, spec, collect_func) -> None:
+def test_collector_collect(
+    mock_collector: Collector, spec: tuple[ArtifactType, str | tuple[list[str], str]], collect_func: str
+) -> None:
     with (
         patch.object(mock_collector, "collect_path", autospec=True),
         patch.object(mock_collector, "collect_glob", autospec=True),
@@ -92,7 +97,7 @@ def test_collector_collect(mock_collector: Collector, spec, collect_func) -> Non
 
 
 @pytest.mark.parametrize(
-    "path_str, base, expected",
+    ("path_str", "base", "expected"),
     [
         ("/some/path", None, "fs/some/path"),
         ("some/path", None, "fs/some/path"),
@@ -106,7 +111,7 @@ def test_collector__output_path(
     mock_target: Target,
     mock_collector: Collector,
     path_str: str,
-    base: Optional[str],
+    base: str | None,
     expected: str,
 ) -> None:
     path = mock_target.fs.path(path_str)
@@ -128,12 +133,12 @@ def test_collector__get_symlink_branches(mock_target: Target, mock_collector: Co
 
 
 def test_collector_collect_path_no_module_name(mock_collector: Collector) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Module name must be provided or Collector needs to be bound to a module"):
         mock_collector.collect_path("/some/path")
 
 
 @pytest.mark.parametrize(
-    "outpath, base, volatile, as_targetpath",
+    ("outpath", "base", "volatile", "as_targetpath"),
     [
         (None, None, False, True),
         (None, None, False, False),
@@ -427,7 +432,7 @@ def test_collector_collect_path_dedup_symlink_branch(mock_target: Target, mock_c
 
 
 @pytest.mark.parametrize(
-    "report_func, exception, log_msg",
+    ("report_func", "exception", "log_msg"),
     [
         (
             "add_path_missing",

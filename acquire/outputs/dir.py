@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import platform
 import shutil
-from pathlib import Path
-from typing import BinaryIO, Optional, Union
-
-from dissect.target.filesystem import FilesystemEntry
+from typing import TYPE_CHECKING, BinaryIO
 
 from acquire.outputs.base import Output
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from dissect.target.filesystem import FilesystemEntry
 
 
 class DirectoryOutput(Output):
@@ -16,8 +20,8 @@ class DirectoryOutput(Output):
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]] = None,
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path | None = None,
+        size: int | None = None,
     ) -> None:
         """Write a file-like object to a directory.
 

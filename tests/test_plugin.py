@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from unittest.mock import Mock, patch
 
 from acquire.uploaders.plugin_registry import PluginRegistry
 
 
-def test_registry_functionality():
+def test_registry_functionality() -> None:
     data = PluginRegistry[int]("<undefined>")
     data.register("name", int)
 
     assert data.get("name")(20) == 20
 
 
-def test_registry_functionality_iterator():
+def test_registry_functionality_iterator() -> None:
     plugins = [("test", str), ("best", int)]
     data = PluginRegistry("<undefined>", plugins)
 
@@ -19,14 +21,14 @@ def test_registry_functionality_iterator():
     assert data.get("test")("hello") == "hello"
 
 
-def test_registry_entrypoint():
+def test_registry_entrypoint() -> None:
     mocked_output = Mock()
     with patch.object(PluginRegistry, "_find_entrypoint_data", return_value=[mocked_output]):
         data = PluginRegistry("<undefined>")
         assert data.get(mocked_output.name) == mocked_output.load.return_value
 
 
-def test_registry_entrypoint_failed():
+def test_registry_entrypoint_failed() -> None:
     mocked_output = Mock()
     mocked_output.load.side_effect = [ModuleNotFoundError]
     data = PluginRegistry("-")

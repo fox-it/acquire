@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import io
 import tarfile
-from pathlib import Path
-from typing import BinaryIO, Optional, Union
-
-from dissect.target.filesystem import FilesystemEntry
+from typing import TYPE_CHECKING, BinaryIO
 
 from acquire.crypt import EncryptedStream
 from acquire.outputs.base import Output
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from dissect.target.filesystem import FilesystemEntry
+
+TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
 
 
 class TarOutput(Output):
@@ -15,6 +21,7 @@ class TarOutput(Output):
     Args:
         path: The path to write the tar archive to.
         compress: Whether to compress the tar archive.
+        compression_method: Compression method to use (Default: gzip). Supports "gzip", "bzip2", "xz".
         encrypt: Whether to encrypt the tar archive.
         public_key: The RSA public key to encrypt the header with.
     """
@@ -23,15 +30,19 @@ class TarOutput(Output):
         self,
         path: Path,
         compress: bool = False,
+        compression_method: str = "gzip",
         encrypt: bool = False,
-        public_key: Optional[bytes] = None,
+        public_key: bytes | None = None,
     ) -> None:
+        self.compression = None
         ext = ".tar" if ".tar" not in path.suffixes else ""
         mode = "w|" if encrypt else "w:"
 
         if compress:
-            ext += ".gz" if ".gz" not in path.suffixes else ""
-            mode += "gz"
+            self.compression = TAR_COMPRESSION_METHODS.get(compression_method, "gz")
+
+            ext += f".{self.compression}" if f".{self.compression}" not in path.suffixes else ""
+            mode += self.compression
 
         if encrypt:
             ext += ".enc"
@@ -41,16 +52,16 @@ class TarOutput(Output):
 
         if encrypt:
             self._fh = EncryptedStream(self.path.open("wb"), public_key)
-            self.tar = tarfile.open(fileobj=self._fh, mode=mode)
+            self.tar = tarfile.open(fileobj=self._fh, mode=mode)  # noqa: SIM115
         else:
-            self.tar = tarfile.open(name=self.path, mode=mode)
+            self.tar = tarfile.open(name=self.path, mode=mode)  # noqa: SIM115
 
     def write(
         self,
         output_path: str,
         fh: BinaryIO,
-        entry: Optional[Union[FilesystemEntry, Path]] = None,
-        size: Optional[int] = None,
+        entry: FilesystemEntry | Path | None = None,
+        size: int | None = None,
     ) -> None:
         """Write a file-like object to a tar file.
 

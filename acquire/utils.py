@@ -12,12 +12,21 @@ import textwrap
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
-from dissect.target import Target
+from dissect.target.helpers import keychain
 
-from acquire.outputs import OUTPUTS
-from acquire.uploaders.plugin_registry import UploaderRegistry
+from acquire.outputs import (
+    COMPRESSION_METHODS,
+    OUTPUTS,
+    TAR_COMPRESSION_METHODS,
+    ZIP_COMPRESSION_METHODS,
+)
+
+if TYPE_CHECKING:
+    from dissect.target import Target
+
+    from acquire.uploaders.plugin_registry import UploaderRegistry
 
 try:
     from acquire.version import version as VERSION
@@ -32,12 +41,12 @@ class StrEnum(str, Enum):
 def _create_profile_information(profiles: dict) -> str:
     desc = ""
 
-    profile_names = (name for name in profiles.keys() if name != "none")
+    profile_names = (name for name in profiles if name != "none")
     for name in profile_names:
         profile_dict = profiles[name]
         desc += f"{name} profile:\n"
 
-        minindent = max([len(os_) for os_ in profile_dict.keys()])
+        minindent = max([len(os_) for os_ in profile_dict])
         descfmt = f"  {{:{minindent}s}}: {{}}\n"
 
         for os_, modlist in profile_dict.items():
@@ -74,24 +83,29 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("targets", metavar="TARGETS", default=["local"], nargs="*", help="Targets to load")
     # Create a mutually exclusive group, such that only one of the output options can be used
     output_group = parser.add_mutually_exclusive_group()
-    output_group.add_argument("-o", "--output", default=Path("."), type=Path, help="output directory")
+    output_group.add_argument("-o", "--output", default=Path(), type=Path, help="output directory")
     output_group.add_argument("-of", "--output-file", type=Path, help="output filename")
 
     parser.add_argument(
         "-ot",
         "--output-type",
-        choices=OUTPUTS.keys(),
+        choices=OUTPUTS,
         default="tar",
         help="output type (default: tar)",
     )
     parser.add_argument(
         "--compress",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="compress output (if supported by the output type)",
     )
     parser.add_argument(
+        "--compress-method",
+        choices=COMPRESSION_METHODS,
+        help="compression method (if supported by the output type)",
+    )
+    parser.add_argument(
         "--encrypt",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="encrypt output (if supported by the output type)",
     )
     parser.add_argument(
@@ -115,8 +129,17 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
     parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
-    parser.add_argument("-f", "--file", action="append", help="acquire file")
-    parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
+    # Keep `--file` and `--dir` (-f, and -d) temporarily
+    parser.add_argument(
+        "-f",
+        "-d",
+        "--file",
+        "--dir",
+        "--path",
+        dest="path",
+        action="append",
+        help="acquire a path, this can be either a file or directory",
+    )
     parser.add_argument("-g", "--glob", action="append", help="acquire files matching glob pattern")
 
     parser.add_argument("--disable-report", action="store_true", help="disable acquisition report file")
@@ -124,29 +147,36 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("--child", help="only collect specific child")
     parser.add_argument(
         "--children",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="collect all children in addition to main target",
     )
-    parser.add_argument("--skip-parent", action="store_true", help="skip parent collection (when using --children)")
+    parser.add_argument(
+        "--skip-parent", action=argparse.BooleanOptionalAction, help="skip parent collection (when using --children)"
+    )
 
     parser.add_argument(
         "--force-fallback",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="force filesystem access directly through OS level. Only supported with target 'local'",
     )
     parser.add_argument(
         "--fallback",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help=(
             "fallback to OS level filesystem access if filesystem type is not supported. "
             "Only supported with target 'local'"
         ),
     )
+    parser.add_argument(
+        "--enable-nfs",
+        action=argparse.BooleanOptionalAction,
+        help="mount nfs shares by connecting to the nfs server of the share.Only supported with target 'local'",
+    )
 
     parser.add_argument(
         "-u",
         "--auto-upload",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="upload result files after collection",
     )
     parser.add_argument(
@@ -155,6 +185,9 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         help="upload specified files (all other acquire actions are ignored)",
     )
     parser.add_argument("--no-proxy", action="store_true", help="don't autodetect proxies")
+
+    parser.add_argument("-K", "--keychain-file", type=Path, help="keychain file in CSV format")
+    parser.add_argument("-Kv", "--keychain-value", help="passphrase, recovery key or key file path value")
 
     for module_cls in modules.values():
         for args, kwargs in module_cls.__cli_args__:
@@ -184,17 +217,17 @@ def parse_acquire_args(
     Returns:
         A command line arguments namespace
     """
-    command_line_args, rest = parser.parse_known_args()
-    _merge_args_and_config(parser, command_line_args, config)
+    args, rest = parser.parse_known_args()
+    _merge_args_and_config(parser, args, config)
 
-    return command_line_args, rest
+    return args, rest
 
 
 def _merge_args_and_config(
     parser: argparse.ArgumentParser,
     command_line_args: argparse.Namespace,
     config: dict[str, Any],
-):
+) -> None:
     """Update the parsed command line arguments with the optional set of configured default arguments.
 
     The arguments are set to values supplied in ``config[arguments]``, when not
@@ -221,10 +254,10 @@ def _merge_args_and_config(
             config_argument = getattr(config_defaults_args, argument, value)
             setattr(command_line_args, argument, config_argument)
 
-    setattr(command_line_args, "config", config)
+    command_line_args.config = config
 
 
-def check_and_set_log_args(args: argparse.Namespace):
+def check_and_set_log_args(args: argparse.Namespace) -> None:
     """Check command line arguments which are related to logging.
 
     Also some arguments derived from the user supplied ones are set in the
@@ -261,16 +294,16 @@ def check_and_set_log_args(args: argparse.Namespace):
         else:
             raise ValueError(f"Log path doesn't exist: {log_path}")
 
-    setattr(args, "start_time", start_time)
-    setattr(args, "log_path", log_path)
-    setattr(args, "log_to_dir", log_to_dir)
-    setattr(args, "log_delay", log_delay)
+    args.start_time = start_time
+    args.log_path = log_path
+    args.log_to_dir = log_to_dir
+    args.log_delay = log_delay
 
 
 def check_and_set_acquire_args(
     args: argparse.Namespace,
     upload_plugins: UploaderRegistry,
-):
+) -> None:
     """Check the command line arguments and set some derived arguments.
 
     This function is separate from ``check_and_set_log_args()`` as logging
@@ -284,8 +317,12 @@ def check_and_set_acquire_args(
         ValueError: When an invalid combination of arguments is found.
     """
     upload_plugin = None
+    args.upload_plugin = upload_plugin
 
     # check & set upload related configuration
+    if args.upload and args.auto_upload:
+        raise ValueError("only one of --upload or --auto-upload can be specified")
+
     if args.upload or args.auto_upload:
         upload_mode = args.config.get("upload", {}).get("mode")
         if not upload_mode:
@@ -297,16 +334,15 @@ def check_and_set_acquire_args(
 
         # If initialization of the plugin fails, a ValueError is raised
         upload_plugin = upload_plugin_cls(**args.config)
-
-    setattr(args, "upload_plugin", upload_plugin)
+        args.upload_plugin = upload_plugin
 
     if not args.upload:
         # check output related configuration
         if (args.children or len(args.targets) > 1) and args.output_file:
-            raise ValueError("--children can not be used with --output_file. Use --output instead")
-        elif args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
-            raise ValueError("--output_file must be a path to a file in an existing directory")
-        elif args.output and not args.output.is_dir():
+            raise ValueError("--children can not be used with --output-file. Use --output instead")
+        if args.output_file and (not args.output_file.parent.is_dir() or args.output_file.is_dir()):
+            raise ValueError("--output-file must be a path to a file in an existing directory")
+        if args.output and not args.output.is_dir():
             raise ValueError(f"Output directory doesn't exist or is a file: {args.output}")
 
         # check & set encryption related configuration
@@ -316,10 +352,26 @@ def check_and_set_acquire_args(
                 public_key = args.public_key.read_text()
             if not public_key:
                 raise ValueError("No public key available (embedded or argument)")
-            setattr(args, "public_key", public_key)
+            args.public_key = public_key
 
     if not args.children and args.skip_parent:
         raise ValueError("--skip-parent can only be set with --children")
+
+    if args.compress:
+        if (args.output_type == "zip" and args.compress_method) and args.compress_method not in ZIP_COMPRESSION_METHODS:
+            raise ValueError(
+                f"Invalid compression method for zip, allowed are: {', '.join(ZIP_COMPRESSION_METHODS.keys())}"
+            )
+        if (args.output_type == "tar" and args.compress_method) and args.compress_method not in TAR_COMPRESSION_METHODS:
+            raise ValueError(
+                f"Invalid compression method for tar, allowed are: {', '.join(TAR_COMPRESSION_METHODS.keys())}"
+            )
+
+    if args.keychain_file:
+        keychain.register_keychain_file(args.keychain_file)
+
+    if args.keychain_value:
+        keychain.register_wildcard_value(args.keychain_value)
 
 
 def get_user_name() -> str:
@@ -354,9 +406,9 @@ def get_formatted_exception() -> str:
     return "".join(traceback.format_exception(*exc_info))
 
 
-def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional[str] = None) -> str:
+def format_output_name(prefix: str, postfix: str | None = None, ext: str | None = None) -> str:
     if not postfix:
-        postfix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        postfix = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
     name = f"{prefix}_{postfix}"
     if ext:
         name = f"{name}.{ext}"
@@ -364,7 +416,7 @@ def format_output_name(prefix: str, postfix: Optional[str] = None, ext: Optional
 
 
 def persist_execution_report(path: Path, report_data: dict) -> Path:
-    with open(path, "w") as f:
+    with path.open("w") as f:
         f.write(json.dumps(report_data, sort_keys=True, indent=4))
 
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import base64
 import contextlib
@@ -14,6 +16,8 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty as QueueEmptyError
+from queue import Queue
+from typing import TYPE_CHECKING, BinaryIO
 from urllib import request
 from urllib.error import HTTPError
 from urllib.parse import urljoin
@@ -56,6 +60,10 @@ from acquire.crypt import (
     key_fingerprint,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from threading import Event
+
 log = logging.getLogger(__name__)
 
 
@@ -73,7 +81,7 @@ class VerifyError(Exception):
 
 
 class EncryptedFile(AlignedStream):
-    def __init__(self, fh, key_file=None, key_server=None):
+    def __init__(self, fh: BinaryIO, key_file: Path | None = None, key_server: str | None = None) -> None:
         self.fh = fh
         self.key_file = key_file
         self.key_server = key_server
@@ -113,13 +121,13 @@ class EncryptedFile(AlignedStream):
 
         super().__init__(size)
 
-    def seekable(self):
+    def seekable(self) -> bool:
         return False
 
-    def seek(self, pos, whence=io.SEEK_CUR):
+    def seek(self, pos: int, whence: int = io.SEEK_CUR) -> int:
         raise io.UnsupportedOperation("seeking is not allowed")
 
-    def _read(self, offset, length):
+    def _read(self, offset: int, length: int) -> bytes:
         if not self.size:
             result = []
 
@@ -158,29 +166,28 @@ class EncryptedFile(AlignedStream):
                 length -= read_size
 
             return self.cipher.decrypt(b"".join(result))
-        else:
-            read_size = max(0, min(length, self.size - offset))
-            return self.cipher.decrypt(self.fh.read(read_size))
+        read_size = max(0, min(length, self.size - offset))
+        return self.cipher.decrypt(self.fh.read(read_size))
 
-    def chunks(self, chunk_size=CHUNK_SIZE):
+    def chunks(self, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
         while True:
             chunk = self.read(chunk_size)
             if not chunk:
                 break
             yield chunk
 
-    def verify(self):
+    def verify(self) -> None:
         try:
             self.cipher.verify(self.digest)
         except ValueError:
             raise VerifyError("Digest check failed")
 
     @property
-    def file_header(self):
+    def file_header(self) -> c_acquire.file:
         return self._file_header
 
     @file_header.setter
-    def file_header(self, file_header):
+    def file_header(self, file_header: c_acquire.file) -> None:
         if file_header.magic != FILE_MAGIC:
             raise ValueError(f"Invalid file magic: {file_header.magic}")
 
@@ -193,31 +200,33 @@ class EncryptedFile(AlignedStream):
         self._file_header = file_header
 
     @property
-    def header(self):
+    def header(self) -> c_acquire.header:
         return self._header
 
     @header.setter
-    def header(self, header):
+    def header(self, header: c_acquire.header) -> None:
         if header.magic != HEADER_MAGIC:
             raise ValueError(f"Invalid header magic: {header.magic}")
         self._header = header
 
     @property
-    def footer(self):
+    def footer(self) -> c_acquire.footer:
         return self._footer
 
     @footer.setter
-    def footer(self, footer):
+    def footer(self, footer: c_acquire.footer) -> None:
         if footer.magic != FOOTER_MAGIC:
             raise ValueError(f"Invalid footer magic: {footer}")
         self._footer = footer
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> datetime:
         return datetime.fromtimestamp(self.file_header.timestamp, timezone.utc)
 
 
-def decrypt_header(header, fingerprint, key_file=None, key_server=None):
+def decrypt_header(
+    header: bytes, fingerprint: bytes, key_file: Path | None = None, key_server: str | None = None
+) -> bytes:
     if not key_file and not key_server:
         raise ValueError("Need either key file or key server")
 
@@ -226,22 +235,19 @@ def decrypt_header(header, fingerprint, key_file=None, key_server=None):
         if key_fingerprint(rsa_key.public_key()) != fingerprint:
             raise ValueError("Key doesn't match fingerprint")
         return PKCS1_OAEP.new(rsa_key).decrypt(header)
-    else:
-        data = json.dumps({"fingerprint": fingerprint.hex(), "header": base64.b64encode(header).decode()}).encode(
-            "utf-8"
-        )
+    data = json.dumps({"fingerprint": fingerprint.hex(), "header": base64.b64encode(header).decode()}).encode("utf-8")
 
-        url = urljoin(key_server, "/api/v1/decrypt")
-        req = request.Request(url, data, headers={"Content-Type": "application/json"})
-        try:
-            resp = request.urlopen(req)
-        except HTTPError as e:
-            if e.code == 404:
-                raise ValueError("Unknown key fingerprint")
-            raise ValueError(f"Failed to decrypt header: {e}")
-        result = json.loads(resp.read())
+    url = urljoin(key_server, "/api/v1/decrypt")
+    req = request.Request(url, data, headers={"Content-Type": "application/json"})
+    try:
+        resp = request.urlopen(req)
+    except HTTPError as e:
+        if e.code == 404:
+            raise ValueError("Unknown key fingerprint")
+        raise ValueError(f"Failed to decrypt header: {e}")
+    result = json.loads(resp.read())
 
-        return base64.b64decode(result["header"])
+    return base64.b64decode(result["header"])
 
 
 def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.Queue) -> bool:
@@ -252,7 +258,7 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
     # If suffixes of the out_path do not correspond with the in_path suffixes (minus ".enc"),
     # we're probably dealing with a special custom filename. Therefore, do not check for the existence of the
     # decompressed filename
-    if not out_path.suffixes == in_path.suffixes[:-1]:
+    if out_path.suffixes != in_path.suffixes[:-1]:
         return False
 
     # Check if acquire file is compressed (Path("file.tar.gz.enc").stem -> "file.tar.gz")
@@ -264,18 +270,32 @@ def check_existing(in_path: Path, out_path: Path, status_queue: multiprocessing.
     return False
 
 
-def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, key_server=None, clobber=False):
+def worker(
+    task_id: int,
+    stop_event: Event,
+    status_queue: Queue,
+    in_path: Path,
+    out_path: Path,
+    key_file: Path | None = None,
+    key_server: str | None = None,
+    clobber: bool = False,
+) -> None:
+    success = False
+    message = "An unknown error occurred"
+
     try:
         if check_existing(in_path, out_path, status_queue) and not clobber:
+            message = "Output file or decompressed file already exists!"
             return
 
         _update(status_queue, task_id, visible=True)
-        success = False
         with in_path.open("rb") as infh:
             try:
                 ef = EncryptedFile(infh, key_file=key_file, key_server=key_server)
             except Exception as e:
-                _info(status_queue, f"{in_path} • Error opening encrypted file: {e}")
+                message = f"Error opening encrypted file: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+                return
             _info(
                 status_queue,
                 f"{in_path} • File: {ef.file_header.magic.decode()} | {ef.file_header.header_type} | {ef.timestamp}",
@@ -283,25 +303,33 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
             _info(status_queue, f"{in_path} • Header: {ef.header.magic.decode()} | {ef.header.cipher_type}")
             _update(status_queue, task_id, total=ef.size)
 
-            with out_path.open("wb") as outfh:
-                _info(status_queue, f"{in_path} • Decrypting to {out_path}")
-                _start(status_queue, task_id)
-                try:
+            try:
+                with out_path.open("wb") as outfh:
+                    _info(status_queue, f"{in_path} • Decrypting to {out_path}")
+                    _start(status_queue, task_id)
+
                     for chunk in ef.chunks():
                         if stop_event.is_set():
-                            raise ValueError("stopping")
+                            raise ValueError("stopping")  # noqa: TRY301
                         outfh.write(chunk)
                         _update(status_queue, task_id, advance=len(chunk))
                     ef.verify()
-                    _info(status_queue, f"{in_path} • File verified OK!")
+                    message = "File verified OK!"
+                    _info(status_queue, f"{in_path} • {message}")
                     success = True
-                except ValueError as e:
-                    _info(status_queue, f"{in_path} • Error decrypting file: {e}")
-                except VerifyError as e:
-                    _info(status_queue, f"{in_path} • Verify error: {e}")
-                    _info(status_queue, f"{in_path} • ! Output file should NOT be trusted")
-                except Exception as e:
-                    _info(status_queue, f"{in_path} • Unknown error: {e}")
+            except ValueError as e:
+                message = f"Error decrypting file: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+            except VerifyError as e:
+                _info(status_queue, f"{in_path} • Verify error: {e}")
+                message = "! Verification error, output file should NOT be trusted"
+                _info(status_queue, f"{in_path} • {message}")
+            except OSError as e:
+                message = f"Filesystem error: {e}"
+                _info(status_queue, f"{in_path} • {message}")
+            except Exception as e:
+                message = f"Unknown error: {e}"
+                _info(status_queue, f"{in_path} • {message}")
 
         if not success:
             failed_path = out_path.with_suffix(f"{out_path.suffix}.failed")
@@ -309,26 +337,26 @@ def worker(task_id, stop_event, status_queue, in_path, out_path, key_file=None, 
             out_path.rename(failed_path)
     finally:
         _update(status_queue, task_id, visible=False)
-        _exit(status_queue, task_id)
+        _exit(status_queue, task_id, str(in_path), message, success)
 
 
-def _start(queue, task_id):
+def _start(queue: Queue, task_id: int) -> None:
     queue.put_nowait((STATUS_START, task_id))
 
 
-def _update(queue, task_id, *args, **kwargs):
+def _update(queue: Queue, task_id: int, *args, **kwargs) -> None:
     queue.put_nowait((STATUS_UPDATE, (task_id, args, kwargs)))
 
 
-def _info(queue, msg):
+def _info(queue: Queue, msg: str) -> None:
     queue.put_nowait((STATUS_INFO, msg))
 
 
-def _exit(queue, task_id):
-    queue.put_nowait((STATUS_EXIT, task_id))
+def _exit(queue: multiprocessing.Queue, task_id: int, in_path: str, message: str, success: bool) -> None:
+    queue.put_nowait((STATUS_EXIT, (task_id, in_path, message, success)))
 
 
-def setup_logging(logger, verbosity):
+def setup_logging(logger: logging.Logger, verbosity: int) -> None:
     if verbosity == 1:
         level = logging.ERROR
     elif verbosity == 2:
@@ -347,7 +375,7 @@ def setup_logging(logger, verbosity):
     logger.setLevel(level)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="+", type=Path, help="paths to encrypted files")
     parser.add_argument("-o", "--output", type=Path, help="optional path to output file")
@@ -391,6 +419,7 @@ def main():
         key_file = None
         key_server = args.key_server
 
+    exit_code = 0
     ctx = progress or contextlib.nullcontext()
     with ctx:
         signal_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -399,7 +428,7 @@ def main():
             status_queue = mp.Queue()
             tasks = []
 
-            for in_path, out_path in zip(files, outputs):
+            for in_path, out_path in zip(files, outputs, strict=False):
                 task_id = (
                     progress.add_task("decrypt", start=False, visible=False, filename=in_path.name)
                     if progress
@@ -420,12 +449,15 @@ def main():
 
             signal.signal(signal.SIGINT, signal_handler)
 
+            results = {}
             while tasks:
                 try:
                     cmd, args = status_queue.get(timeout=10)
 
                     if cmd == STATUS_EXIT:
-                        tasks.remove(args)
+                        task_id, in_path, message, success = args
+                        tasks.remove(task_id)
+                        results[in_path] = (success, message)
                     elif cmd == STATUS_INFO:
                         if progress:
                             progress.console.log(args)
@@ -438,11 +470,35 @@ def main():
                         task_id, args, kwargs = args
                         if progress:
                             progress.update(task_id, *args, **kwargs)
-                except (QueueEmptyError, KeyboardInterrupt):
+                except (QueueEmptyError, KeyboardInterrupt):  # noqa: PERF203
                     (progress.console.log if progress else log.info)("Stopping...")
                     stop_event.set()
                     executor.shutdown(wait=True, cancel_futures=True)
                     break
+
+            results_string = textwrap.indent(
+                "\n".join(
+                    f"{file} - {'Success' if success else 'Failed'}: {message}"
+                    for file, (success, message) in sorted(results.items())
+                ),
+                " • ",
+            )
+            (progress.console.log if progress else log.info)(
+                f"\nDecrypt results (file - result: message):\n{results_string}"
+            )
+
+            successes = [success for success, _ in results.values()] or [False]
+            # If no successful results, return 1
+            if not any(successes):
+                exit_code = 1
+            # Else, if some results but not all were successful return 2
+            elif not all(successes):
+                exit_code = 2
+            # Else, if all were successful but there were still tasks to handle, return 3
+            elif tasks:
+                exit_code = 3
+
+    return exit_code
 
 
 def show_duplicates(output_directory: Path, files: list[Path]) -> None:
@@ -462,9 +518,10 @@ def show_duplicates(output_directory: Path, files: list[Path]) -> None:
     )
     log.warning(
         "Two or more encrypted files have the same name. "
-        f"This will skip decrypting the file if it already exists in '{output_directory}'\n"
-        f"The files with the same names are:\n"
-        f"{duplicates}"
+        "This will skip decrypting the file if it already exists in '%s'\n"
+        "The files with the same names are:\n%s",
+        output_directory,
+        duplicates,
     )
 
 
@@ -476,7 +533,7 @@ def find_enc_files(files: list[Path]) -> list[Path]:
         elif path.is_dir():
             encrypted_files.extend(path.rglob("*.enc"))
         else:
-            log.info(f"File {path!r} does not have the .enc extension. skipping.")
+            log.info("File %r does not have the .enc extension. skipping", path)
     return encrypted_files
 
 

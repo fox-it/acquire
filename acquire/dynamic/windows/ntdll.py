@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ctypes
 from enum import IntEnum, IntFlag
-from typing import List
 
 from acquire.dynamic.windows.exceptions import (
     AccessDeniedError,
@@ -65,14 +64,14 @@ BUFFER_SIZE = 1024
 
 
 class OBJECT_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [
+    _fields_ = (
         ("Length", ULONG),
         ("RootDirectory", HANDLE),
         ("ObjectName", PUNICODE_STRING),
         ("Attributes", ULONG),
         ("SecurityDescriptor", PVOID),
         ("SecurityQualityOfService", PVOID),
-    ]
+    )
 
 
 class NtStatusCode(IntEnum):
@@ -166,7 +165,7 @@ def initialize_object_attributes(
 def close_handle(handle: HANDLE) -> None:
     """Closes an opened handle."""
     if not CloseHandle(handle):
-        raise HandleNotClosedSuccessfullyError()
+        raise HandleNotClosedSuccessfullyError
 
 
 def validate_ntstatus(status: NTSTATUS) -> None:
@@ -206,7 +205,7 @@ def open_directory_object(dir_name: str, root_handle: HANDLE = None) -> HANDLE:
     return returned_handle
 
 
-def query_directory_object(path_to_dir: str, dir_handle: HANDLE) -> List[NamedObject]:
+def query_directory_object(path_to_dir: str, dir_handle: HANDLE) -> list[NamedObject]:
     """Queries a directory object.
 
     Parameters:

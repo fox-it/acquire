@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import os
+from concurrent import futures
 from io import SEEK_SET, UnsupportedOperation
-from pathlib import Path
 from stat import S_IRGRP, S_IROTH, S_IRUSR
+from typing import TYPE_CHECKING, Any
 
 from dissect.util.stream import AlignedStream
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 try:
     # Windows systems do not have the fcntl module.
     from fcntl import F_SETFL, fcntl
@@ -12,6 +18,35 @@ try:
     HAS_FCNTL = True
 except ImportError:
     HAS_FCNTL = False
+
+
+def timeout(func: Callable, *, timelimit: int) -> Callable:
+    """Timeout a function if it takes too long to complete.
+
+    Args:
+        func: a function to wrap.
+        timelimit: The time in seconds that an operation is allowed to run.
+
+    Raises:
+        TimeoutError: If its time exceeds the timelimit
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        with futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(func, *args, **kwargs)
+
+            try:
+                result = future.result(timelimit)
+            except futures.TimeoutError:
+                raise TimeoutError
+            finally:
+                # Make sure the thread stops right away.
+                executor._threads.clear()
+                futures.thread._threads_queues.clear()
+
+            return result
+
+    return wrapper
 
 
 class VolatileStream(AlignedStream):
@@ -41,6 +76,8 @@ class VolatileStream(AlignedStream):
         st_mode = os.fstat(self.fd).st_mode
         write_only = (st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == 0  # novermin
 
+        self._os_read = timeout(os.read, timelimit=5)
+
         super().__init__(0 if write_only else size)
 
     def seek(self, pos: int, whence: int = SEEK_SET) -> int:
@@ -53,8 +90,8 @@ class VolatileStream(AlignedStream):
         result = []
         while length:
             try:
-                buf = os.read(self.fd, min(length, self.size - offset))
-            except BlockingIOError:
+                buf = self._os_read(self.fd, min(length, self.size - offset))
+            except (BlockingIOError, TimeoutError):
                 break
 
             if not buf:

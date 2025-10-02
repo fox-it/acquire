@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools>=65.5.0", "setuptools_scm[toml]>=6.4.0"]
+requires = ["setuptools>=77.0.0", "setuptools_scm[toml]>=6.4.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "acquire"
 description = "A tool to quickly gather forensic artifacts from disk images or a live system into a lightweight container"
 readme = "README.md"
-requires-python = "~=3.9"
-license.text = "Affero General Public License v3"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "COPYRIGHT"]
 authors = [
   {name = "Dissect Team", email = "dissect@fox-it.com"}
 ]
@@ -16,7 +17,6 @@ classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Intended Audience :: Information Technology",
-  "License :: OSI Approved",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Topic :: Internet :: Log Analysis",
@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "dissect.cstruct>=4,<5",
-    "dissect.target>=3.7,<4",
+    "dissect.target>=3.23,<4",
 ]
 dynamic = ["version"]
 
@@ -41,28 +41,88 @@ full = [
     "pycryptodome",
     "requests",
     "rich",
-    "dissect.target[full]>=3.7,<4",
+    "dissect.target[full]>=3.23,<4",
     "requests_toolbelt",
 ]
 dev = [
     "acquire[full]",
     "dissect.cstruct>=4.0.dev,<5.0.dev",
-    "dissect.target[dev]>=3.7.dev,<4.0.dev",
+    "dissect.target[dev]>=3.23.dev,<4.0.dev",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+]
+lint = [
+    "ruff==0.13.1",
+    "vermin",
+]
+build = [
+    "build",
+]
+debug = [
+    "ipdb",
+]
+dev = [
+    {include-group = "test"},
+    {include-group = "lint"},
+    {include-group = "debug"},
 ]
 
 [project.scripts]
 acquire = "acquire.acquire:main"
 acquire-decrypt = "acquire.tools.decrypter:main"
 
-[tool.black]
+[tool.ruff]
 line-length = 120
+required-version = ">=0.13.1"
 
-[tool.isort]
-profile = "black"
-known_first_party = ["acquire"]
+[tool.ruff.format]
+docstring-code-format = true
 
-[tool.setuptools]
-license-files = ["LICENSE", "COPYRIGHT"]
+[tool.ruff.lint]
+select = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "UP",
+  "YTT",
+  "ANN",
+  "B",
+  "C4",
+  "DTZ",
+  "T10",
+  "FA",
+  "ISC",
+  "G",
+  "INP",
+  "PIE",
+  "PYI",
+  "PT",
+  "Q",
+  "RSE",
+  "RET",
+  "SLOT",
+  "SIM",
+  "TID",
+  "TCH",
+  "PTH",
+  "PLC",
+  "TRY",
+  "FLY",
+  "PERF",
+  "FURB",
+  "RUF",
+]
+ignore = ["E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/_docs/**" = ["INP001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["acquire"]
 
 [tool.setuptools.packages.find]
 include = ["acquire", "acquire.*"]

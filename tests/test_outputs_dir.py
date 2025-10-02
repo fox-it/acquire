@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from dissect.target.filesystem import VirtualFilesystem
 from dissect.target.helpers.fsutil import normalize
 
 from acquire.outputs import DirectoryOutput
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from dissect.target.filesystem import VirtualFilesystem
 
 
 @pytest.fixture
@@ -18,12 +24,12 @@ def leaves(path: Path) -> list[Path]:
     leave_paths = []
 
     dir_is_empty = True
-    for path in path.iterdir():
+    for entry in path.iterdir():
         dir_is_empty = False
-        if path.is_dir():
-            leave_paths.extend(leaves(path))
+        if entry.is_dir():
+            leave_paths.extend(leaves(entry))
         else:
-            leave_paths.append(path)
+            leave_paths.append(entry)
 
     if dir_is_empty:
         leave_paths.append(path)
@@ -57,7 +63,5 @@ def test_dir_output_write_entry(mock_fs: VirtualFilesystem, dir_output: Director
 
     if entry.is_dir():
         assert file.is_dir()
-    elif entry.is_symlink():
-        assert file.is_file()
-    elif entry.is_file():
+    elif entry.is_symlink() or entry.is_file():
         assert file.is_file()
