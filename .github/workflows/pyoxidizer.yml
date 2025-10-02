@@ -38,7 +38,7 @@ jobs:
           strip build/x86_64-unknown-linux-gnu/release/install/acquire
 
       - name: Verify binary
-        run: build/x86_64-unknown-linux-gnu/release/install/acquire --version
+        run: build/x86_64-unknown-linux-gnu/release/install/acquire-x86_64-unknown-linux-gnu --help
 
       - uses: actions/upload-artifact@v3
         with:
@@ -94,7 +94,7 @@ jobs:
           strip build/x86_64-unknown-linux-musl/release/install/acquire
 
       - name: Verify binary
-        run: build/x86_64-unknown-linux-musl/release/install/acquire --version
+        run: build/x86_64-unknown-linux-musl/release/install/acquire-x86_64-unknown-linux-musl --help
 
       - uses: actions/upload-artifact@v3
         with:
@@ -132,7 +132,7 @@ jobs:
           strip build/x86_64-pc-windows-msvc/release/install/acquire.exe
 
       - name: Verify binary
-        run: build/x86_64-pc-windows-msvc/release/install/acquire.exe --version
+        run: build/x86_64-pc-windows-msvc/release/install/acquire-x86_64-pc-windows-msvc.exe --help
 
       - uses: actions/upload-artifact@v3
         with:
@@ -171,11 +171,11 @@ jobs:
 
           mkdir -p build/universal2-apple-darwin/release/install
           cp -r build/x86_64-apple-darwin/release/install/* build/universal2-apple-darwin/release/install/
-          lipo -create build/x86_64-apple-darwin/release/install/acquire build/aarch64-apple-darwin/release/install/acquire -output build/universal2-apple-darwin/release/install/acquire
-          strip build/universal2-apple-darwin/release/install/acquire
+          lipo -create build/x86_64-apple-darwin/release/install/acquire build/aarch64-apple-darwin/release/install/acquire -output build/universal2-apple-darwin/release/install/acquire-universal2-apple-darwin
+          strip build/universal2-apple-darwin/release/install/acquire-universal2-apple-darwin
 
       - name: Verify binary
-        run: build/universal2-apple-darwin/release/install/acquire --version
+        run: build/universal2-apple-darwin/release/install/acquire-universal2-apple-darwin --help
 
       - uses: actions/upload-artifact@v3
         with:
