@@ -1177,6 +1177,12 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
+
+        # Sophos Hitman pro
+        ("path", "sysvol/ProgramData/HitmanPro/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
     )
 
 
@@ -1214,12 +1220,6 @@ class EDR(Module):
     SPEC = (
         # Carbon Black
         ("path", "sysvol/ProgramData/CarbonBlack/Logs"),
-        
-        # Sophos Hitman pro
-        ("glob", "sysvol/ProgramData/HitmanPro/Logs/**"),
-        ("glob", "sysvol/ProgramData/HitmanPro.Alert/Logs/**"),
-        ("glob", "sysvol/ProgramData/HitmanPro/*.db"),
-        ("glob", "sysvol/ProgramData/HitmanPro.Alert/*.db"),
     )
 
 
