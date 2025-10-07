@@ -1214,6 +1214,12 @@ class EDR(Module):
     SPEC = (
         # Carbon Black
         ("path", "sysvol/ProgramData/CarbonBlack/Logs"),
+        
+        # Sophos Hitman pro
+        ("glob", "sysvol/ProgramData/HitmanPro/Logs/**"),
+        ("glob", "sysvol/ProgramData/HitmanPro.Alert/Logs/**"),
+        ("glob", "sysvol/ProgramData/HitmanPro/*.db"),
+        ("glob", "sysvol/ProgramData/HitmanPro.Alert/*.db"),
     )
 
 
