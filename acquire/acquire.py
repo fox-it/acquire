@@ -1177,7 +1177,6 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
-
         # Sophos Hitman pro
         ("path", "sysvol/ProgramData/HitmanPro/Logs/"),
         ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
