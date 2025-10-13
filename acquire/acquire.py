@@ -18,7 +18,7 @@ import warnings
 from collections import defaultdict
 from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
+from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
 from dissect.target import Target
 from dissect.target.filesystems import ntfs
@@ -63,7 +63,7 @@ from acquire.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
 
@@ -1177,6 +1177,11 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
+        # Sophos Hitman pro
+        ("path", "sysvol/ProgramData/HitmanPro/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
     )
 
 
@@ -1649,8 +1654,7 @@ class Bootbanks(Module):
 
         for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
             for bootbank_path, boot_vol in boot_fs:
-                # samefile fails on python 3.9 (https://github.com/fox-it/dissect.target/issues/1289)
-                # but support for 3.9 gets dropped soon
+                # samefile fails on python 3.10 for string paths (https://github.com/fox-it/dissect.target/issues/1289)
                 if bootbank_path.samefile(target.fs.path(mountpoint)):
                     log.info("Acquiring %s (%s)", mountpoint, boot_vol)
                     mountpoint_len = len(mountpoint)
@@ -1797,8 +1801,8 @@ class OpenHandles(Module):
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
-        from acquire.dynamic.windows.collect import collect_open_handles
-        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+        from acquire.dynamic.windows.collect import collect_open_handles  # noqa: PLC0415
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv  # noqa: PLC0415
 
         log.info("*** Acquiring open handles")
 

@@ -428,7 +428,7 @@ def main() -> int:
             status_queue = mp.Queue()
             tasks = []
 
-            for in_path, out_path in zip(files, outputs):
+            for in_path, out_path in zip(files, outputs, strict=False):
                 task_id = (
                     progress.add_task("decrypt", start=False, visible=False, filename=in_path.name)
                     if progress
