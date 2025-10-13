@@ -59,8 +59,6 @@ def _create_profile_information(profiles: dict) -> str:
     return desc
 
 
-
-
 def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> argparse.ArgumentParser:
     module_profiles = "Module:\n" + textwrap.indent(_create_profile_information(profiles), "  ")
     volatile_profiles = "Volatile:\n" + textwrap.indent(_create_profile_information(volatile), "  ")
