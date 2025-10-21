@@ -9,7 +9,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import groupby
-from typing import TYPE_CHECKING, BinaryIO, Callable
+from typing import TYPE_CHECKING, BinaryIO
 
 from dissect.target.exceptions import (
     FileNotFoundError,
@@ -22,7 +22,7 @@ from dissect.target.helpers import fsutil
 from acquire.utils import StrEnum, get_formatted_exception, normalize_path
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from dissect.target import Target
     from dissect.target.filesystem import Filesystem

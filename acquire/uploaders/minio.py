@@ -39,8 +39,8 @@ class MinIO(UploaderPlugin):
             RuntimeError: When the minio module is not installed.
         """
         try:
-            import urllib3
-            from minio import Minio
+            import urllib3  # noqa: PLC0415
+            from minio import Minio  # noqa: PLC0415
         except ImportError:
             raise RuntimeError("Minio upload module is not available")
 

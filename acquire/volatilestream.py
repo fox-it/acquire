@@ -4,13 +4,13 @@ import os
 from concurrent import futures
 from io import SEEK_SET, UnsupportedOperation
 from stat import S_IRGRP, S_IROTH, S_IRUSR
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from dissect.util.stream import AlignedStream
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
-
 try:
     # Windows systems do not have the fcntl module.
     from fcntl import F_SETFL, fcntl

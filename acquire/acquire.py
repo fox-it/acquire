@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import enum
 import functools
 import io
@@ -18,7 +19,7 @@ import warnings
 from collections import defaultdict
 from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
+from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
 from dissect.target import Target
 from dissect.target.filesystems import ntfs
@@ -66,7 +67,7 @@ from acquire.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
 
@@ -1204,6 +1205,11 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
+        # Sophos Hitman pro
+        ("path", "sysvol/ProgramData/HitmanPro/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
     )
 
 
@@ -1676,8 +1682,7 @@ class Bootbanks(Module):
 
         for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
             for bootbank_path, boot_vol in boot_fs:
-                # samefile fails on python 3.9 (https://github.com/fox-it/dissect.target/issues/1289)
-                # but support for 3.9 gets dropped soon
+                # samefile fails on python 3.10 for string paths (https://github.com/fox-it/dissect.target/issues/1289)
                 if bootbank_path.samefile(target.fs.path(mountpoint)):
                     log.info("Acquiring %s (%s)", mountpoint, boot_vol)
                     mountpoint_len = len(mountpoint)
@@ -1824,8 +1829,8 @@ class OpenHandles(Module):
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
-        from acquire.dynamic.windows.collect import collect_open_handles
-        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+        from acquire.dynamic.windows.collect import collect_open_handles  # noqa: PLC0415
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv  # noqa: PLC0415
 
         log.info("*** Acquiring open handles")
 
@@ -2439,19 +2444,20 @@ def main() -> None:
                 target_path = f"{target_path}?{target_query}"
             target_paths.append(target_path)
 
+        # Use esxi_memory_context_manager only if running on ESXi host
+        if platform.system().lower() == "vmkernel":
+            context_mgr = esxi_memory_context_manager()
+        else:
+            context_mgr = contextlib.nullcontext()
+
         try:
             target_name = "Unknown"  # just in case open_all already fails
-            for target in Target.open_all(target_paths):
-                target_name = "Unknown"  # overwrite previous target name
-                target_name = target.name
-                log.info("Loading target %s", target_name)
-                log.info(target)
-                if target.os == "esxi" and target.name == "local":
-                    # Loader found that we are running on an esxi host
-                    # Perform operations to "enhance" memory
-                    with esxi_memory_context_manager():
-                        files_to_upload = acquire_children_and_targets(target, args)
-                else:
+            with context_mgr:
+                for target in Target.open_all(target_paths):
+                    target_name = "Unknown"  # overwrite previous target name
+                    target_name = target.name
+                    log.info("Loading target %s", target_name)
+                    log.info(target)
                     files_to_upload = acquire_children_and_targets(target, args)
         except Exception:
             log.error("Failed to acquire target: %s", target_name)  # noqa: TRY400
