@@ -874,7 +874,7 @@ class IIS(Module):
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         warnings.warn(
-            "--iis is deprecated in favor of --webserver-logs and will be removed in acquire ???",
+            "--iis is deprecated in favor of --webserver-logs and will be removed in acquire 3.22",
             DeprecationWarning,
             stacklevel=2,
         )
