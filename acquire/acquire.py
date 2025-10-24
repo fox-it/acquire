@@ -899,11 +899,8 @@ class WebserverLog(Module):
             if subclass.__name__ == "IISLogsPlugin" and target.os != "windows":
                 continue
 
-            if not hasattr(subclass, "_get_paths"):
-                continue
-
             webserver = subclass(target)
-            for log_path in webserver._get_paths():
+            for log_path in webserver.get_all_paths():
                 spec.add(("path", log_path))
 
         return spec
