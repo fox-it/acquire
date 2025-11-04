@@ -82,6 +82,16 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     output_group.add_argument("-o", "--output", default=Path(), type=Path, help="output directory")
     output_group.add_argument("-of", "--output-file", type=Path, help="output filename")
 
+    output_group.add_argument(
+        "-dg",
+        "--diagnostics",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="[PATH]",
+        help="gather diagnostics information and print as JSON (optional path, defaults to logfile stem)",
+    )
+
     parser.add_argument(
         "-ot",
         "--output-type",
