@@ -371,6 +371,9 @@ def check_and_set_acquire_args(
             raise ValueError(
                 f"Invalid compression method for tar, allowed are: {', '.join(TAR_COMPRESSION_METHODS.keys())}"
             )
+    else:
+        if args.compress_method:
+            raise ValueError("--compress-method can only be used when --compress is set")
 
     if args.keychain_file:
         keychain.register_keychain_file(args.keychain_file)
