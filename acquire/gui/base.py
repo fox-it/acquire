@@ -31,7 +31,7 @@ class GUI:
             cls = Stub
             if str(flavour).lower() == "windows":
                 # create a basic Win32 GUI
-                from acquire.gui.win32 import Win32
+                from acquire.gui.win32 import Win32  # noqa: PLC0415
 
                 cls = Win32
             GUI._instance = super().__new__(cls)
@@ -52,7 +52,7 @@ class GUI:
     def shard(self, shard: int) -> None:
         """Sets the shard of the progress bar."""
         # Use this to 'refine' progress bar (i.e. assign a shard)
-        if shard > 100 or shard < 1:
+        if shard > 100 or shard < 0:
             raise GUIError("Shards have to be between 0-100")
         self._shard = shard
 

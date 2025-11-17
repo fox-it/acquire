@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import enum
 import functools
 import io
@@ -14,18 +15,20 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import warnings
 from collections import defaultdict
-from itertools import product
+from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple, NoReturn
+from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
 from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
 from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
-from dissect.target.tools.utils import args_to_uri
+from dissect.target.tools.utils.cli import args_to_uri
 from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
@@ -61,7 +64,7 @@ from acquire.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
 
@@ -279,27 +282,55 @@ class Module:
 
 
 @register_module("--sys")
+@module_arg(
+    "--full-sys",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Sysfs (/sys) entries",
+)
 @local_module
 class Sys(Module):
-    DESC = "Sysfs files (live systems only)"
+    DESC = """all or a subset of Sysfs (/sys) entries (live systems only). Defaults to a subset.
+    Use --full-sys to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("dir", "/sys")]
+        spec_path = "/sys" if cli_args.full_sys else "/sys/module"
+        spec = [("path", spec_path)]
+
         collector.collect(spec, follow=False, volatile=True)
 
 
 @register_module("--proc")
+@module_arg(
+    "--full-proc",
+    action=argparse.BooleanOptionalAction,
+    help="acquire all Procfs (/proc) entries",
+)
 @local_module
 class Proc(Module):
-    DESC = "Procfs files (live systems only)"
+    DESC = """all or a subset of Procfs (/proc) entries (live systems only). Defaults to a subset.
+    Use --full-proc to acquire all entries."""
     EXEC_ORDER = ExecutionOrder.BOTTOM
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("dir", "/proc")]
+        if cli_args.full_proc:
+            spec = [("path", "/proc")]
+        else:
+            spec = [
+                ("path", "/proc/sys/kernel/hostname"),
+                ("path", "/proc/uptime"),
+                ("path", "/proc/stat"),
+            ]
+            spec = itertools.chain(spec, cls._get_proc_specs(target))
         collector.collect(spec, follow=False, volatile=True)
+
+    @classmethod
+    def _get_proc_specs(cls, target: Target) -> Iterator[tuple[str, str]]:
+        pid_paths = ["status", "stat", "environ"]
+        for proc, part in itertools.product(target.proc.iter_proc(), pid_paths):
+            yield ("path", proc / part)
 
 
 @register_module("--proc-net")
@@ -310,7 +341,14 @@ class ProcNet(Module):
 
     @classmethod
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
-        spec = [("dir", "/proc/net")]
+        # With network namespaces, /proc/net is a references to /proc/<pid>/net,
+        # It contains the same information as /proc/net, however it only shows the information from the
+        # namespace where the process is the member of.
+        # TODO: Research about network namespaces
+        spec = [
+            ("path", "/proc/net/"),
+            ("path", "/proc/self/net/"),
+        ]
         collector.collect(spec, follow=False, volatile=True)
 
 
@@ -322,8 +360,15 @@ class NTFS(Module):
     def _run(cls, target: Target, cli_args: argparse.Namespace, collector: Collector) -> None:
         for fs, main_mountpoint, name, mountpoints in iter_ntfs_filesystems(target):
             log.info("Acquiring from %s as %s (%s)", fs, name, mountpoints)
+            filenames = [
+                "$MFT",
+                "$Boot",
+                "$Secure:$SII",
+                "$Secure:$SDS",
+                "$LogFile",
+            ]
 
-            for filename in ("$MFT", "$Boot", "$Secure:$SDS"):
+            for filename in filenames:
                 if main_mountpoint is not None:
                     path = fsutil.join(main_mountpoint, filename)
                     collector.collect_path(path)
@@ -335,6 +380,7 @@ class NTFS(Module):
                     collector.collect_file_raw(filename, fs, name)
 
             cls.collect_usnjrnl(collector, fs, name)
+            cls.collect_rmmetadata(collector, fs, name)
 
     @classmethod
     def collect_usnjrnl(cls, collector: Collector, fs: Filesystem, name: str) -> None:
@@ -352,12 +398,26 @@ class NTFS(Module):
 
             return (journal, size)
 
-        collector.collect_file_raw(
-            "$Extend/$Usnjrnl:$J",
-            fs,
-            name,
-            file_accessor=usnjrnl_accessor,
-        )
+        for filename in ("$Extend/$Usnjrnl:$J", "$Extend/$Usnjrnl:$Max"):
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+                file_accessor=usnjrnl_accessor,
+            )
+
+    @classmethod
+    def collect_rmmetadata(cls, collector: Collector, fs: Filesystem, name: str) -> None:
+        filenames = [
+            "$Extend/$RmMetadata/$TxfLog/$T",
+            "$Extend/$RmMetadata/$TxfLog/$Tops:$T",
+        ]
+        for filename in filenames:
+            collector.collect_file_raw(
+                filename,
+                fs,
+                name,
+            )
 
 
 @register_module("-r", "--registry")
@@ -365,8 +425,8 @@ class Registry(Module):
     DESC = "registry hives"
     HIVES = ("drivers", "sam", "security", "software", "system", "default")
     SPEC = (
-        ("dir", "sysvol/windows/system32/config/txr"),
-        ("dir", "sysvol/windows/system32/config/regback"),
+        ("path", "sysvol/windows/system32/config/txr"),
+        ("path", "sysvol/windows/system32/config/regback"),
         ("glob", "sysvol/System Volume Information/_restore*/RP*/snapshot/_REGISTRY_*"),
         ("glob", "ntuser.dat*", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/UsrClass.dat*", from_user_home),
@@ -379,7 +439,7 @@ class Registry(Module):
         files = []
         for hive in cls.HIVES:
             pattern = f"sysvol/windows/system32/config/{hive}*"
-            files.extend([("file", entry) for entry in target.fs.path().glob(pattern) if entry.is_file()])
+            files.extend([("path", entry) for entry in target.fs.path().glob(pattern) if entry.is_file()])
         return files
 
 
@@ -544,11 +604,11 @@ class WinMemDump(Module):
 class WinMemFiles(Module):
     DESC = "Windows memory files"
     SPEC = (
-        ("file", "sysvol/pagefile.sys"),
-        ("file", "sysvol/hiberfil.sys"),
-        ("file", "sysvol/swapfile.sys"),
-        ("file", "sysvol/windows/memory.dmp"),
-        ("dir", "sysvol/windows/minidump"),
+        ("path", "sysvol/pagefile.sys"),
+        ("path", "sysvol/hiberfil.sys"),
+        ("path", "sysvol/swapfile.sys"),
+        ("path", "sysvol/windows/memory.dmp"),
+        ("path", "sysvol/windows/minidump"),
     )
 
     @classmethod
@@ -556,15 +616,30 @@ class WinMemFiles(Module):
         spec = set()
 
         page_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
-        for reg_key in target.registry.iterkeys(page_key):
+        for reg_key in target.registry.keys(page_key):
             for page_path in reg_key.value("ExistingPageFiles").value:
-                spec.add(("file", target.resolve(page_path)))
+                spec.add(("path", target.resolve(page_path)))
 
         crash_key = "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl"
-        for reg_key in target.registry.iterkeys(crash_key):
-            spec.add(("file", target.resolve(reg_key.value("DumpFile").value)))
-            spec.add(("dir", target.resolve(reg_key.value("MinidumpDir").value)))
+        for reg_key in target.registry.keys(crash_key):
+            spec.add(("path", target.resolve(reg_key.value("DumpFile").value)))
+            spec.add(("path", target.resolve(reg_key.value("MinidumpDir").value)))
 
+        return spec
+
+
+@register_module("--cam-history")
+class CamHistory(Module):
+    DESC = "Capability Manager History Database"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+
+        cam_history_db_file = CamPlugin(target)._find_db()
+        if cam_history_db_file and cam_history_db_file.exists():
+            # Collect all files from the db path, including .db-wal and .db-shm files.
+            spec.add(("path", cam_history_db_file.parent))
         return spec
 
 
@@ -577,41 +652,41 @@ class EventLogs(Module):
         spec = set()
         evt_log_paths = evt.EvtPlugin(target).get_logs(filename_glob="*.evt")
         for path in evt_log_paths:
-            spec.add(("file", path))
+            spec.add(("path", path))
         evtx_log_paths = evtx.EvtxPlugin(target).get_logs(filename_glob="*.evtx")
         for path in evtx_log_paths:
-            spec.add(("file", path))
+            spec.add(("path", path))
         return spec
 
 
 @register_module("-t", "--tasks")
 class Tasks(Module):
     SPEC = (
-        ("dir", "sysvol/windows/tasks"),
-        ("dir", "sysvol/windows/system32/tasks"),
-        ("dir", "sysvol/windows/syswow64/tasks"),
-        ("dir", "sysvol/windows/sysvol/domain/policies"),
-        ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        ("path", "sysvol/windows/tasks"),
+        ("path", "sysvol/windows/system32/tasks"),
+        ("path", "sysvol/windows/syswow64/tasks"),
+        ("path", "sysvol/windows/sysvol/domain/policies"),
+        ("path", "sysvol/windows/system32/GroupPolicy/DataStore/"),
         # Task Scheduler Service transaction log
-        ("file", "sysvol/SchedLgU.txt"),
-        ("file", "sysvol/windows/SchedLgU.txt"),
-        ("file", "sysvol/windows/tasks/SchedLgU.txt"),
-        ("file", "sysvol/winnt/tasks/SchedLgU.txt"),
+        ("path", "sysvol/SchedLgU.txt"),
+        ("path", "sysvol/windows/SchedLgU.txt"),
+        ("path", "sysvol/windows/tasks/SchedLgU.txt"),
+        ("path", "sysvol/winnt/tasks/SchedLgU.txt"),
     )
 
 
 @register_module("-ad", "--active-directory")
 class ActiveDirectory(Module):
     DESC = "Active Directory data (policies, scripts, etc.)"
-    SPEC = (("dir", "sysvol/windows/sysvol/domain"),)
+    SPEC = (("path", "sysvol/windows/sysvol/domain"),)
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters"
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             try:
-                spec.add(("dir", reg_key.value("SysVol").value))
+                spec.add(("path", reg_key.value("SysVol").value))
             except Exception:  # noqa: PERF203
                 pass
         return spec
@@ -619,7 +694,7 @@ class ActiveDirectory(Module):
 
 @register_module("-nt", "--ntds")
 class NTDS(Module):
-    SPEC = (("dir", "sysvol/windows/NTDS"),)
+    SPEC = (("path", "sysvol/windows/NTDS"),)
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
@@ -627,12 +702,12 @@ class NTDS(Module):
 
         key = "HKLM\\SYSTEM\\CurrentControlSet\\services\\NTDS\\Parameters"
         values = [
-            ("dir", "DSA Working Directory"),
-            ("file", "DSA Database File"),
-            ("file", "Database backup path"),
-            ("dir", "Database log files path"),
+            ("path", "DSA Working Directory"),
+            ("path", "DSA Database File"),
+            ("path", "Database backup path"),
+            ("path", "Database log files path"),
         ]
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             for collect_type, value in values:
                 path = reg_key.value(value).value
                 spec.add((collect_type, path))
@@ -650,8 +725,8 @@ class ETL(Module):
 class Recents(Module):
     DESC = "Windows recently used files artifacts"
     SPEC = (
-        ("dir", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
-        ("dir", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
+        ("path", "AppData/Roaming/Microsoft/Windows/Recent", from_user_home),
+        ("path", "AppData/Roaming/Microsoft/Office/Recent", from_user_home),
         ("glob", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/*.lnk", from_user_home),
         ("glob", "Desktop/*.lnk", from_user_home),
         ("glob", "Recent/*.lnk", from_user_home),
@@ -663,8 +738,8 @@ class Recents(Module):
 class Startup(Module):
     DESC = "Windows Startup folder"
     SPEC = (
-        ("dir", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
-        ("dir", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
+        ("path", "sysvol/ProgramData/Microsoft/Windows/Start Menu/Programs/Startup"),
+        ("path", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", from_user_home),
     )
 
 
@@ -730,7 +805,7 @@ class Exchange(Module):
         spec = set()
 
         key = "HKLM\\SOFTWARE\\Microsoft\\ExchangeServer"
-        for reg_key in target.registry.iterkeys(key):
+        for reg_key in target.registry.keys(key):
             for subkey in reg_key.subkeys():
                 try:
                     setup_key = subkey.subkey("Setup")
@@ -738,19 +813,19 @@ class Exchange(Module):
                     spec.update(
                         [
                             (
-                                "file",
+                                "path",
                                 f"{install_path}\\TransportRoles\\Agents\\agents.config",
                             ),
                             (
-                                "dir",
+                                "path",
                                 f"{install_path}\\Logging\\Ews",
                             ),
                             (
-                                "dir",
+                                "path",
                                 f"{install_path}\\Logging\\CmdletInfra\\Powershell-Proxy\\Cmdlet",
                             ),
                             (
-                                "dir",
+                                "path",
                                 f"{install_path}\\TransportRoles\\Logs",
                             ),
                         ]
@@ -803,33 +878,51 @@ class IIS(Module):
             ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
         }
         iis_plugin = iis.IISLogsPlugin(target)
-        spec.update([("file", log_path) for _, log_path in iis_plugin.iter_log_format_path_pairs()])
+        spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
+        return spec
+
+
+@register_module("--sharepoint")
+class SharePoint(Module):
+    DESC = "Windows SharePoint Server logs"
+
+    @classmethod
+    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
+        spec = set()
+        key = "HKLM\\SOFTWARE\\Microsoft\\Shared Tools\\Web Server Extensions\\*\\WSS"
+
+        for reg_key in target.registry.glob_ext(key):
+            try:
+                spec.add(("path", reg_key.value("LogDir").value))
+            except Exception:  # noqa: PERF203
+                pass
+
         return spec
 
 
 @register_module("--prefetch")
 class Prefetch(Module):
     DESC = "Windows Prefetch files"
-    SPEC = (("dir", "sysvol/windows/prefetch"),)
+    SPEC = (("path", "sysvol/windows/prefetch"),)
 
 
 @register_module("--appcompat")
 class Appcompat(Module):
     DESC = "Windows Amcache and RecentFileCache"
-    SPEC = (("dir", "sysvol/windows/appcompat"),)
+    SPEC = (("path", "sysvol/windows/appcompat"),)
 
 
 @register_module("--pca")
 class PCA(Module):
     DESC = "Windows Program Compatibility Assistant"
-    SPEC = (("dir", "sysvol/windows/pca"),)
+    SPEC = (("path", "sysvol/windows/pca"),)
 
 
 @register_module("--syscache")
 class Syscache(Module):
     DESC = "Windows Syscache hive and log files"
     SPEC = (
-        ("file", "sysvol/System Volume Information/Syscache.hve"),
+        ("path", "sysvol/System Volume Information/Syscache.hve"),
         ("glob", "sysvol/System Volume Information/Syscache.hve.LOG*"),
     )
 
@@ -839,9 +932,9 @@ class WindowsNotifications(Module):
     DESC = "Windows Push Notifications Database files."
     SPEC = (
         # Old Win7/Win10 version of the file
-        ("file", "AppData/Local/Microsoft/Windows/Notifications/appdb.dat", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/Notifications/appdb.dat", from_user_home),
         # New version of the file
-        ("file", "AppData/Local/Microsoft/Windows/Notifications/wpndatabase.db", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/Notifications/wpndatabase.db", from_user_home),
     )
 
 
@@ -858,7 +951,7 @@ class BITS(Module):
         # (basically: \%ALLUSERSPROFILE%\Microsoft\...; %ALLUSERSPROFILE% == %PROGRAMDATA%)
         ("glob", "sysvol/ProgramData/Microsoft/Network/Downloader/qmgr*.dat"),
         # Win 10 files
-        ("file", "sysvol/ProgramData/Microsoft/Network/Downloader/qmgr.db"),
+        ("path", "sysvol/ProgramData/Microsoft/Network/Downloader/qmgr.db"),
         ("glob", "sysvol/ProgramData/Microsoft/Network/Downloader/edb.log*"),
     )
 
@@ -866,7 +959,7 @@ class BITS(Module):
 @register_module("--wbem")
 class WBEM(Module):
     DESC = "Windows WBEM (WMI) database files"
-    SPEC = (("dir", "sysvol/windows/system32/wbem/Repository"),)
+    SPEC = (("path", "sysvol/windows/system32/wbem/Repository"),)
 
 
 @register_module("--dhcp")
@@ -877,8 +970,8 @@ class DHCP(Module):
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
         spec = set()
         key = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DhcpServer\\Parameters"
-        for reg_key in target.registry.iterkeys(key):
-            spec.add(("dir", reg_key.value("DatabasePath").value))
+        for reg_key in target.registry.keys(key):
+            spec.add(("path", reg_key.value("DatabasePath").value))
         return spec
 
 
@@ -887,7 +980,7 @@ class DNS(Module):
     DESC = "Windows Server DNS files"
     SPEC = (
         ("glob", "sysvol/windows/system32/config/netlogon.*"),
-        ("dir", "sysvol/windows/system32/dns"),
+        ("path", "sysvol/windows/system32/dns"),
     )
 
 
@@ -912,7 +1005,7 @@ class WinDnsClientCache(Module):
 @register_module("--powershell")
 class PowerShell(Module):
     DESC = "Windows PowerShell Artefacts"
-    SPEC = (("dir", "AppData/Roaming/Microsoft/Windows/PowerShell", from_user_home),)
+    SPEC = (("path", "AppData/Roaming/Microsoft/Windows/PowerShell", from_user_home),)
 
 
 @register_module("--thumbnail-cache")
@@ -926,8 +1019,8 @@ class TextEditor(Module):
     DESC = "text editor (un)saved tab contents"
     # Only Windows 11 notepad & Notepad++ tabs for now, but locations for other text editors may be added later.
     SPEC = (
-        ("dir", "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/", from_user_home),
-        ("dir", "AppData/Roaming/Notepad++/backup/", from_user_home),
+        ("path", "AppData/Local/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/TabState/", from_user_home),
+        ("path", "AppData/Roaming/Notepad++/backup/", from_user_home),
     )
 
 
@@ -935,26 +1028,26 @@ class TextEditor(Module):
 class Misc(Module):
     DESC = "miscellaneous Windows artefacts"
     SPEC = (
-        ("file", "sysvol/windows/PFRO.log"),
-        ("file", "sysvol/windows/setupapi.log"),
-        ("file", "sysvol/windows/setupapidev.log"),
+        ("path", "sysvol/windows/PFRO.log"),
+        ("path", "sysvol/windows/setupapi.log"),
+        ("path", "sysvol/windows/setupapidev.log"),
         ("glob", "sysvol/windows/inf/setupapi*.log"),
         ("glob", "sysvol/system32/logfiles/*/*.txt"),
-        ("dir", "sysvol/windows/system32/sru"),
-        ("dir", "sysvol/windows/system32/drivers/etc"),
-        ("dir", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
-        ("dir", "sysvol/windows/system32/GroupPolicy/DataStore/"),
-        ("dir", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
-        ("dir", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
+        ("path", "sysvol/windows/system32/sru"),
+        ("path", "sysvol/windows/system32/drivers/etc"),
+        ("path", "sysvol/Windows/System32/WDI/LogFiles/StartupInfo"),
+        ("path", "sysvol/windows/system32/GroupPolicy/DataStore/"),
+        ("path", "sysvol/ProgramData/Microsoft/Group Policy/History/"),
+        ("path", "AppData/Local/Microsoft/Group Policy/History/", from_user_home),
         ("glob", "sysvol/Windows/System32/LogFiles/SUM/*.mdb"),
         ("glob", "sysvol/ProgramData/USOShared/Logs/System/*.etl"),
         ("glob", "sysvol/Windows/Logs/WindowsUpdate/WindowsUpdate*.etl"),
         ("glob", "sysvol/Windows/Logs/CBS/CBS*.log"),
         # Windows Search DB
-        ("dir", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
+        ("path", "sysvol/ProgramData/Microsoft/Search/Data/Applications/Windows"),
         # Windows Search DB - Windows Search Database Roaming
         ("glob", "AppData/Roaming/Microsoft/Search/Data/Applications/S-1-*/*", from_user_home),
-        ("dir", "sysvol/Windows/SoftwareDistribution/DataStore"),
+        ("path", "sysvol/Windows/SoftwareDistribution/DataStore"),
     )
 
 
@@ -963,127 +1056,133 @@ class AV(Module):
     DESC = "various antivirus logs"
     SPEC = (
         # AVG
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/log"),
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report"),
-        ("dir", "sysvol/ProgramData/AVG/Antivirus/log"),
-        ("dir", "sysvol/ProgramData/AVG/Antivirus/report"),
-        ("dir", "sysvol/ProgramData/AVG/Persistent Data/Antivirus/Logs"),
-        ("file", "sysvol/ProgramData/AVG/Antivirus/FileInfo2.db"),
-        ("file", "sysvol/ProgramData/AVG/Antivirus/lsdb2.json"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/log"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/AVG/Antivirus/report"),
+        ("path", "sysvol/ProgramData/AVG/Antivirus/log"),
+        ("path", "sysvol/ProgramData/AVG/Antivirus/report"),
+        ("path", "sysvol/ProgramData/AVG/Persistent Data/Antivirus/Logs"),
+        ("path", "sysvol/ProgramData/AVG/Antivirus/FileInfo2.db"),
+        ("path", "sysvol/ProgramData/AVG/Antivirus/lsdb2.json"),
         # Avast
-        ("dir", "sysvol/Documents And Settings/All Users/Application Data/Avast Software/Avast/Log"),
-        ("dir", "sysvol/ProgramData/Avast Software/Avast/Log"),
-        ("dir", "Avast Software/Avast/Log", from_user_home),
-        ("file", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
-        ("dir", "sysvol/ProgramData/Avast Software/Persistent Data/Logs"),
-        ("dir", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
+        ("path", "sysvol/Documents And Settings/All Users/Application Data/Avast Software/Avast/Log"),
+        ("path", "sysvol/ProgramData/Avast Software/Avast/Log"),
+        ("path", "Avast Software/Avast/Log", from_user_home),
+        ("path", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
+        ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Logs"),
+        ("path", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
         # Avira
-        ("dir", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
-        ("dir", "sysvol/ProgramData/Avira/Security/Logs"),
-        ("dir", "sysvol/ProgramData/Avira/VPN"),
+        ("path", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
+        ("path", "sysvol/ProgramData/Avira/Security/Logs"),
+        ("path", "sysvol/ProgramData/Avira/VPN"),
         # Bitdefender
-        ("dir", "sysvol/ProgramData/Bitdefender/Endpoint Security/Logs"),
-        ("dir", "sysvol/ProgramData/Bitdefender/Desktop/Profiles/Logs"),
+        ("path", "sysvol/ProgramData/Bitdefender/Endpoint Security/Logs"),
+        ("path", "sysvol/ProgramData/Bitdefender/Desktop/Profiles/Logs"),
         ("glob", "sysvol/Program Files*/Bitdefender*/*"),
         # ComboFix
-        ("file", "sysvol/ComboFix.txt"),
+        ("path", "sysvol/ComboFix.txt"),
         # Cybereason
-        ("dir", "sysvol/ProgramData/crs1/Logs"),
-        ("dir", "sysvol/ProgramData/apv2/Logs"),
-        ("dir", "sysvol/ProgramData/crb1/Logs"),
+        ("path", "sysvol/ProgramData/crs1/Logs"),
+        ("path", "sysvol/ProgramData/apv2/Logs"),
+        ("path", "sysvol/ProgramData/crb1/Logs"),
         # Cylance
-        ("dir", "sysvol/ProgramData/Cylance/Desktop"),
-        ("dir", "sysvol/ProgramData/Cylance/Optics/Log"),
-        ("dir", "sysvol/Program Files/Cylance/Desktop/log"),
+        ("path", "sysvol/ProgramData/Cylance/Desktop"),
+        ("path", "sysvol/ProgramData/Cylance/Optics/Log"),
+        ("path", "sysvol/Program Files/Cylance/Desktop/log"),
         # ESET
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs"),
-        ("dir", "sysvol/ProgramData/ESET/ESET NOD32 Antivirus/Logs"),
-        ("dir", "sysvol/ProgramData/ESET/ESET Security/Logs"),
-        ("dir", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
-        ("dir", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
-        ("dir", "AppData/Local/ESET/ESET Security/Quarantine", from_user_home),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/ESET/ESET NOD32 Antivirus/Logs"),
+        ("path", "sysvol/ProgramData/ESET/ESET NOD32 Antivirus/Logs"),
+        ("path", "sysvol/ProgramData/ESET/ESET Security/Logs"),
+        ("path", "sysvol/ProgramData/ESET/RemoteAdministrator/Agent/EraAgentApplicationData/Logs"),
+        ("path", "sysvol/Windows/System32/config/systemprofile/AppData/Local/ESET/ESET Security/Quarantine"),
+        ("path", "AppData/Local/ESET/ESET Security/Quarantine", from_user_home),
         # Emsisoft
         ("glob", "sysvol/ProgramData/Emsisoft/Reports/scan*.txt"),
         # F-Secure
-        ("dir", "sysvol/ProgramData/F-Secure/Log"),
-        ("dir", "AppData/Local/F-Secure/Log", from_user_home),
-        ("dir", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
+        ("path", "sysvol/ProgramData/F-Secure/Log"),
+        ("path", "AppData/Local/F-Secure/Log", from_user_home),
+        ("path", "sysvol/ProgramData/F-Secure/Antivirus/ScheduledScanReports"),
         # HitmanPro
-        ("dir", "sysvol/ProgramData/HitmanPro/Logs"),
-        ("dir", "sysvol/ProgramData/HitmanPro.Alert/Logs"),
-        ("file", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
-        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
+        ("path", "sysvol/ProgramData/HitmanPro/Logs"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
+        ("path", "sysvol/ProgramData/HitmanPro/Quarantine"),
         # Malwarebytes
         ("glob", "sysvol/ProgramData/Malwarebytes/Malwarebytes Anti-Malware/Logs/mbam-log-*.xml"),
         ("glob", "sysvol/ProgramData/Malwarebytes/MBAMService/logs/mbamservice.log*"),
-        ("dir", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
-        ("dir", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
+        ("path", "AppData/Roaming/Malwarebytes/Malwarebytes Anti-Malware/Logs", from_user_home),
+        ("path", "sysvol/ProgramData/Malwarebytes/MBAMService/ScanResults"),
         # McAfee
-        ("dir", "Application Data/McAfee/DesktopProtection", from_user_home),
-        ("dir", "sysvol/ProgramData/McAfee/DesktopProtection"),
-        ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
-        ("dir", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
-        ("dir", "sysvol/ProgramData/Mcafee/VirusScan"),
-        ("dir", "sysvol/ProgramData/McAfee/MSC/Logs"),
-        ("dir", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
-        ("dir", "sysvol/ProgramData/McAfee/Agent/logs"),
-        ("dir", "sysvol/ProgramData/McAfee/datreputation/Logs"),
-        ("dir", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs"),
-        ("dir", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs"),
-        ("dir", "sysvol/Program Files (x86)/McAfee/DLP/WCF Service/Log"),
+        ("path", "Application Data/McAfee/DesktopProtection", from_user_home),
+        ("path", "sysvol/ProgramData/McAfee/DesktopProtection"),
+        ("path", "sysvol/ProgramData/McAfee/Endpoint Security/ATP"),
+        ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs"),
+        ("path", "sysvol/ProgramData/McAfee/Endpoint Security/Logs_Old"),
+        ("path", "sysvol/ProgramData/Mcafee/VirusScan"),
+        ("path", "sysvol/ProgramData/McAfee/MSC/Logs"),
+        ("path", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
+        ("path", "sysvol/ProgramData/McAfee/Agent/logs"),
+        ("path", "sysvol/ProgramData/McAfee/datreputation/Logs"),
+        ("path", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/datreputation/Logs"),
+        ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Managed/VirusScan/Logs"),
+        ("path", "sysvol/Program Files (x86)/McAfee/DLP/WCF Service/Log"),
         # McAfee ePO
-        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Apache2/Logs"),
-        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events"),
-        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug"),
-        ("dir", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Server/Logs"),
+        ("path", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Apache2/Logs"),
+        ("path", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events"),
+        ("path", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/DB/Events/Debug"),
+        ("path", "sysvol/Program Files (x86)/McAfee/ePolicy Orchestrator/Server/Logs"),
         # RogueKiller
         ("glob", "sysvol/ProgramData/RogueKiller/logs/AdliceReport_*.json"),
         # SUPERAntiSpyware
-        ("dir", "AppData/Roaming/SUPERAntiSpyware/Logs", from_user_home),
+        ("path", "AppData/Roaming/SUPERAntiSpyware/Logs", from_user_home),
         # SecureAge
-        ("dir", "sysvol/ProgramData/SecureAge Technology/SecureAge/log"),
+        ("path", "sysvol/ProgramData/SecureAge Technology/SecureAge/log"),
         # SentinelOne
-        ("dir", "sysvol/programdata/sentinel/logs"),
+        ("path", "sysvol/programdata/sentinel/logs"),
         # Sophos
         ("glob", "sysvol/Documents and Settings/All Users/Application Data/Sophos/Sophos */Logs"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */Logs"),
-        ("dir", "sysvol/ProgramData/Sophos/Logs"),
+        ("path", "sysvol/ProgramData/Sophos/Logs"),
         # Symantec
         (
-            "dir",
+            "path",
             "sysvol/Documents and Settings/All Users/Application Data/Symantec/Symantec Endpoint Protection/Logs/AV",
         ),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Logs"),
-        ("dir", "AppData/Local/Symantec/Symantec Endpoint Protection/Logs", from_user_home),
-        ("dir", "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
+        ("path", "AppData/Local/Symantec/Symantec Endpoint Protection/Logs", from_user_home),
+        ("path", "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/CmnClnt/ccSubSDK"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/registrationInfo.xml"),
         # TotalAV
         ("glob", "sysvol/Program Files*/TotalAV/logs"),
-        ("dir", "sysvol/ProgramData/TotalAV/logs"),
+        ("path", "sysvol/ProgramData/TotalAV/logs"),
         # Trendmicro
         ("glob", "sysvol/Program Files*/Trend Micro"),
-        ("dir", "sysvol/ProgramData/Trend Micro"),
+        ("path", "sysvol/ProgramData/Trend Micro"),
         # VIPRE
-        ("dir", "sysvol/ProgramData/VIPRE Business Agent/Logs"),
-        ("dir", "AppData/Roaming/VIPRE Business", from_user_home),
-        ("dir", "AppData/Roaming/GFI Software/AntiMalware/Logs", from_user_home),
-        ("dir", "AppData/Roaming/Sunbelt Software/AntiMalware/Logs", from_user_home),
+        ("path", "sysvol/ProgramData/VIPRE Business Agent/Logs"),
+        ("path", "AppData/Roaming/VIPRE Business", from_user_home),
+        ("path", "AppData/Roaming/GFI Software/AntiMalware/Logs", from_user_home),
+        ("path", "AppData/Roaming/Sunbelt Software/AntiMalware/Logs", from_user_home),
         # Webroot
-        ("file", "sysvol/ProgramData/WRData/WRLog.log"),
+        ("path", "sysvol/ProgramData/WRData/WRLog.log"),
         # Microsoft Windows Defender
-        ("dir", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
+        ("path", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
         ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
-        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
-        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
-        ("file", "sysvol/Windows/Temp/MpCmdRun.log"),
-        ("file", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
-        ("file", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
+        ("path", "sysvol/Windows/Temp/MpCmdRun.log"),
+        ("path", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
         # Microsoft Safety Scanner
-        ("file", "sysvol/Windows/Debug/msert.log"),
+        ("path", "sysvol/Windows/Debug/msert.log"),
+        # Sophos Hitman pro
+        ("path", "sysvol/ProgramData/HitmanPro/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
+        ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
+        ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
     )
 
 
@@ -1093,25 +1192,25 @@ class QuarantinedFiles(Module):
     SPEC = (
         # Microsoft Defender
         # https://knez.github.io/posts/how-to-extract-quarantine-files-from-windows-defender/
-        ("dir", "sysvol/ProgramData/Microsoft/Windows Defender/Quarantine"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Quarantine"),
         # Symantec Endpoint Protection
         (
-            "dir",
+            "path",
             "sysvol/Documents and Settings/All Users/Application Data/Symantec/Symantec Endpoint Protection/Quarantine",
         ),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Quarantine"),
         # Trend Micro
         # https://secret.inf.ufpr.br/papers/marcus_av_handson.pdf
-        ("dir", "sysvol/ProgramData/Trend Micro/AMSP/quarantine"),
+        ("path", "sysvol/ProgramData/Trend Micro/AMSP/quarantine"),
         # McAfee
-        ("dir", "sysvol/Quarantine"),
-        ("dir", "sysvol/ProgramData/McAfee/VirusScan/Quarantine"),
+        ("path", "sysvol/Quarantine"),
+        ("path", "sysvol/ProgramData/McAfee/VirusScan/Quarantine"),
         # Sophos
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
-        ("dir", "sysvol/ProgramData/Sophos/Safestore"),
+        ("path", "sysvol/ProgramData/Sophos/Safestore"),
         # HitmanPRO
-        ("dir", "sysvol/ProgramData/HitmanPro/Quarantine"),
+        ("path", "sysvol/ProgramData/HitmanPro/Quarantine"),
     )
 
 
@@ -1120,7 +1219,7 @@ class EDR(Module):
     DESC = "various Endpoint Detection and Response (EDR) logs"
     SPEC = (
         # Carbon Black
-        ("dir", "sysvol/ProgramData/CarbonBlack/Logs"),
+        ("path", "sysvol/ProgramData/CarbonBlack/Logs"),
     )
 
 
@@ -1194,24 +1293,24 @@ class History(Module):
 
     SPEC = (
         # IE
-        ("dir", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
-        ("dir", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
+        ("path", "AppData/Local/Microsoft/Internet Explorer/Recovery", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/INetCookies", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/WebCache/*.dat", from_user_home),
         # IE - index.dat
-        ("file", "Cookies/index.dat", from_user_home),
-        ("file", "Local Settings/History/History.IE5/index.dat", from_user_home),
+        ("path", "Cookies/index.dat", from_user_home),
+        ("path", "Local Settings/History/History.IE5/index.dat", from_user_home),
         ("glob", "Local Settings/History/History.IE5/MSHist*/index.dat", from_user_home),
-        ("file", "Local Settings/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
-        ("file", "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat", from_user_home),
-        ("file", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
+        ("path", "Local Settings/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("path", "Local Settings/Application Data/Microsoft/Feeds Cache/index.dat", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/History/History.IE5/index.dat", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/History/History.IE5/MSHist*/index.dat", from_user_home),
-        ("file", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/index.dat", from_user_home),
         ("glob", "AppData/Local/Microsoft/Windows/History/Low/History.IE5/MSHist*/index.dat", from_user_home),
-        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
-        ("file", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat", from_user_home),
-        ("file", "AppData/Roaming/Microsoft/Windows/Cookies/index.dat", from_user_home),
-        ("file", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
-        ("file", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Content.IE5/index.dat", from_user_home),
+        ("path", "AppData/Local/Microsoft/Windows/Temporary Internet Files/Low/Content.IE5/index.dat", from_user_home),
+        ("path", "AppData/Roaming/Microsoft/Windows/Cookies/index.dat", from_user_home),
+        ("path", "AppData/Roaming/Microsoft/Windows/Cookies/Low/index.dat", from_user_home),
+        ("path", "AppData/Roaming/Microsoft/Windows/IEDownloadHistory/index.dat", from_user_home),
         # Firefox - Windows
         ("glob", "AppData/Local/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
         ("glob", "AppData/Roaming/Mozilla/Firefox/Profiles/*/*.sqlite*", from_user_home),
@@ -1227,12 +1326,12 @@ class History(Module):
         # Brave - Ubuntu - snap
         ("glob", "snap/brave/[0-9]*/.config/BraveSoftware/**", from_user_home),
         # Safari - macOS
-        ("file", "Library/Safari/Bookmarks.plist", from_user_home),
-        ("file", "Library/Safari/Downloads.plist", from_user_home),
-        ("file", "Library/Safari/Extensions/Extensions.plist", from_user_home),
+        ("path", "Library/Safari/Bookmarks.plist", from_user_home),
+        ("path", "Library/Safari/Downloads.plist", from_user_home),
+        ("path", "Library/Safari/Extensions/Extensions.plist", from_user_home),
         ("glob", "Library/Safari/History.*", from_user_home),
-        ("file", "Library/Safari/LastSession.plist", from_user_home),
-        ("file", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
+        ("path", "Library/Safari/LastSession.plist", from_user_home),
+        ("path", "Library/Caches/com.apple.Safari/Cache.db", from_user_home),
     )
 
     @classmethod
@@ -1241,7 +1340,7 @@ class History(Module):
         for root_dirs, extension_dirs, history_files in cls.COMMON_DIR_COMBINATIONS:
             for root_dir, extension_dir, history_file in product(root_dirs, extension_dirs, history_files):
                 full_path = f"{root_dir}/{extension_dir}/{history_file}"
-                search_type = "glob" if "*" in full_path else "file"
+                search_type = "glob" if "*" in full_path else "path"
 
                 spec.add((search_type, full_path, from_user_home))
 
@@ -1252,35 +1351,41 @@ class History(Module):
 class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
-        # teamviewer
+        # teamviewer - Windows
         ("glob", "sysvol/Program Files/TeamViewer/*.log"),
+        ("path", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
         ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("glob", "/var/log/teamviewer*/*.log"),
+        ("path", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        # teamviewer - Mac + Linux
+        ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
         # anydesk - Windows
-        ("dir", "sysvol/ProgramData/AnyDesk"),
-        ("dir", "AppData/Roaming/AnyDesk", from_user_home),
+        ("path", "sysvol/ProgramData/AnyDesk"),
+        ("path", "AppData/Roaming/AnyDesk", from_user_home),
         # anydesk - Mac + Linux
         ("glob", ".anydesk*/*", from_user_home),
-        ("file", "/var/log/anydesk.trace"),
+        ("path", "/var/log/anydesk.trace"),
         # RustDesk - Windows
-        ("dir", "sysvol/ProgramData/RustDesk"),
-        ("dir", "AppData/Roaming/RustDesk/log/server/", from_user_home),
+        ("path", "AppData/Roaming/RustDesk/log/", from_user_home),
         # RustDesk - Mac + Linux
-        ("dir", ".local/share/logs/RustDesk/server/", from_user_home),
-        ("dir", "/var/log/RustDesk"),
-        ("dir", "Library/Logs/RustDesk/Server", from_user_home),
+        ("path", ".local/share/logs/RustDesk/", from_user_home),
+        ("path", "/var/log/RustDesk/"),
+        ("path", "Library/Logs/RustDesk/", from_user_home),
         # zoho
-        ("dir", "sysvol/ProgramData/ZohoMeeting/log"),
-        ("dir", "AppData/Local/ZohoMeeting/log", from_user_home),
+        ("path", "sysvol/ProgramData/ZohoMeeting/log"),
+        ("path", "AppData/Local/ZohoMeeting/log", from_user_home),
         # realvnc
-        ("file", "sysvol/ProgramData/RealVNC-Service/vncserver.log"),
-        ("file", "AppData/Local/RealVNC/vncserver.log", from_user_home),
+        ("path", "sysvol/ProgramData/RealVNC-Service/vncserver.log"),
+        ("path", "AppData/Local/RealVNC/vncserver.log", from_user_home),
         # tightvnc
-        ("dir", "sysvol/ProgramData/TightVNC/Server/Logs"),
+        ("path", "sysvol/ProgramData/TightVNC/Server/Logs"),
         # Remote desktop cache files
-        ("dir", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
+        ("path", "AppData/Local/Microsoft/Terminal Server Client/Cache", from_user_home),
+        # Splashtop
+        ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
+        ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
     )
 
 
@@ -1289,8 +1394,8 @@ class WebHosting(Module):
     DESC = "Web hosting software log files"
     SPEC = (
         # cPanel
-        ("dir", "/usr/local/cpanel/logs"),
-        ("file", ".lastlogin", from_user_home),
+        ("path", "/usr/local/cpanel/logs"),
+        ("path", ".lastlogin", from_user_home),
     )
 
 
@@ -1314,7 +1419,7 @@ class WER(Module):
                     log.debug("Skipping WER file because it exceeds 1GB: %s", path)
                     continue
 
-                spec.add(("file", path))
+                spec.add(("path", path))
 
         return spec
 
@@ -1324,8 +1429,8 @@ class Etc(Module):
     SPEC = (
         # In OS-X /etc is a symlink to /private/etc. To prevent collecting
         # duplicates, we only use the /etc directory here.
-        ("dir", "/etc"),
-        ("dir", "/usr/local/etc"),
+        ("path", "/etc"),
+        ("path", "/usr/local/etc"),
     )
 
 
@@ -1363,19 +1468,19 @@ class Home(Module):
         ("glob", ".*_logout", from_user_home),
         ("glob", "*/.*_logout", from_user_home),
         # Miscellaneous configuration files
-        ("dir", ".config", from_user_home),
+        ("path", ".config", from_user_home),
         ("glob", "*/.config", from_user_home),
-        ("file", ".wget-hsts", from_user_home),
+        ("path", ".wget-hsts", from_user_home),
         ("glob", "*/.wget-hsts", from_user_home),
-        ("file", ".gitconfig", from_user_home),
+        ("path", ".gitconfig", from_user_home),
         ("glob", "*/.gitconfig", from_user_home),
-        ("file", ".selected_editor", from_user_home),
+        ("path", ".selected_editor", from_user_home),
         ("glob", "*/.selected_editor", from_user_home),
-        ("file", ".viminfo", from_user_home),
+        ("path", ".viminfo", from_user_home),
         ("glob", "*/.viminfo", from_user_home),
-        ("file", ".lesshist", from_user_home),
+        ("path", ".lesshist", from_user_home),
         ("glob", "*/.lesshist", from_user_home),
-        ("file", ".profile", from_user_home),
+        ("path", ".profile", from_user_home),
         ("glob", "*/.profile", from_user_home),
         # OS-X home (aka /Users)
         ("glob", ".bash_sessions/*", from_user_home),
@@ -1417,14 +1522,14 @@ class Docker(Module):
         ("glob", "/var/lib/docker/containers/*/*.json"),
         ("glob", "/var/lib/docker/containers/*/hostname"),
         # Linux daemon configs
-        ("file", "/etc/docker/daemon.json"),
-        ("file", "/var/snap/docker/current/config/daemon.json"),
+        ("path", "/etc/docker/daemon.json"),
+        ("path", "/var/snap/docker/current/config/daemon.json"),
         # Windows daemon configs
-        ("file", "sysvol/ProgramData/docker/config/daemon.json"),
+        ("path", "sysvol/ProgramData/docker/config/daemon.json"),
         # User-specific config files (MacOS/Linux/Windows)
-        ("file", ".docker/daemon.json", from_user_home),
+        ("path", ".docker/daemon.json", from_user_home),
         # Repositories
-        ("file", "/var/lib/docker/image/overlay2/repositories.json"),
+        ("path", "/var/lib/docker/image/overlay2/repositories.json"),
     )
 
 
@@ -1433,37 +1538,61 @@ class Var(Module):
     SPEC = (
         # In OS-X /var is a symlink to /private/var. To prevent collecting
         # duplicates, we only use the /var directory here.
-        ("dir", "/var/log"),
-        ("dir", "/var/spool/at"),
-        ("dir", "/var/spool/cron"),
-        ("dir", "/var/spool/anacron"),
-        ("dir", "/var/lib/dpkg/status"),
-        ("dir", "/var/lib/rpm"),
-        ("dir", "/var/db"),
-        ("dir", "/var/audit"),
-        ("dir", "/var/cron"),
-        ("dir", "/var/run"),
+        ("path", "/var/log"),
+        ("path", "/var/spool/at"),
+        ("path", "/var/spool/cron"),
+        ("path", "/var/spool/anacron"),
+        ("path", "/var/lib/dpkg/status"),
+        ("path", "/var/lib/rpm"),
+        ("path", "/var/db"),
+        ("path", "/var/audit"),
+        ("path", "/var/cron"),
+        ("path", "/var/run"),
         # Proxmox specific files
-        ("dir", "/var/lib/pve-cluster"),
-        ("dir", "/var/lib/pve-firewall"),
-        ("dir", "/var/lib/pve-manager"),
+        ("path", "/var/lib/pve-cluster"),
+        ("path", "/var/lib/pve-firewall"),
+        ("path", "/var/lib/pve-manager"),
         # some OS-X specific files
-        ("dir", "/private/var/at"),
-        ("dir", "/private/var/db/diagnostics"),
-        ("dir", "/private/var/db/uuidtext"),
-        ("file", "/private/var/vm/sleepimage"),
+        ("path", "/private/var/at"),
+        ("path", "/private/var/db/diagnostics"),
+        ("path", "/private/var/db/uuidtext"),
+        ("path", "/private/var/vm/sleepimage"),
         ("glob", "/private/var/vm/swapfile*"),
         ("glob", "/private/var/folders/*/*/0/com.apple.notificationcenter/*/*"),
         # user specific cron on OS-X
-        ("dir", "/usr/lib/cron"),
+        ("path", "/usr/lib/cron"),
     )
 
 
 @register_module("--bsd")
 class BSD(Module):
     SPEC = (
-        ("file", "/bin/freebsd-version"),
-        ("dir", "/usr/ports"),
+        ("path", "/bin/freebsd-version"),
+        ("path", "/usr/ports"),
+    )
+
+
+@register_module("--applications")
+class Applications(Module):
+    SPEC = (
+        ("path", "/usr/share/applications"),
+        ("path", "/usr/local/share/applications"),
+        ("path", "/var/lib/snapd/desktop/applications"),
+        ("path", "/var/lib/flatpak/exports/share/applications"),
+        ("path", ".local/share/applications", from_user_home),
+    )
+
+
+@register_module("--network")
+class Network(Module):
+    SPEC = (
+        ("path", "/etc/systemd/network"),
+        ("path", "/run/systemd/network"),
+        ("path", "/usr/lib/systemd/network"),
+        ("path", "/usr/local/lib/systemd/network"),
+        ("path", "/etc/NetworkManager/system-connections"),
+        ("path", "/usr/lib/NetworkManager/system-connections"),
+        ("path", "/run/NetworkManager/system-connections"),
     )
 
 
@@ -1472,26 +1601,26 @@ class MacOS(Module):
     DESC = "macOS / OSX specific files and directories"
     SPEC = (
         # filesystem events
-        ("dir", "/.fseventsd"),
+        ("path", "/.fseventsd"),
         # kernel extensions
-        ("dir", "/Library/Extensions"),
-        ("dir", "/System/Library/Extensions"),
+        ("path", "/Library/Extensions"),
+        ("path", "/System/Library/Extensions"),
         # logs
-        ("dir", "/Library/Logs"),
+        ("path", "/Library/Logs"),
         # autorun locations
-        ("dir", "/Library/LaunchAgents"),
-        ("dir", "/Library/LaunchDaemons"),
-        ("dir", "/Library/StartupItems"),
-        ("dir", "/System/Library/LaunchAgents"),
-        ("dir", "/System/Library/LaunchDaemons"),
-        ("dir", "/System/Library/StartupItems"),
+        ("path", "/Library/LaunchAgents"),
+        ("path", "/Library/LaunchDaemons"),
+        ("path", "/Library/StartupItems"),
+        ("path", "/System/Library/LaunchAgents"),
+        ("path", "/System/Library/LaunchDaemons"),
+        ("path", "/System/Library/StartupItems"),
         # installed software
-        ("dir", "/Library/Receipts/InstallHistory.plist"),
-        ("file", "/System/Library/CoreServices/SystemVersion.plist"),
+        ("path", "/Library/Receipts/InstallHistory.plist"),
+        ("path", "/System/Library/CoreServices/SystemVersion.plist"),
         # system preferences
-        ("dir", "/Library/Preferences"),
+        ("path", "/Library/Preferences"),
         # DHCP settings
-        ("dir", "/private/var/db/dhcpclient/leases"),
+        ("path", "/private/var/db/dhcpclient/leases"),
     )
 
 
@@ -1516,37 +1645,38 @@ class Bootbanks(Module):
             "bootbank": "BOOTBANK1",
             "altbootbank": "BOOTBANK2",
         }
-        boot_fs = {}
+        boot_fs = []  # List of tuples of bootbank paths and volume names
 
         for boot_dir, boot_vol in boot_dirs.items():
             dir_path = target.fs.path(boot_dir)
             if dir_path.is_symlink() and dir_path.exists():
                 dst = dir_path.readlink()
-                fs = dst.get().top.fs
-                boot_fs[fs] = boot_vol
+                boot_fs.append((dst, boot_vol))
 
-        for fs, mountpoint, uuid, _ in iter_esxi_filesystems(target):
-            if fs in boot_fs:
-                name = boot_fs[fs]
-                log.info("Acquiring %s (%s)", mountpoint, name)
-                mountpoint_len = len(mountpoint)
-                base = f"fs/{uuid}:{name}"
-                for path in target.fs.path(mountpoint).rglob("*"):
-                    outpath = path.as_posix()[mountpoint_len:]
-                    collector.collect_path(path, outpath=outpath, base=base)
+        for _, mountpoint, uuid, _ in iter_esxi_filesystems(target):
+            for bootbank_path, boot_vol in boot_fs:
+                # samefile fails on python 3.10 for string paths (https://github.com/fox-it/dissect.target/issues/1289)
+                if bootbank_path.samefile(target.fs.path(mountpoint)):
+                    log.info("Acquiring %s (%s)", mountpoint, boot_vol)
+                    mountpoint_len = len(mountpoint)
+                    base = f"fs/{uuid}:{boot_vol}"
+                    for path in target.fs.path(mountpoint).rglob("*"):
+                        outpath = path.as_posix()[mountpoint_len:]
+                        collector.collect_path(path, outpath=outpath, base=base)
+                    break
 
 
 @register_module("--esxi")
 class ESXi(Module):
     DESC = "ESXi interesting files"
     SPEC = (
-        ("dir", "/scratch/log"),
-        ("dir", "/locker/packages/var"),
+        ("path", "/scratch/log"),
+        ("path", "/locker/packages/var"),
         # ESXi 7
-        ("dir", "/scratch/cache"),
-        ("dir", "/scratch/vmkdump"),
+        ("path", "/scratch/cache"),
+        ("path", "/scratch/vmkdump"),
         # ESXi 6
-        ("dir", "/scratch/vmware"),
+        ("path", "/scratch/vmware"),
     )
 
 
@@ -1571,7 +1701,7 @@ class VMFS(Module):
 @register_module("--activities-cache")
 class ActivitiesCache(Module):
     DESC = "user's activities caches"
-    SPEC = (("dir", "AppData/Local/ConnectedDevicesPlatform", from_user_home),)
+    SPEC = (("path", "AppData/Local/ConnectedDevicesPlatform", from_user_home),)
 
 
 @register_module("--hashes")
@@ -1643,10 +1773,10 @@ class FileHashes(Module):
                 path_selectors.extend([("glob", glob) for glob in cli_args.glob_to_hash])
 
             if cli_args.dir_to_hash:
-                path_selectors.extend([("dir", (dir_path, extensions)) for dir_path in cli_args.dir_to_hash])
+                path_selectors.extend([("path", (dir_path, extensions)) for dir_path in cli_args.dir_to_hash])
 
         else:
-            path_selectors.extend([("dir", (dir_path, extensions)) for dir_path in cls.DEFAULT_PATHS])
+            path_selectors.extend([("path", (dir_path, extensions)) for dir_path in cls.DEFAULT_PATHS])
 
         hash_funcs = cli_args.hash_func if cli_args.hash_func else cls.DEFAULT_HASH_FUNCS
 
@@ -1672,8 +1802,8 @@ class OpenHandles(Module):
             log.error("Open Handles plugin can only run on Windows systems! Skipping...")
             return
 
-        from acquire.dynamic.windows.collect import collect_open_handles
-        from acquire.dynamic.windows.handles import serialize_handles_into_csv
+        from acquire.dynamic.windows.collect import collect_open_handles  # noqa: PLC0415
+        from acquire.dynamic.windows.handles import serialize_handles_into_csv  # noqa: PLC0415
 
         log.info("*** Acquiring open handles")
 
@@ -1688,6 +1818,15 @@ class OpenHandles(Module):
                 csv_compressed_handles,
             )
             log.info("Collecting open handles is done.")
+
+
+@register_module("--dpapi")
+class DPAPI(Module):
+    SPEC = (
+        ("path", "sysvol/Windows/System32/Microsoft/Protect"),
+        ("path", "AppData/Roaming/Microsoft/Protect", from_user_home),
+        ("path", "Application Data/Microsoft/Protect", from_user_home),
+    )
 
 
 def print_disks_overview(target: Target) -> None:
@@ -1729,21 +1868,39 @@ def print_acquire_warning(target: Target) -> None:
 
 
 def _get_modules_for_profile(
+    target: Target,
     profile_name: str,
-    operating_system: str,
     profiles: dict[str, dict[str, list[type[Module]]]],
     err_msg: str,
 ) -> dict[str, type[Module]]:
-    modules_selected = {}
+    if profile_name == "none":
+        return {}
 
-    if profile_name != "none":
-        if (profile := profiles.get(profile_name, {}).get(operating_system)) is not None:
-            for mod in profile:
-                modules_selected[mod.__modname__] = mod
-        else:
-            log.error(err_msg, operating_system, profile_name)
+    if (profile_os := profiles.get(profile_name)) is None:
+        log.error("No profile found named %s", profile_name)
+        return {}
 
-    return modules_selected
+    if (profile := profile_os.get(target.os)) is None:
+        for os in target.os_tree():
+            if profile := profile_os.get(os):
+                log.info(
+                    "No collection set for OS %r with profile %r, using the one for OS %r instead",
+                    target.os,
+                    profile_name,
+                    os,
+                )
+                break
+
+    if not profile:
+        log.error(err_msg, target.os, profile_name)
+        return {}
+
+    selected_modules = {}
+
+    for mod in profile:
+        selected_modules[mod.__modname__] = mod
+
+    return selected_modules
 
 
 def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | None = None) -> list[str | Path]:
@@ -1794,24 +1951,27 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
     print_acquire_warning(target)
 
     modules_selected = {}
+    modules_disabled = []
     modules_successful = []
     modules_failed = {}
     for name, mod in MODULES.items():
         name_slug = name.lower()
         # check if module was set in the arguments provided
-        if getattr(args, name_slug):
+        if (mod_arg := getattr(args, name_slug)) is True:
             modules_selected[name] = mod
+        elif mod_arg is False:
+            modules_disabled.append(name)
 
     profile = args.profile
 
     # Set profile to default if no profile, modules, files, directories or globes were selected
-    if not profile and not modules_selected and not args.file and not args.directory and not args.glob:
+    if not profile and not modules_selected and not args.path and not args.glob:
         log.info("Using default collection profile")
         profile = "default"
         log.info("")
 
     normal_modules = _get_modules_for_profile(
-        profile, target.os, PROFILES, "No collection set for OS '%s' with profile '%s'"
+        target, profile, PROFILES, "No collection set for OS '%s' with profile '%s'"
     )
     modules_selected.update(normal_modules)
 
@@ -1819,9 +1979,13 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         volatile_profile = "none"
 
     volatile_modules = _get_modules_for_profile(
-        volatile_profile, target.os, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
+        target, volatile_profile, VOLATILE, "No collection set for OS '%s' with volatile profile '%s'"
     )
     modules_selected.update(volatile_modules)
+
+    # Filter modules that are explicitly disabled
+    for name in modules_disabled:
+        modules_selected.pop(name, None)
 
     if not modules_selected:
         log.warning("NO modules selected!")
@@ -1880,15 +2044,12 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
 
     with Collector(target, output, base=dir_base, skip_list=skip_list) as collector:
         # Acquire specified files
-        if args.file or args.directory or args.glob:
+        if args.path or args.glob:
             log.info("*** Acquiring specified paths")
             spec = []
 
-            if args.file:
-                spec.extend([("file", path.strip()) for path in args.file])
-
-            if args.directory:
-                spec.extend([("dir", path.strip()) for path in args.directory])
+            if args.path:
+                spec.extend([("path", path.strip()) for path in args.path])
 
             if args.glob:
                 spec.extend([("glob", path.strip()) for path in args.glob])
@@ -1992,6 +2153,8 @@ class WindowsProfile:
         ActiveDirectory,
         RemoteAccess,
         ActivitiesCache,
+        CamHistory,
+        DPAPI,
     )
     FULL = (
         *DEFAULT,
@@ -2001,6 +2164,7 @@ class WindowsProfile:
         WindowsNotifications,
         SSH,
         IIS,
+        SharePoint,
         TextEditor,
         Docker,
         MSSQL,
@@ -2018,6 +2182,8 @@ class LinuxProfile:
     DEFAULT = MINIMAL
     FULL = (
         *DEFAULT,
+        Applications,
+        Network,
         Docker,
         History,
         WebHosting,
@@ -2123,29 +2289,20 @@ class VolatileProfile:
         WinRDPSessions,
         WinDnsClientCache,
         ProcNet,
-    )
-    FULL = (
         Proc,
         Sys,
     )
 
 
 VOLATILE = {
-    "full": {
-        "windows": VolatileProfile.DEFAULT,
-        "linux": VolatileProfile.FULL,
-        "bsd": VolatileProfile.FULL,
-        "esxi": VolatileProfile.FULL,
-        "macos": [],
-        "proxmox": [],
-    },
     "default": {
         "windows": VolatileProfile.DEFAULT,
-        "linux": [],
-        "bsd": [],
-        "esxi": [],
+        "linux": VolatileProfile.DEFAULT,
+        "bsd": VolatileProfile.DEFAULT,
+        "esxi": VolatileProfile.DEFAULT,
         "macos": [],
-        "proxmox": [],
+        # proxmox is debian based
+        "proxmox": VolatileProfile.DEFAULT,
     },
     "none": None,
 }
@@ -2201,6 +2358,19 @@ def main() -> None:
         log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
         log.info("")
 
+        if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
+            warnings.warn(
+                "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if "--proc-net" in sys.argv:
+            warnings.warn(
+                "--proc-net will be merged with --proc and will be removed in acquire 3.23",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         # start GUI if requested through CLI / config
         flavour = None
         if args.gui == "always" or (
@@ -2251,23 +2421,27 @@ def main() -> None:
                 if args.fallback:
                     target_query.update({"fallback-to-directory-fs": 1})
 
+                if args.enable_nfs:
+                    target_query.update({"enable-nfs": 1})
+
                 target_query = urllib.parse.urlencode(target_query)
                 target_path = f"{target_path}?{target_query}"
             target_paths.append(target_path)
 
+        # Use esxi_memory_context_manager only if running on ESXi host
+        if platform.system().lower() == "vmkernel":
+            context_mgr = esxi_memory_context_manager()
+        else:
+            context_mgr = contextlib.nullcontext()
+
         try:
             target_name = "Unknown"  # just in case open_all already fails
-            for target in Target.open_all(target_paths):
-                target_name = "Unknown"  # overwrite previous target name
-                target_name = target.name
-                log.info("Loading target %s", target_name)
-                log.info(target)
-                if target.os == "esxi" and target.name == "local":
-                    # Loader found that we are running on an esxi host
-                    # Perform operations to "enhance" memory
-                    with esxi_memory_context_manager():
-                        files_to_upload = acquire_children_and_targets(target, args)
-                else:
+            with context_mgr:
+                for target in Target.open_all(target_paths):
+                    target_name = "Unknown"  # overwrite previous target name
+                    target_name = target.name
+                    log.info("Loading target %s", target_name)
+                    log.info(target)
                     files_to_upload = acquire_children_and_targets(target, args)
         except Exception:
             log.error("Failed to acquire target: %s", target_name)  # noqa: TRY400

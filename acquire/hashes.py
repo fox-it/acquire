@@ -7,12 +7,12 @@ import io
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from acquire.utils import StrEnum
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from dissect.target import Target
@@ -70,7 +70,7 @@ def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = N
 
         hashes = path.get().hash(algos=[f.as_hashlib_method() for f in provided_hash_funcs_sorted])
 
-        hashes_map = dict(zip(provided_hash_funcs_sorted, hashes))
+        hashes_map = dict(zip(provided_hash_funcs_sorted, hashes, strict=False))
     else:
         hashes_map = {}
 
@@ -165,8 +165,8 @@ def collect_hashes(
     For example::
 
         [
-            ("dir", ("sysvol/Windows/", ("exe", "dll", "sys"))),
-            (HashFunc.MD5, HashFunc.SHA1)
+            ("path", ("sysvol/Windows/", ("exe", "dll", "sys"))),
+            (HashFunc.MD5, HashFunc.SHA1),
         ]
     """
 

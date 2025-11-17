@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dissect.target.helpers import keychain
+from dissect.target.tools.utils.cli import _OverrideRequiredAction, list_children
 
 from acquire.outputs import (
     COMPRESSION_METHODS,
@@ -124,13 +125,27 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
     parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
-    parser.add_argument("-f", "--file", action="append", help="acquire file")
-    parser.add_argument("-d", "--directory", action="append", help="acquire directory recursively")
+    # Keep `--file` and `--dir` (-f, and -d) temporarily
+    parser.add_argument(
+        "-f",
+        "-d",
+        "--file",
+        "--dir",
+        "--path",
+        dest="path",
+        action="append",
+        help="acquire a path, this can be either a file or directory",
+    )
     parser.add_argument("-g", "--glob", action="append", help="acquire files matching glob pattern")
 
     parser.add_argument("--disable-report", action="store_true", help="disable acquisition report file")
 
-    parser.add_argument("--child", help="only collect specific child")
+    parser.add_argument(
+        "--list-children", action=_OverrideRequiredAction, help="list all children indices and paths, then exit"
+    )
+    parser.add_argument("--recursive", action="store_true", help="make --list-children behave recursively")
+
+    parser.add_argument("--child", help="only collect specific child based on index or path, see --list-children")
     parser.add_argument(
         "--children",
         action=argparse.BooleanOptionalAction,
@@ -152,6 +167,11 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
             "fallback to OS level filesystem access if filesystem type is not supported. "
             "Only supported with target 'local'"
         ),
+    )
+    parser.add_argument(
+        "--enable-nfs",
+        action=argparse.BooleanOptionalAction,
+        help="mount nfs shares by connecting to the nfs server of the share.Only supported with target 'local'",
     )
 
     parser.add_argument(
@@ -199,6 +219,11 @@ def parse_acquire_args(
     """
     args, rest = parser.parse_known_args()
     _merge_args_and_config(parser, args, config)
+
+    if args.list_children:
+        # List found children on targets and exit
+        list_children(args)
+        parser.exit(0)
 
     return args, rest
 
