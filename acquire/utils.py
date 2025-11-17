@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dissect.target.helpers import keychain
-from dissect.target.tools.utils import _OverrideRequiredAction, list_children
+from dissect.target.tools.utils.cli import _OverrideRequiredAction, list_children
 
 from acquire.outputs import (
     COMPRESSION_METHODS,
