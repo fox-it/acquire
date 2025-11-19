@@ -883,7 +883,7 @@ class IIS(Module):
 
 @register_module("--webserver-log")
 class WebserverLog(Module):
-    DESC = "Various webserver logs"
+    DESC = "Various webserver logs and configuration files"
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
