@@ -31,7 +31,7 @@ from dissect.target.plugins.apps.webserver.iis import IISLogsPlugin
 from dissect.target.plugins.apps.webserver.nginx import NginxPlugin
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
-from dissect.target.tools.utils import args_to_uri
+from dissect.target.tools.utils.cli import args_to_uri
 from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
