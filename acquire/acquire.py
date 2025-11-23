@@ -881,8 +881,8 @@ class IIS(Module):
         return WebserverLog.get_spec_additions(cls, target, cli_args)
 
 
-@register_module("--webserver-log")
-class WebserverLog(Module):
+@register_module("--webserver")
+class Webserver(Module):
     DESC = "Various webserver logs and configuration files"
 
     @classmethod
