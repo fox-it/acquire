@@ -46,7 +46,9 @@ class MinIO(UploaderPlugin):
 
         http_client = urllib3.proxy_from_url(proxies["http"]) if proxies else None
 
-        return Minio(self.endpoint, self.access_id, self.access_key, http_client=http_client)
+        return Minio(
+            endpoint=self.endpoint, access_key=self.access_id, secret_key=self.access_key, http_client=http_client
+        )
 
     def upload_file(self, client: Any, path: Path) -> None:
         object_path = path.name
