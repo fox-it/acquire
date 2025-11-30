@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -63,3 +64,77 @@ def test_tar_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
 
     with tarfile.open(name=decrypted_path, mode="r") as tar_file:
         assert entry.open().read() == tar_file.extractfile(entry_name).read()
+
+
+def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_key: bytes) -> None:
+    class ShrinkingFile(io.BytesIO):
+        """
+        A file-like object that returns 5 bytes less than required.
+        Simulates a file on disk that has shrunk in between the time of
+        determining the size and actually reading the data.
+        """
+
+        def __init__(self, data: bytes):
+            super().__init__(data)
+
+        def read(self, size: int) -> bytes:
+            return super().read(size - 5)
+
+    content = b"some text"
+
+    content_padded = content[:-5] + tarfile.NUL * 5
+    file = ShrinkingFile(content)
+
+    tar_output = TarOutput(tmp_path / "race.tar", encrypt=True, public_key=public_key)
+    tar_output.write("file.log", file)
+    tar_output.close()
+    file.close()
+
+    encrypted_stream = EncryptedFile(tar_output.path.open("rb"), Path("tests/_data/private_key.pem"))
+    decrypted_path = tmp_path / "decrypted.tar"
+
+    # Direct streaming is not an option because tarfile needs seek when reading from encrypted files directly
+    Path(decrypted_path).write_bytes(encrypted_stream.read())
+
+    with tarfile.open(name=decrypted_path, mode="r") as tar_file:
+        member = tar_file.getmember("file.log")
+        extracted = tar_file.extractfile(member).read()
+        # The content should be padded with zeros to match the original size, despite the fact that the file shrunk
+        assert extracted == content_padded
+
+
+def test_tar_output_race_condition_with_growing_file(tmp_path: Path, public_key: bytes) -> None:
+    class GrowingFile(io.BytesIO):
+        """
+        A file-like object that returns 3 extra bytes.
+        Simulates a file on disk that has grown in between the time of
+        determining the size and actually reading the data.
+        """
+
+        def __init__(self, data: bytes):
+            super().__init__(data)
+
+        def read(self, size: int) -> bytes:
+            return super().read(size) + b"FOX"
+
+    content = b"some text"
+
+    file = GrowingFile(content)
+
+    tar_output = TarOutput(tmp_path / "race.tar", encrypt=True, public_key=public_key)
+    tar_output.write("file.log", file)
+    tar_output.close()
+    file.close()
+
+    encrypted_stream = EncryptedFile(tar_output.path.open("rb"), Path("tests/_data/private_key.pem"))
+    decrypted_path = tmp_path / "decrypted.tar"
+
+    # Direct streaming is not an option because tarfile needs seek when reading from encrypted files directly
+    Path(decrypted_path).write_bytes(encrypted_stream.read())
+
+    with tarfile.open(name=decrypted_path, mode="r") as tar_file:
+        member = tar_file.getmember("file.log")
+        extracted = tar_file.extractfile(member).read()
+        # The content should match the original content, without the extra bytes
+        # because the file was read with the original size
+        assert extracted == content
