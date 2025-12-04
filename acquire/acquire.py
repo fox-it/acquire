@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 import warnings
 from collections import defaultdict
-from itertools import chain, product
+from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
@@ -878,7 +878,7 @@ class IIS(Module):
             DeprecationWarning,
             stacklevel=2,
         )
-        return WebserverLog.get_spec_additions(cls, target, cli_args)
+        return Webserver.get_spec_additions(cls, target, cli_args)
 
 
 @register_module("--webserver")
