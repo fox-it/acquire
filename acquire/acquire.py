@@ -895,6 +895,8 @@ class Webserver(Module):
             NginxPlugin,
         ]
 
+        spec.add(("path", target.resolve(IISLogsPlugin.APPLICATION_HOST_CONFIG)))
+
         for subclass in subclasses:
             if subclass.__name__ == "IISLogsPlugin" and target.os != "windows":
                 continue
