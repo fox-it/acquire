@@ -366,10 +366,28 @@ class NTFS(Module):
             filenames = [
                 "$MFT",
                 "$Boot",
-                "$Secure:$SII",
                 "$Secure:$SDS",
                 "$LogFile",
             ]
+
+            sii_fh = fs.ntfs.mft.get("$Secure").index("$SII")._index_stream
+
+            # FIXME: the path of $Secure:$SII is incorrect
+            # -rw-r--r--  0 root   root   262144  1 Jan  1970 c:/$Secure:$SII
+            # -rw-r--r--  0 root   root 373293056 27 Aug 12:01 fs/C:/$MFT
+            # -rw-r--r--  0 root   root      8192 27 Aug 12:01 fs/C:/$Boot
+            # -rw-r--r--  0 root   root   2460372 27 Aug 12:01 fs/C:/$Secure:$SDS
+            # -rw-r--r--  0 root   root  67108864 27 Aug 12:01 fs/C:/$LogFile
+            # -rw-r--r--  0 root   root  41192056 27 Aug 12:03 fs/C:/$Extend/$Usnjrnl:$J
+            # -rw-r--r--  0 root   root        32 27 Aug 12:03 fs/C:/$Extend/$Usnjrnl:$Max
+            # -rw-r--r--  0 root   root   1048576 27 Aug 12:01 fs/C:/$Extend/$RmMetadata/$TxfLog/$Tops:$T
+            # -rw-r--r--  0 root   root      4096  1 Jan  1970 /$fs$/fs0/$Secure:$SII
+            # -rw-r--r--  0 root   root    262144 23 Dec 06:11 fs/$fs$/fs0/$MFT
+            # -rw-r--r--  0 root   root      8192 23 Dec 06:11 fs/$fs$/fs0/$Boot
+            # -rw-r--r--  0 root   root    263812 23 Dec 06:11 fs/$fs$/fs0/$Secure:$SDS
+            # -rw-r--r--  0 root   root   4620288 23 Dec 06:11 fs/$fs$/fs0/$LogFile
+            # -rw-r--r--  0 root   root   1048576 23 Dec 06:11 fs/$fs$/fs0/$Extend/$RmMetadata/$TxfLog/$Tops:$T
+            collector.output.write(fsutil.join(main_mountpoint, "$Secure:$SII"), sii_fh)
 
             for filename in filenames:
                 if main_mountpoint is not None:
