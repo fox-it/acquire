@@ -9,6 +9,8 @@ import pytest
 from acquire.acquire import acquire_children_and_targets
 from acquire.gui import GUI
 
+from dissect.target.helpers.record import ChildTargetRecord
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -34,8 +36,8 @@ if TYPE_CHECKING:
 def test_gui(
     mock_target: Target, gui: GUI, num_children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ) -> None:
-    def list_children() -> Iterator[Target]:
-        yield from [mock_target] * num_children
+    def list_children() -> Iterator[tuple[str, ChildTargetRecord]]:
+        yield from [(0, mock_target)] * num_children
 
     mock_target.list_children = list_children
 
