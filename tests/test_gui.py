@@ -37,7 +37,8 @@ def test_gui(
     mock_target: Target, gui: GUI, num_children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ) -> None:
     def list_children() -> Iterator[tuple[str, ChildTargetRecord]]:
-        yield from [(0, mock_target)] * num_children
+        # We do not use the index so just set it to zero.
+        yield from [("0", mock_target)] * num_children
 
     mock_target.list_children = list_children
 
