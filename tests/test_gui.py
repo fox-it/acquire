@@ -9,12 +9,11 @@ import pytest
 from acquire.acquire import acquire_children_and_targets
 from acquire.gui import GUI
 
-from dissect.target.helpers.record import ChildTargetRecord
-
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from dissect.target import Target
+    from dissect.target.helpers.record import ChildTargetRecord
 
 
 @pytest.mark.parametrize(
