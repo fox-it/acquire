@@ -2547,7 +2547,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> li
             raise
 
     if args.children:
-        for child in target.list_children():
+        for _, child in target.list_children():
             counter += 1
             acquire_gui.shard = int((progress_limit / total_targets) * counter)
             try:
