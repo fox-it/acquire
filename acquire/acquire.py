@@ -106,61 +106,12 @@ logging.lastResort = None
 logging.raiseExceptions = False
 
 
-def misc_windows_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
-    misc_dirs = {
-        ("Windows/ServiceProfiles/LocalService", False),
-        ("Windows/ServiceProfiles/NetworkService", False),
-        ("Windows/System32/config/systemprofile", False),
-        ("Users", True),
-        ("Documents and Settings", True),
-    }
-
-    for fs in target.fs.path().iterdir():
-        if fs.name.lower() == "c:":
-            continue
-
-        for misc_dir, get_subdirs in misc_dirs:
-            misc_path = fs.joinpath(misc_dir)
-
-            if not misc_path.exists():
-                continue
-
-            if get_subdirs:
-                for entry in misc_path.iterdir():
-                    if entry.is_dir():
-                        yield entry
-            else:
-                yield misc_path
-
-
-def misc_unix_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
-    user_dirs = ["root", "home/*"]
-
-    home_dirs = (target.fs.path("/").glob(path) for path in user_dirs)
-    yield from itertools.chain.from_iterable(home_dirs)
-
-
-def misc_macos_user_homes(target: Target) -> Iterator[fsutil.TargetPath]:
-    yield from itertools.chain(target.fs.path("/Users/").glob("*"), misc_unix_user_homes(target))
-
-
-MISC_MAPPING = {
-    "macos": misc_macos_user_homes,
-    "windows": misc_windows_user_homes,
-}
-
-
 def from_user_home(target: Target, path: str) -> Iterator[str]:
     try:
-        for user_details in target.user_details.all_with_home():
-            yield user_details.home_path.joinpath(path).as_posix()
+        return (user_home.joinpath(path).as_posix() for user_home in target.user_details.all_home_paths)
     except Exception as e:
         log.warning("Error occurred when requesting all user homes")
         log.debug("", exc_info=e)
-
-    misc_user_homes = MISC_MAPPING.get(target.os, misc_unix_user_homes)
-    for user_dir in misc_user_homes(target):
-        yield user_dir.joinpath(path).as_posix()
 
 
 def iter_ntfs_filesystems(target: Target) -> Iterator[tuple[ntfs.NtfsFilesystem, str | None, str, str]]:
