@@ -35,6 +35,7 @@ from dissect.target.tools.utils.cli import args_to_uri
 from dissect.util.stream import RunlistStream
 
 from acquire.collector import Collector, get_full_formatted_report, get_report_summary
+from acquire.diagnostics.common import diagnostics_info_json
 from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.esxi import esxi_memory_context_manager
 from acquire.gui import GUI
@@ -2419,6 +2420,30 @@ def main() -> None:
         if args.upload:
             try:
                 upload_files(args.upload, args.upload_plugin, args.no_proxy)
+            except Exception:
+                acquire_gui.message("Failed to upload files")
+                log.exception("")
+                exit_failure(args.config.get("arguments"))
+            exit_success(args.config.get("arguments"))
+
+        # Check for diagnostics argument here. Process and execute.
+        if args.diagnostics:
+            print("\nWARNING: Gathering diagnostics may destroy forensic evidence.")
+            confirm = input("Do you want to continue? [y/N]: ").strip().lower()
+            if confirm not in ("y", "yes"):
+                print("Aborted diagnostics.")
+                exit_success(args.config.get("arguments"))
+            try:
+                # Determine output path
+                if isinstance(args.diagnostics, str):
+                    diag_path = Path(args.diagnostics)
+                elif log_file:
+                    diag_path = Path(log_file).with_name(Path(log_file).stem + "_diag.json")
+                else:
+                    diag_path = Path("diag.json")
+
+                diagnostics_info_json(diag_path)
+                log.info("Diagnostics written to file %s", diag_path.resolve())
             except Exception:
                 acquire_gui.message("Failed to upload files")
                 log.exception("")
