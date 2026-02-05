@@ -867,20 +867,6 @@ class MSSQL(Module):
             yield ("glob", f"{log_path}/ERRORLOG*")
 
 
-@register_module("--iis")
-class IIS(Module):
-    DESC = "IIS logs"
-
-    @classmethod
-    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        warnings.warn(
-            "--iis is deprecated in favor of --webserver-logs and will be removed in acquire 3.22",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return Webserver.get_spec_additions(cls, target, cli_args)
-
-
 @register_module("--webserver")
 class Webserver(Module):
     DESC = "Various webserver logs and configuration files"
@@ -2193,7 +2179,7 @@ class WindowsProfile:
         QuarantinedFiles,
         WindowsNotifications,
         SSH,
-        IIS,
+        Webserver,
         SharePoint,
         TextEditor,
         Docker,
