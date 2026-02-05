@@ -2374,12 +2374,6 @@ def main() -> None:
         log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
         log.info("")
 
-        if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
-            warnings.warn(
-                "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         if "--proc-net" in sys.argv:
             warnings.warn(
                 "--proc-net will be merged with --proc and will be removed in acquire 3.23",
