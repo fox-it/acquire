@@ -1412,6 +1412,10 @@ class RemoteAccess(Module):
         # Splashtop
         ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
         ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
+        # SimpleHelp
+        ("path", "sysvol/ProgramData/JWrapper-Remote Access"),
+        ("path", "/opt/JWrapper-Remote Access"),
+        ("path", "/Library/Application Support/JWrapper-Remote Access"),
     )
 
 
