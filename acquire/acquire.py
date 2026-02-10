@@ -1378,12 +1378,12 @@ class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
         # teamviewer - Windows
-        ("glob", "sysvol/Program Files/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
-        ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
+        ("glob", "sysvol/Program Files*/TeamViewer/*.log"),
+        ("path", "sysvol/Program Files*/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
         ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/RemoteSupport", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/Meeting", from_user_home),
         # teamviewer - Mac + Linux
         ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
