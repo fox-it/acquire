@@ -1094,8 +1094,10 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Avast Software/Avast/Log"),
         ("path", "Avast Software/Avast/Log", from_user_home),
         ("path", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
-        ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Logs"),
+        ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Avast/Logs"),
         ("path", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
+        ("path", "sysvol/Program Files*/AVAST Software/Business Agent/log.txt"),
+        ("path", "sysvol/Program Files*/AVAST Software/Business Agent/smbpol.db"),
         # Avira
         ("path", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
         ("path", "sysvol/ProgramData/Avira/Security/Logs"),
@@ -1147,7 +1149,7 @@ class AV(Module):
         ("path", "sysvol/ProgramData/McAfee/MSC/Logs"),
         ("path", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
         ("path", "sysvol/ProgramData/McAfee/Agent/logs"),
-        ("path", "sysvol/ProgramData/McAfee/datreputation/Logs"),
+        ("path", "sysvol/ProgramData/McAfee/datareputation/Logs"),
         ("path", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
         ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
         ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
@@ -1179,6 +1181,7 @@ class AV(Module):
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Logs"),
         ("path", "AppData/Local/Symantec/Symantec Endpoint Protection/Logs", from_user_home),
         ("path", "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
+        ("path", "sysvol/Windows.old/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/CmnClnt/ccSubSDK"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/registrationInfo.xml"),
         # TotalAV
@@ -1197,11 +1200,13 @@ class AV(Module):
         # Microsoft Windows Defender
         ("path", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
         ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
+        ("glob", "sysvol/Windows.old/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("path", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("path", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detections.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
         # Sophos Hitman pro
@@ -1209,7 +1214,9 @@ class AV(Module):
         ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
         ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
         ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
-    )
+        # CrowdStrike Falcon
+        ("path", "sysvol/Windows/System32/Drivers/CrowdStrike/Quarantine")
+        )
 
 
 @register_module("--quarantined")
@@ -1235,6 +1242,7 @@ class QuarantinedFiles(Module):
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         ("path", "sysvol/ProgramData/Sophos/Safestore"),
+        ("glob", "sysvol/ProgramData/Sophos/*/Logs"),
         # HitmanPRO
         ("path", "sysvol/ProgramData/HitmanPro/Quarantine"),
     )
