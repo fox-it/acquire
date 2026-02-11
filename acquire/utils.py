@@ -125,12 +125,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
     parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
-    # Keep `--file` and `--dir` (-f, and -d) temporarily
     parser.add_argument(
-        "-f",
-        "-d",
-        "--file",
-        "--dir",
         "--path",
         dest="path",
         action="append",
