@@ -1365,7 +1365,7 @@ class RemoteAccess(Module):
     SPEC = (
         # teamviewer - Windows
         ("glob", "sysvol/Program Files*/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files*/TeamViewer/Connections_incoming.txt"),
+        ("glob", "sysvol/Program Files*/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
         ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
         ("path", "AppData/Roaming/TeamViewer/MRU/RemoteSupport", from_user_home),
