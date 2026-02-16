@@ -367,6 +367,9 @@ def check_and_set_acquire_args(
                 f"Invalid compression method for tar, allowed are: {', '.join(TAR_COMPRESSION_METHODS.keys())}"
             )
 
+    if args.compress_method and not args.compress:
+        args.compress = True
+
     if args.keychain_file:
         keychain.register_keychain_file(args.keychain_file)
 
