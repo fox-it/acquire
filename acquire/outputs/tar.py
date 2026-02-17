@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import io
+import shutil
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -100,7 +102,52 @@ class TarOutput(Output):
             if stat:
                 info.mtime = stat.st_mtime
 
-        self.tar.addfile(info, fh)
+        # Inline version of Python stdlib's tarfile.addfile & tarfile.copyfileobj,
+        # to allow for padding and more control over the tar file writing.
+        self.tar._check("awx")
+
+        if fh is None and info.isreg() and info.size != 0:
+            raise ValueError("fileobj not provided for non zero-size regular file")
+
+        info = copy.copy(info)
+
+        buf = info.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
+        self.tar.fileobj.write(buf)
+        self.tar.offset += len(buf)
+        bufsize = self.tar.copybufsize
+        if fh is not None:
+            bufsize = bufsize or 16 * 1024
+
+            if info.size == 0:
+                return
+            if info.size is None:
+                shutil.copyfileobj(fh, self.tar.fileobj, bufsize)
+                return
+
+            blocks, remainder = divmod(info.size, bufsize)
+            for _ in range(blocks):
+                # Prevents "long reads" because it reads at max bufsize bytes at a time
+                buf = fh.read(bufsize)
+                if len(buf) < bufsize:
+                    # PATCH; instead of raising an exception, pad the data to the desired length
+                    buf += tarfile.NUL * (bufsize - len(buf))
+                self.tar.fileobj.write(buf)
+
+            if remainder != 0:
+                # Prevents "long reads" because it reads at max bufsize bytes at a time
+                buf = fh.read(remainder)
+                if len(buf) < remainder:
+                    # PATCH; instead of raising an exception, pad the data to the desired length
+                    buf += tarfile.NUL * (remainder - len(buf))
+                self.tar.fileobj.write(buf)
+
+            blocks, remainder = divmod(info.size, tarfile.BLOCKSIZE)
+            if remainder > 0:
+                self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
+                blocks += 1
+            self.tar.offset += blocks * tarfile.BLOCKSIZE
+
+        self.tar.members.append(info)
 
     def close(self) -> None:
         """Closes the tar file."""
