@@ -1096,8 +1096,8 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
         ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Avast/Logs"),
         ("path", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
-        ("path", "sysvol/Program Files*/AVAST Software/Business Agent/log.txt"),
-        ("path", "sysvol/Program Files*/AVAST Software/Business Agent/smbpol.db"),
+        ("glob", "sysvol/Program Files*/AVAST Software/Business Agent/log.txt"),
+        ("glob", "sysvol/Program Files*/AVAST Software/Business Agent/smbpol.db"),
         # Avira
         ("path", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
         ("path", "sysvol/ProgramData/Avira/Security/Logs"),
@@ -1216,7 +1216,7 @@ class AV(Module):
         ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
         # CrowdStrike Falcon
         ("path", "sysvol/Windows/System32/Drivers/CrowdStrike/Quarantine")
-        )
+    )
 
 
 @register_module("--quarantined")
