@@ -867,20 +867,6 @@ class MSSQL(Module):
             yield ("glob", f"{log_path}/ERRORLOG*")
 
 
-@register_module("--iis")
-class IIS(Module):
-    DESC = "IIS logs"
-
-    @classmethod
-    def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        warnings.warn(
-            "--iis is deprecated in favor of --webserver-logs and will be removed in acquire 3.22",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return Webserver.get_spec_additions(cls, target, cli_args)
-
-
 @register_module("--webserver")
 class Webserver(Module):
     DESC = "Various webserver logs and configuration files"
@@ -1386,12 +1372,12 @@ class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
         # teamviewer - Windows
-        ("glob", "sysvol/Program Files/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
-        ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
+        ("glob", "sysvol/Program Files*/TeamViewer/*.log"),
+        ("glob", "sysvol/Program Files*/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
         ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/RemoteSupport", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/Meeting", from_user_home),
         # teamviewer - Mac + Linux
         ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
@@ -2201,7 +2187,7 @@ class WindowsProfile:
         QuarantinedFiles,
         WindowsNotifications,
         SSH,
-        IIS,
+        Webserver,
         SharePoint,
         TextEditor,
         Docker,
@@ -2396,12 +2382,6 @@ def main() -> None:
         log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
         log.info("")
 
-        if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
-            warnings.warn(
-                "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         if "--proc-net" in sys.argv:
             warnings.warn(
                 "--proc-net will be merged with --proc and will be removed in acquire 3.23",
