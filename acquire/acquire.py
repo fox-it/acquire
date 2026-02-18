@@ -1215,7 +1215,7 @@ class AV(Module):
         ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
         ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
         # CrowdStrike Falcon
-        ("path", "sysvol/Windows/System32/Drivers/CrowdStrike/Quarantine")
+        ("path", "sysvol/Windows/System32/Drivers/CrowdStrike/Quarantine"),
     )
 
 
