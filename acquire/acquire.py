@@ -366,10 +366,13 @@ class NTFS(Module):
             filenames = [
                 "$MFT",
                 "$Boot",
-                "$Secure:$SII",
                 "$Secure:$SDS",
                 "$LogFile",
             ]
+
+            sii_fh = fs.ntfs.mft.get("$Secure").index("$SII")._index_stream
+
+            collector.output.write(fsutil.join(main_mountpoint, "$Secure:$SII"), sii_fh)
 
             for filename in filenames:
                 if main_mountpoint is not None:
