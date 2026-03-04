@@ -24,7 +24,6 @@ def collect_named_objects(path: str = "\\") -> list[NamedObject]:
     Parameters:
         path: point to start searching from
     """
-
     try:
         dir_handle = open_directory_object(dir_name=path, root_handle=None)
     except AccessDeniedError:

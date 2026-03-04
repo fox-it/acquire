@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 from dissect.target.plugin import OSPlugin
 from dissect.target.plugins.os.default._os import DefaultOSPlugin

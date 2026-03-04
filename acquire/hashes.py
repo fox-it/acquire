@@ -47,7 +47,6 @@ def get_paths_from_dir(
     extensions: set[str] | None = None,
 ) -> Iterator[Path]:
     """Yield paths that match provided `glob` pattern and `extensions` values"""
-
     extension_suffixes = {f".{ext}" for ext in extensions} if extensions else None
 
     for path in target.fs.path("/").glob(glob):
@@ -57,13 +56,11 @@ def get_paths_from_dir(
 
 
 def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> tuple:
-    """
-    Calculate and return the details for specified path.
+    """Calculate and return the details for specified path.
 
     The details include file size and hashes, calculated for
     hash functions provided in `hash_funcs`.
     """
-
     hash_funcs = hash_funcs or []
     if hash_funcs:
         provided_hash_funcs_sorted = sorted(set(hash_funcs))
@@ -120,7 +117,6 @@ def filter_out_by_value_match(
     offsets: Iterator[int] = (0,),
 ) -> Iterator[Path]:
     """Filter out paths where file data matches the provided `value` at the specified offsets"""
-
     if not offsets:
         raise ValueError("No offsets provided")
 
@@ -158,8 +154,7 @@ def collect_hashes(
     specs: Iterator[Iterator[tuple]],
     path_filters: Iterator[Callable[[Iterator[Path]], Iterator[Path]]] | None = None,
 ) -> Iterator[tuple]:
-    """
-    Walk through the paths, calculate hashes and return details per path.
+    """Walk through the paths, calculate hashes and return details per path.
 
     Spec contains a path selector and a list of hash functions to compute against the paths.
     For example::
@@ -169,7 +164,6 @@ def collect_hashes(
             (HashFunc.MD5, HashFunc.SHA1),
         ]
     """
-
     log.info("Starting to collect hashes for spec: %s", specs)
 
     stream_hash_func_pairs = []
@@ -225,11 +219,9 @@ def collect_hashes(
 
 
 def serialize_into_csv(rows: Iterator[list], compress: bool = True) -> tuple[int, bytes]:
-    """
-    Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
+    """Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
     containing the number of rows processed and the result bytes.
     """
-
     raw_buffer = io.BytesIO()
 
     counter = 0

@@ -682,7 +682,6 @@ class Collector:
 
 def get_report_summary(report: CollectionReport) -> str:
     """Create a table-view report summary with success/failure/missing/empty counters per module"""
-
     record_counts = report.get_counts_per_module_per_outcome()
 
     if not record_counts:
@@ -748,11 +747,9 @@ def get_report_summary(report: CollectionReport) -> str:
 
 
 def get_full_formatted_report(report: CollectionReport, record_indent: int = 4) -> str:
-    """
-    Create a full list of successful / failed / missing / empty artifacts collected,
+    """Create a full list of successful / failed / missing / empty artifacts collected,
     broken down by module.
     """
-
     record_line_template = "{record.outcome}: {record.artifact_type}:{record.artifact_value}"
     blocks = []
 

@@ -115,14 +115,28 @@ select = [
   "PERF",
   "FURB",
   "RUF",
+  "D"
 ]
-ignore = ["E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003"]
+ignore = [
+    "E203", "B904", "UP024", "ANN002", "ANN003", "ANN204", "ANN401", "SIM105", "TRY003",
+    # Ignore some pydocstyle rules for now as they require a larger cleanup
+    "D1",
+    "D205",
+    "D301",
+    "D417",
+    # Seems bugged: https://github.com/astral-sh/ruff/issues/16824
+    "D402",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/_docs/**" = ["INP001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["acquire"]
+required-imports = ["from __future__ import annotations"]
 
 [tool.setuptools.packages.find]
 include = ["acquire", "acquire.*"]

@@ -93,8 +93,7 @@ class ACCESS_MASK(IntFlag):
 
 
 class OBJ_ATTR(IntFlag):
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.10240.0/shared/ntdef.h
+    """https://github.com/tpn/winsdk-10/blob/master/Include/10.0.10240.0/shared/ntdef.h
     https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/object-handles
     """
 
@@ -189,7 +188,6 @@ def open_directory_object(dir_name: str, root_handle: HANDLE = None) -> HANDLE:
         dir_name: Specific directory we want to try and open.
         root_handle: From which point we want to start querying the object.
     """
-
     object_name = UNICODE_STRING.from_str(dir_name)
     p_name = ctypes.pointer(object_name)
 
