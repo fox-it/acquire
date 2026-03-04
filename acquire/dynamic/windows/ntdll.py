@@ -93,8 +93,11 @@ class ACCESS_MASK(IntFlag):
 
 
 class OBJ_ATTR(IntFlag):
-    """https://github.com/tpn/winsdk-10/blob/master/Include/10.0.10240.0/shared/ntdef.h
-    https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/object-handles
+    """Drivers object handles values.
+
+    References:
+        - https://github.com/tpn/winsdk-10/blob/master/Include/10.0.10240.0/shared/ntdef.h
+        - https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/object-handles
     """
 
     OBJ_INHERIT = 0x00000002
