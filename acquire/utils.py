@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 class StrEnum(str, Enum):
-    """Sortable and serializible string-based enum"""
+    """Sortable and serializible string-based enum."""
 
 
 def _create_profile_information(profiles: dict) -> str:

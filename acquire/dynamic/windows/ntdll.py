@@ -168,7 +168,7 @@ def close_handle(handle: HANDLE) -> None:
 
 
 def validate_ntstatus(status: NTSTATUS) -> None:
-    """Validates the result status of a Nt call
+    """Validates the result status of a Nt call.
 
     Parameters:
         status: the return value of a ntcall

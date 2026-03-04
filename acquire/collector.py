@@ -681,7 +681,7 @@ class Collector:
 
 
 def get_report_summary(report: CollectionReport) -> str:
-    """Create a table-view report summary with success/failure/missing/empty counters per module"""
+    """Create a table-view report summary with success/failure/missing/empty counters per module."""
     record_counts = report.get_counts_per_module_per_outcome()
 
     if not record_counts:

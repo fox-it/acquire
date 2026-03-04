@@ -44,7 +44,7 @@ def collect_named_objects(path: str = "\\") -> list[NamedObject]:
 
 
 def collect_open_handles(handle_types: list[NamedObject] | None = None) -> Iterator[Handle]:
-    """Collect open handles
+    """Collect open handles.
 
     Collect open handles and optionally provide a list to explicitly collect specific types of handles.
 

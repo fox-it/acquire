@@ -245,7 +245,7 @@ def module_arg(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
 
 
 def local_module(cls: type[object]) -> object:
-    """A decorator that sets property `__local__` on a module class to mark it for local target only"""
+    """A decorator that sets property `__local__` on a module class to mark it for local target only."""
     cls.__local__ = True
     return cls
 
