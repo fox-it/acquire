@@ -5,7 +5,7 @@ import ctypes
 import gzip
 import io
 import threading
-from logging import Filter, LogRecord, getLogger
+from logging import Filter, getLogger
 from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
@@ -39,6 +39,7 @@ from acquire.dynamic.windows.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from logging import LogRecord
 
 log = getLogger(__name__)
 

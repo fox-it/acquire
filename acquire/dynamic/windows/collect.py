@@ -4,8 +4,8 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 from acquire.dynamic.windows.exceptions import AccessDeniedError
-from acquire.dynamic.windows.handles import Handle, get_handles
-from acquire.dynamic.windows.named_objects import NamedObject, NamedObjectType
+from acquire.dynamic.windows.handles import get_handles
+from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.dynamic.windows.ntdll import (
     close_handle,
     open_directory_object,
@@ -14,6 +14,9 @@ from acquire.dynamic.windows.ntdll import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from acquire.dynamic.windows.handles import Handle
+    from acquire.dynamic.windows.named_objects import NamedObject
 
 log = getLogger(__name__)
 
