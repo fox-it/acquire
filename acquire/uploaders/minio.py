@@ -18,7 +18,6 @@ class MinIO(UploaderPlugin):
         Raises:
             ValueError: When the configuration is invalid.
         """
-
         self.endpoint = upload.get("endpoint")
         self.access_id = upload.get("access_id")
         self.access_key = upload.get("access_key")

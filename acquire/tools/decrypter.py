@@ -16,7 +16,6 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty as QueueEmptyError
-from queue import Queue
 from typing import TYPE_CHECKING, BinaryIO
 from urllib import request
 from urllib.error import HTTPError
@@ -62,6 +61,7 @@ from acquire.crypt import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from queue import Queue
     from threading import Event
 
 log = logging.getLogger(__name__)

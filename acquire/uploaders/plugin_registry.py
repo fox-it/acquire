@@ -53,7 +53,7 @@ class PluginRegistry(Generic[T]):
         self.plugins.pop(name)
 
     def items(self) -> ItemsView[str, T]:
-        """Returns all the items inside the ``plugins`` dictionary"""
+        """Returns all the items inside the ``plugins`` dictionary."""
         return self.plugins.items()
 
     def get(self, name: str) -> T:
