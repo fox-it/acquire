@@ -1,11 +1,17 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
-from dissect.target.plugin import OSPlugin
 from dissect.target.plugins.os.default._os import DefaultOSPlugin
 from dissect.target.plugins.os.unix.linux._os import LinuxPlugin
 from dissect.target.plugins.os.unix.linux.fortios._os import FortiOSPlugin
 from dissect.target.target import Target
 
 from acquire.acquire import PROFILES, _get_modules_for_profile
+
+if TYPE_CHECKING:
+    from dissect.target.plugin import OSPlugin
 
 
 @pytest.mark.parametrize(

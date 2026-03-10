@@ -5,7 +5,7 @@ import ctypes
 import gzip
 import io
 import threading
-from logging import Filter, LogRecord, getLogger
+from logging import Filter, getLogger
 from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
@@ -39,6 +39,7 @@ from acquire.dynamic.windows.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from logging import LogRecord
 
 log = getLogger(__name__)
 
@@ -164,7 +165,6 @@ def _get_file_name_thread(h_file: HANDLE, queue: Queue) -> None:
 
 def get_handle_name(pid: int, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX) -> str | None:
     """Return handle name."""
-
     remote = pid != GetCurrentProcessId()
 
     if remote:
@@ -268,7 +268,6 @@ def serialize_handles_into_csv(rows: Iterator[Handle], compress: bool = True) ->
     Serialize provided rows into normal or gzip-compressed CSV, and return a tuple
     containing the result bytes.
     """
-
     raw_buffer = io.BytesIO()
 
     buffer = gzip.GzipFile(fileobj=raw_buffer, mode="wb") if compress else raw_buffer

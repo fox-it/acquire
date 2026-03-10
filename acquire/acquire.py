@@ -49,7 +49,7 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
+from acquire.uploaders.plugin import upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
     check_and_set_acquire_args,
@@ -70,6 +70,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
+
+    from acquire.uploaders.plugin import UploaderPlugin
 
 try:
     from acquire.version import version
@@ -245,7 +247,7 @@ def module_arg(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
 
 
 def local_module(cls: type[object]) -> object:
-    """A decorator that sets property `__local__` on a module class to mark it for local target only"""
+    """A decorator that sets property `__local__` on a module class to mark it for local target only."""
     cls.__local__ = True
     return cls
 
