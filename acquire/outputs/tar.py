@@ -48,7 +48,7 @@ class TarOutput(Output):
             ext += ".enc"
 
         self._fh = None
-        self.path = path.with_suffix(path.suffix + ext)
+        self.path = path.with_suffix(path.suffix + ext + ".running")
 
         if encrypt:
             self._fh = EncryptedStream(self.path.open("wb"), public_key)
@@ -107,3 +107,5 @@ class TarOutput(Output):
         self.tar.close()
         if self._fh:
             self._fh.close()
+
+        self.path.rename(self.path.parent.joinpath(self.path.stem))
