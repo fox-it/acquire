@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import io
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
@@ -100,7 +101,54 @@ class TarOutput(Output):
             if stat:
                 info.mtime = stat.st_mtime
 
-        self.tar.addfile(info, fh)
+        # Inline version of Python stdlib's tarfile.addfile & tarfile.copyfileobj,
+        # to allow for padding and more control over the tar file writing.
+        self.tar._check("awx")
+
+        if fh is None and info.isreg() and info.size != 0:
+            return
+
+        tarinfo = copy.copy(info)
+        saved_offset = self.tar.offset
+        saved_filepos = self.tar.fileobj.tell()
+
+        try:
+            buf = tarinfo.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
+            self.tar.fileobj.write(buf)
+            self.tar.offset += len(buf)
+            bufsize = self.tar.copybufsize or 16 * 1024
+
+            if fh is not None:
+                if tarinfo.size is None or tarinfo.size == 0:
+                    return
+
+                blocks, remainder = divmod(tarinfo.size, bufsize)
+                for _ in range(blocks):
+                    buf = fh.read(size)
+                    if len(buf) < size:
+                        # PATCH; instead of raising an exception, pad the data to the desired length
+                        buf += tarfile.NUL * (size - len(buf))
+                    self.tar.fileobj.write(buf)
+
+                if remainder > 0:
+                    buf = fh.read(remainder)
+                    if len(buf) < remainder:
+                        # PATCH; instead of raising an exception, pad the data to the desired length
+                        buf += tarfile.NUL * (remainder - len(buf))
+                    self.tar.fileobj.write(buf)
+
+                blocks, remainder = divmod(tarinfo.size, tarfile.BLOCKSIZE)
+                if remainder > 0:
+                    self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
+                    blocks += 1
+                self.tar.offset += blocks * tarfile.BLOCKSIZE
+
+            self.tar.members.append(tarinfo)
+        except Exception:
+            self.tar.fileobj.seek(saved_filepos)
+            self.tar.fileobj.truncate()
+            self.tar.offset = saved_offset
+            raise
 
     def close(self) -> None:
         """Closes the tar file."""
