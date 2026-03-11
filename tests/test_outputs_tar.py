@@ -68,12 +68,6 @@ def test_tar_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
 
 def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_key: bytes) -> None:
     class ShrinkingFile(io.BytesIO):
-        """
-        A file-like object that returns 5 bytes less than required.
-        Simulates a file on disk that has shrunk in between the time of
-        determining the size and actually reading the data.
-        """
-
         def __init__(self, data: bytes):
             super().__init__(data)
 
@@ -105,12 +99,6 @@ def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_ke
 
 def test_tar_output_race_condition_with_growing_file(tmp_path: Path, public_key: bytes) -> None:
     class GrowingFile(io.BytesIO):
-        """
-        A file-like object that returns 3 extra bytes.
-        Simulates a file on disk that has grown in between the time of
-        determining the size and actually reading the data.
-        """
-
         def __init__(self, data: bytes):
             super().__init__(data)
 
@@ -138,3 +126,48 @@ def test_tar_output_race_condition_with_growing_file(tmp_path: Path, public_key:
         # The content should match the original content, without the extra bytes
         # because the file was read with the original size
         assert extracted == content
+
+
+def test_tar_output_exception_rollback(tmp_path: Path) -> None:
+    """Test that tar file is properly truncated when an exception occurs during writing."""
+
+    class FailingFile(io.BytesIO):
+        def __init__(self, data: bytes, fail_after_bytes: int = 5):
+            super().__init__(data)
+            self.fail_after_bytes = fail_after_bytes
+            self.bytes_read = 0
+
+        def read(self, size: int) -> bytes:
+            data = super().read(size)
+            self.bytes_read += len(data)
+            if self.bytes_read > self.fail_after_bytes:
+                raise IOError("Simulated I/O error during file read")
+            return data
+
+    content = b"This is some test content that will fail during reading"
+    failing_file = FailingFile(content, fail_after_bytes=5)
+
+    tar_output = TarOutput(tmp_path / "test.tar")
+
+    successful_file = io.BytesIO(b"dissectftw")
+    tar_output.write("successful_file.txt", successful_file)
+
+    file_size_before_failure = tar_output.tar.fileobj.tell()
+    members_count_before = len(tar_output.tar.members)
+
+    # Attempt to write the failing file
+    with pytest.raises(IOError, match="Simulated I/O error during file read"):
+        tar_output.write("failing_file.txt", failing_file, size=len(content))
+
+    # Verify that the tar file was truncated back to its state before the failed write
+    assert tar_output.tar.fileobj.tell() == file_size_before_failure
+    assert len(tar_output.tar.members) == members_count_before
+
+    tar_output.close()
+
+    # Verify the tar file can still be opened and contains only the successful entry
+    with tarfile.open(tar_output.path) as tar_file:
+        members = tar_file.getmembers()
+        assert len(members) == 1
+        assert members[0].name == "successful_file.txt"
+        assert tar_file.extractfile("successful_file.txt").read() == b"dissectftw"

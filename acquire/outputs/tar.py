@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import io
-import shutil
 import tarfile
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -107,47 +106,49 @@ class TarOutput(Output):
         self.tar._check("awx")
 
         if fh is None and info.isreg() and info.size != 0:
-            raise ValueError("fileobj not provided for non zero-size regular file")
+            return
 
-        info = copy.copy(info)
+        tarinfo = copy.copy(info)
+        saved_offset = self.tar.offset
+        saved_filepos = self.tar.fileobj.tell()
 
-        buf = info.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
-        self.tar.fileobj.write(buf)
-        self.tar.offset += len(buf)
-        bufsize = self.tar.copybufsize
-        if fh is not None:
-            bufsize = bufsize or 16 * 1024
+        try:
+            buf = tarinfo.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
+            self.tar.fileobj.write(buf)
+            self.tar.offset += len(buf)
+            bufsize = self.tar.copybufsize or 16 * 1024
 
-            if info.size == 0:
-                return
-            if info.size is None:
-                shutil.copyfileobj(fh, self.tar.fileobj, bufsize)
-                return
+            if fh is not None:
+                if tarinfo.size is None or tarinfo.size == 0:
+                    return
 
-            blocks, remainder = divmod(info.size, bufsize)
-            for _ in range(blocks):
-                # Prevents "long reads" because it reads at max bufsize bytes at a time
-                buf = fh.read(bufsize)
-                if len(buf) < bufsize:
-                    # PATCH; instead of raising an exception, pad the data to the desired length
-                    buf += tarfile.NUL * (bufsize - len(buf))
-                self.tar.fileobj.write(buf)
+                blocks, remainder = divmod(tarinfo.size, bufsize)
+                for _ in range(blocks):
+                    buf = fh.read(size)
+                    if len(buf) < size:
+                        # PATCH; instead of raising an exception, pad the data to the desired length
+                        buf += tarfile.NUL * (size - len(buf))
+                    self.tar.fileobj.write(buf)
 
-            if remainder != 0:
-                # Prevents "long reads" because it reads at max bufsize bytes at a time
-                buf = fh.read(remainder)
-                if len(buf) < remainder:
-                    # PATCH; instead of raising an exception, pad the data to the desired length
-                    buf += tarfile.NUL * (remainder - len(buf))
-                self.tar.fileobj.write(buf)
+                if remainder > 0:
+                    buf = fh.read(remainder)
+                    if len(buf) < remainder:
+                        # PATCH; instead of raising an exception, pad the data to the desired length
+                        buf += tarfile.NUL * (remainder - len(buf))
+                    self.tar.fileobj.write(buf)
 
-            blocks, remainder = divmod(info.size, tarfile.BLOCKSIZE)
-            if remainder > 0:
-                self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
-                blocks += 1
-            self.tar.offset += blocks * tarfile.BLOCKSIZE
+                blocks, remainder = divmod(tarinfo.size, tarfile.BLOCKSIZE)
+                if remainder > 0:
+                    self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
+                    blocks += 1
+                self.tar.offset += blocks * tarfile.BLOCKSIZE
 
-        self.tar.members.append(info)
+            self.tar.members.append(tarinfo)
+        except Exception:
+            self.tar.fileobj.seek(saved_filepos)
+            self.tar.fileobj.truncate()
+            self.tar.offset = saved_offset
+            raise
 
     def close(self) -> None:
         """Closes the tar file."""
