@@ -185,7 +185,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-K", "--keychain-file", type=Path, help="keychain file in CSV format")
     parser.add_argument("-Kv", "--keychain-value", help="passphrase, recovery key or key file path value")
 
-    parser.add_argument("--wait-exit", help="wait on exit, needs to press enter before closing", action="store_true")
+    parser.add_argument("--wait-exit", help="wait on exit, needs to press a key before closing", action="store_true")
 
     for module_cls in modules.values():
         for args, kwargs in module_cls.__cli_args__:
