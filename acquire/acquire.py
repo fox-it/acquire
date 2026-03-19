@@ -2334,19 +2334,29 @@ VOLATILE = {
 }
 
 
-def exit_success(default_args: list[str]) -> NoReturn:
+def exit_success(args: argparse.Namespace) -> NoReturn:
+    default_args = args.config.get("arguments")
     log.info("Acquire finished successful")
     log.info("Arguments: %s", " ".join(sys.argv[1:]))
     log.info("Default Arguments: %s", " ".join(default_args))
     log.info("Exiting with status code 0 (SUCCESS)")
+
+    if args.wait_exit:
+        input("Press any key to exit...")
+
     sys.exit(0)
 
 
-def exit_failure(default_args: list[str]) -> NoReturn:
+def exit_failure(args: argparse.Namespace) -> NoReturn:
+    default_args = args.config.get("arguments")
     log.error("Acquire FAILED")
     log.error("Arguments: %s", " ".join(sys.argv[1:]))
     log.error("Default Arguments: %s", " ".join(default_args))
     log.error("Exiting with status code 1 (FAILURE)")
+
+    if args.wait_exit:
+        input("Press any key to exit...")
+
     sys.exit(1)
 
 
@@ -2494,9 +2504,9 @@ def main() -> None:
         log.exception("")
 
     if acquire_successful:
-        exit_success(args.config.get("arguments"))
+        exit_success(args)
     else:
-        exit_failure(args.config.get("arguments"))
+        exit_failure(args)
 
 
 def load_child(target: Target, child_path: Path) -> None:
