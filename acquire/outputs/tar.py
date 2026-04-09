@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import io
+import shutil
 import tarfile
+from logging import getLogger
 from typing import TYPE_CHECKING, BinaryIO
 
 from acquire.crypt import EncryptedStream
@@ -14,6 +16,7 @@ if TYPE_CHECKING:
     from dissect.target.filesystem import FilesystemEntry
 
 TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
+log = getLogger(__name__)
 
 
 class TarOutput(Output):
@@ -109,6 +112,7 @@ class TarOutput(Output):
             return
 
         tarinfo = copy.copy(info)
+
         saved_offset = self.tar.offset
         saved_filepos = self.tar.fileobj.tell()
 
@@ -116,18 +120,22 @@ class TarOutput(Output):
             buf = tarinfo.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
             self.tar.fileobj.write(buf)
             self.tar.offset += len(buf)
-            bufsize = self.tar.copybufsize or 16 * 1024
 
             if fh is not None:
-                if tarinfo.size is None or tarinfo.size == 0:
+                # Start of tarfile.copyfileobj
+                bufsize = self.tar.copybufsize or 16 * 1024
+                if tarinfo.size == 0:
+                    return
+                if tarinfo.size is None:
+                    shutil.copyfileobj(fh, self.tar.fileobj, bufsize)
                     return
 
                 blocks, remainder = divmod(tarinfo.size, bufsize)
                 for _ in range(blocks):
-                    buf = fh.read(size)
-                    if len(buf) < size:
+                    buf = fh.read(bufsize)
+                    if len(buf) < bufsize:
                         # PATCH; instead of raising an exception, pad the data to the desired length
-                        buf += tarfile.NUL * (size - len(buf))
+                        buf += tarfile.NUL * (bufsize - len(buf))
                     self.tar.fileobj.write(buf)
 
                 if remainder > 0:
@@ -136,6 +144,7 @@ class TarOutput(Output):
                         # PATCH; instead of raising an exception, pad the data to the desired length
                         buf += tarfile.NUL * (remainder - len(buf))
                     self.tar.fileobj.write(buf)
+                # End of tarfile.copyfileobj
 
                 blocks, remainder = divmod(tarinfo.size, tarfile.BLOCKSIZE)
                 if remainder > 0:
@@ -145,6 +154,11 @@ class TarOutput(Output):
 
             self.tar.members.append(tarinfo)
         except Exception:
+            log.warning(
+                "An error occurred while writing to the tar file. "
+                "Truncating to the last known good state (offset: %d).",
+                saved_filepos,
+            )
             self.tar.fileobj.seek(saved_filepos)
             self.tar.fileobj.truncate()
             self.tar.offset = saved_offset

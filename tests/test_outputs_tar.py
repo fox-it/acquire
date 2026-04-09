@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -67,6 +68,8 @@ def test_tar_output_encrypt(mock_fs: VirtualFilesystem, public_key: bytes, tmp_p
 
 
 def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_key: bytes) -> None:
+    """Test that the tar output correctly handles a file that shrinks while being read."""
+
     class ShrinkingFile(io.BytesIO):
         def __init__(self, data: bytes):
             super().__init__(data)
@@ -98,6 +101,8 @@ def test_tar_output_race_condition_with_shrinking_file(tmp_path: Path, public_ke
 
 
 def test_tar_output_race_condition_with_growing_file(tmp_path: Path, public_key: bytes) -> None:
+    """Test that the tar output correctly handles a file that grows while being read."""
+
     class GrowingFile(io.BytesIO):
         def __init__(self, data: bytes):
             super().__init__(data)
@@ -128,7 +133,7 @@ def test_tar_output_race_condition_with_growing_file(tmp_path: Path, public_key:
         assert extracted == content
 
 
-def test_tar_output_exception_rollback(tmp_path: Path) -> None:
+def test_tar_output_exception_rollback(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Test that tar file is properly truncated when an exception occurs during writing."""
 
     class FailingFile(io.BytesIO):
@@ -154,10 +159,18 @@ def test_tar_output_exception_rollback(tmp_path: Path) -> None:
 
     file_size_before_failure = tar_output.tar.fileobj.tell()
     members_count_before = len(tar_output.tar.members)
-
-    # Attempt to write the failing file
-    with pytest.raises(IOError, match="Simulated I/O error during file read"):
+    with (
+        caplog.at_level(logging.WARNING, logger="acquire.outputs.tar"),
+        pytest.raises(IOError, match="Simulated I/O error during file read"),
+    ):
+        # Attempt to write the failing file
         tar_output.write("failing_file.txt", failing_file, size=len(content))
+
+    # Check that a warning was logged about the error and the rollback
+    assert len(caplog.records) == 1
+    assert caplog.records[0].message == (
+        "An error occurred while writing to the tar file. Truncating to the last known good state (offset: 1024)."
+    )
 
     # Verify that the tar file was truncated back to its state before the failed write
     assert tar_output.tar.fileobj.tell() == file_size_before_failure
