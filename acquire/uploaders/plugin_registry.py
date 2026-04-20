@@ -53,36 +53,22 @@ class PluginRegistry(Generic[T]):
         self.plugins.pop(name)
 
     def items(self) -> ItemsView[str, T]:
-        """Returns all the items inside the ``plugins`` dictionary"""
+        """Returns all the items inside the ``plugins`` dictionary."""
         return self.plugins.items()
 
     def get(self, name: str) -> T:
         return self.plugins.get(name)
 
-    def _find_entrypoint_data(self, entry_point_name: str) -> list[metadata.EntryPoint]:
-        """Searches through the entrypoints to find specific entry_point names.
-
-        Args:
-            entry_point_name: The name to search for.
-
-        Returns:
-            A list with entry_points associated with that name."""
-        try:
-            entrypoint_plugins = metadata.entry_points()[entry_point_name]
-        except KeyError:
-            entrypoint_plugins = []
-        return entrypoint_plugins
-
-    def load_entrypoint_plugins(self, name: str) -> None:
+    def load_entrypoint_plugins(self, group_name: str) -> None:
         """Loads all classes defined in the entrypoints that use the specified ``name``.
 
         Loads the class loaded from the entrypoint with the form: ``<name>=<path>:<class>``
         as <name> <loaded class>
 
         Args:
-            name: The entrypoint to search for.
+            group_name: The entrypoint to search for.
         """
-        class_plugins = self._find_entrypoint_data(name)
+        class_plugins = metadata.entry_points(group=group_name)
 
         for ep in class_plugins:
             try:

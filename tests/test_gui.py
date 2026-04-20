@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from dissect.target import Target
+    from dissect.target.helpers.record import ChildTargetRecord
 
 
 @pytest.mark.parametrize(
@@ -34,8 +35,9 @@ if TYPE_CHECKING:
 def test_gui(
     mock_target: Target, gui: GUI, num_children: int, skip_parent: bool, auto_upload: bool, expected_shards: list[int]
 ) -> None:
-    def list_children() -> Iterator[Target]:
-        yield from [mock_target] * num_children
+    def list_children() -> Iterator[tuple[str, ChildTargetRecord]]:
+        # We do not use the index so just set it to zero.
+        yield from [("0", mock_target)] * num_children
 
     mock_target.list_children = list_children
 

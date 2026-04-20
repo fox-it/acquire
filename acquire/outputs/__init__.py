@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from acquire.outputs.dir import DirectoryOutput
 from acquire.outputs.tar import TAR_COMPRESSION_METHODS, TarOutput
 from acquire.outputs.zip import ZIP_COMPRESSION_METHODS, ZipOutput

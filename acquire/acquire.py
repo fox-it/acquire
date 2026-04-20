@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 import warnings
 from collections import defaultdict
-from itertools import chain, product
+from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple, NoReturn
 
@@ -25,7 +25,10 @@ from dissect.target import Target
 from dissect.target.filesystems import ntfs
 from dissect.target.helpers import fsutil
 from dissect.target.loaders.local import _windows_get_devices
-from dissect.target.plugins.apps.webserver import iis
+from dissect.target.plugins.apps.webserver.apache import ApachePlugin
+from dissect.target.plugins.apps.webserver.caddy import CaddyPlugin
+from dissect.target.plugins.apps.webserver.iis import IISLogsPlugin
+from dissect.target.plugins.apps.webserver.nginx import NginxPlugin
 from dissect.target.plugins.os.windows.cam import CamPlugin
 from dissect.target.plugins.os.windows.log import evt, evtx
 from dissect.target.tools.utils.cli import args_to_uri
@@ -46,7 +49,7 @@ from acquire.hashes import (
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
 from acquire.uploaders.minio import MinIO
-from acquire.uploaders.plugin import UploaderPlugin, upload_files_using_uploader
+from acquire.uploaders.plugin import upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
 from acquire.utils import (
     check_and_set_acquire_args,
@@ -67,6 +70,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from dissect.target.filesystem import Filesystem
+
+    from acquire.uploaders.plugin import UploaderPlugin
 
 try:
     from acquire.version import version
@@ -242,7 +247,7 @@ def module_arg(*args, **kwargs) -> Callable[[type[Module]], type[Module]]:
 
 
 def local_module(cls: type[object]) -> object:
-    """A decorator that sets property `__local__` on a module class to mark it for local target only"""
+    """A decorator that sets property `__local__` on a module class to mark it for local target only."""
     cls.__local__ = True
     return cls
 
@@ -864,21 +869,30 @@ class MSSQL(Module):
             yield ("glob", f"{log_path}/ERRORLOG*")
 
 
-@register_module("--iis")
-class IIS(Module):
-    DESC = "IIS logs"
+@register_module("--webserver")
+class Webserver(Module):
+    DESC = "Various webserver logs and configuration files"
 
     @classmethod
     def get_spec_additions(cls, target: Target, cli_args: argparse.Namespace) -> Iterator[tuple]:
-        spec = {
-            ("glob", "sysvol\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\Windows.old\\Windows\\System32\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\*.log"),
-            ("glob", "sysvol\\inetpub\\logs\\LogFiles\\W3SVC*\\*.log"),
-            ("glob", "sysvol\\Resources\\Directory\\*\\LogFiles\\Web\\W3SVC*\\*.log"),
-        }
-        iis_plugin = iis.IISLogsPlugin(target)
-        spec.update(("path", log_path) for log_path in chain(*iis_plugin.log_dirs.values()))
+        spec = set()
+        subclasses = [
+            ApachePlugin,
+            CaddyPlugin,
+            IISLogsPlugin,
+            NginxPlugin,
+        ]
+
+        spec.add(("path", target.resolve(IISLogsPlugin.APPLICATION_HOST_CONFIG)))
+
+        for subclass in subclasses:
+            if subclass.__name__ == "IISLogsPlugin" and target.os != "windows":
+                continue
+
+            webserver = subclass(target)
+            for log_path in webserver.get_all_paths():
+                spec.add(("path", log_path))
+
         return spec
 
 
@@ -1068,8 +1082,10 @@ class AV(Module):
         ("path", "sysvol/ProgramData/Avast Software/Avast/Log"),
         ("path", "Avast Software/Avast/Log", from_user_home),
         ("path", "sysvol/ProgramData/Avast Software/Avast/Chest/index.xml"),
-        ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Logs"),
+        ("path", "sysvol/ProgramData/Avast Software/Persistent Data/Avast/Logs"),
         ("path", "sysvol/ProgramData/Avast Software/Icarus/Logs"),
+        ("glob", "sysvol/Program Files*/AVAST Software/Business Agent/log.txt"),
+        ("glob", "sysvol/Program Files*/AVAST Software/Business Agent/smbpol.db"),
         # Avira
         ("path", "sysvol/ProgramData/Avira/Antivirus/LOGFILES"),
         ("path", "sysvol/ProgramData/Avira/Security/Logs"),
@@ -1121,7 +1137,7 @@ class AV(Module):
         ("path", "sysvol/ProgramData/McAfee/MSC/Logs"),
         ("path", "sysvol/ProgramData/McAfee/Agent/AgentEvents"),
         ("path", "sysvol/ProgramData/McAfee/Agent/logs"),
-        ("path", "sysvol/ProgramData/McAfee/datreputation/Logs"),
+        ("path", "sysvol/ProgramData/McAfee/datareputation/Logs"),
         ("path", "sysvol/ProgramData/Mcafee/Managed/VirusScan/Logs"),
         ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/Common Framework/AgentEvents"),
         ("path", "sysvol/Documents and Settings/All Users/Application Data/McAfee/MCLOGS/SAE"),
@@ -1153,6 +1169,7 @@ class AV(Module):
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/Logs"),
         ("path", "AppData/Local/Symantec/Symantec Endpoint Protection/Logs", from_user_home),
         ("path", "sysvol/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
+        ("path", "sysvol/Windows.old/Windows/System32/winevt/logs/Symantec Endpoint Protection Client.evtx"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/CmnClnt/ccSubSDK"),
         ("glob", "sysvol/ProgramData/Symantec/Symantec Endpoint Protection/*/Data/registrationInfo.xml"),
         # TotalAV
@@ -1171,11 +1188,13 @@ class AV(Module):
         # Microsoft Windows Defender
         ("path", "sysvol/ProgramData/Microsoft/Microsoft AntiMalware/Support"),
         ("glob", "sysvol/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
+        ("glob", "sysvol/Windows.old/Windows/System32/winevt/Logs/Microsoft-Windows-Windows Defender*.evtx"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Support"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/DetectionHistory"),
         ("path", "sysvol/Windows/Temp/MpCmdRun.log"),
         ("path", "sysvol/Windows.old/Windows/Temp/MpCmdRun.log"),
         ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detection.log"),
+        ("path", "sysvol/ProgramData/Microsoft/Windows Defender/Scans/History/Service/Detections.log"),
         # Microsoft Safety Scanner
         ("path", "sysvol/Windows/Debug/msert.log"),
         # Sophos Hitman pro
@@ -1183,6 +1202,8 @@ class AV(Module):
         ("path", "sysvol/ProgramData/HitmanPro.Alert/Logs/"),
         ("path", "sysvol/ProgramData/HitmanPro/excalibur.db"),
         ("path", "sysvol/ProgramData/HitmanPro.Alert/excalibur.db"),
+        # CrowdStrike Falcon
+        ("path", "sysvol/Windows/System32/Drivers/CrowdStrike/Quarantine"),
     )
 
 
@@ -1209,6 +1230,7 @@ class QuarantinedFiles(Module):
         ("glob", "sysvol/ProgramData/Sophos/Sophos/*/Quarantine"),
         ("glob", "sysvol/ProgramData/Sophos/Sophos */INFECTED"),
         ("path", "sysvol/ProgramData/Sophos/Safestore"),
+        ("glob", "sysvol/ProgramData/Sophos/*/Logs"),
         # HitmanPRO
         ("path", "sysvol/ProgramData/HitmanPro/Quarantine"),
     )
@@ -1352,12 +1374,12 @@ class RemoteAccess(Module):
     DESC = "common remote access tools' log files"
     SPEC = (
         # teamviewer - Windows
-        ("glob", "sysvol/Program Files/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files/TeamViewer/Connections_incoming.txt"),
-        ("glob", "sysvol/Program Files (x86)/TeamViewer/*.log"),
-        ("path", "sysvol/Program Files (x86)/TeamViewer/Connections_incoming.txt"),
+        ("glob", "sysvol/Program Files*/TeamViewer/*.log"),
+        ("glob", "sysvol/Program Files*/TeamViewer/Connections_incoming.txt"),
         ("glob", "AppData/Roaming/TeamViewer/*.log", from_user_home),
         ("path", "AppData/Roaming/TeamViewer/Connections.txt", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/RemoteSupport", from_user_home),
+        ("path", "AppData/Roaming/TeamViewer/MRU/Meeting", from_user_home),
         # teamviewer - Mac + Linux
         ("glob", "/var/log/teamviewer*/*.log"),
         ("glob", "Library/Logs/TeamViewer/*.log", from_user_home),
@@ -1386,6 +1408,10 @@ class RemoteAccess(Module):
         # Splashtop
         ("path", "sysvol/ProgramData/Splashtop/Temp/log"),
         ("path", "sysvol/Program Files (x86)/Splashtop/Splashtop Remote/Server/log"),
+        # SimpleHelp
+        ("path", "sysvol/ProgramData/JWrapper-Remote Access"),
+        ("path", "/opt/JWrapper-Remote Access"),
+        ("path", "/Library/Application Support/JWrapper-Remote Access"),
     )
 
 
@@ -2163,7 +2189,7 @@ class WindowsProfile:
         QuarantinedFiles,
         WindowsNotifications,
         SSH,
-        IIS,
+        Webserver,
         SharePoint,
         TextEditor,
         Docker,
@@ -2358,12 +2384,6 @@ def main() -> None:
         log.info("Default Arguments: %s", " ".join(args.config.get("arguments")))
         log.info("")
 
-        if any(arg in sys.argv for arg in ["--file", "--dir", "-f", "-d"]):
-            warnings.warn(
-                "--file and --dir are deprecated in favor of --path and will be removed in acquire 3.22",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         if "--proc-net" in sys.argv:
             warnings.warn(
                 "--proc-net will be merged with --proc and will be removed in acquire 3.23",
@@ -2532,7 +2552,7 @@ def acquire_children_and_targets(target: Target, args: argparse.Namespace) -> li
             raise
 
     if args.children:
-        for child in target.list_children():
+        for _, child in target.list_children():
             counter += 1
             acquire_gui.shard = int((progress_limit / total_targets) * counter)
             try:
