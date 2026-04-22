@@ -19,7 +19,6 @@ from ctypes import (
     get_last_error,
     sizeof,
     string_at,
-    wstring_at
 )
 from ctypes import wintypes as w
 from pathlib import Path
@@ -87,6 +86,7 @@ BN_CLICKED = 0
 BM_SETCHECK = 241
 WM_CTLCOLORSTATIC = 312
 SS_LEFT = 0
+FNERR_BUFFERTOOSMALL = 0x3003
 
 
 class WNDCLASSW(Structure):
@@ -151,7 +151,7 @@ class OPENFILENAME(Structure):
         ("lStructSize", w.DWORD),
         ("hwndOwner", w.HWND),
         ("hInstance", w.HINSTANCE),
-        ("lpstrFilter", w.LPWSTR),
+        ("lpstrFilter", w.LPCWSTR),
         ("lpstrCustomFilter", w.LPWSTR),
         ("nMaxCustFilter", w.DWORD),
         ("nFilterIndex", w.DWORD),
@@ -159,23 +159,26 @@ class OPENFILENAME(Structure):
         ("nMaxFile", w.DWORD),
         ("lpstrFileTitle", w.LPWSTR),
         ("nMaxFileTitle", w.DWORD),
-        ("lpstrInitialDir", w.LPWSTR),
-        ("lpstrTitle", w.LPWSTR),
+        ("lpstrInitialDir", w.LPCWSTR),
+        ("lpstrTitle", w.LPCWSTR),
         ("Flags", w.DWORD),
         ("nFileOffset", w.WORD),
         ("nFileExtension", w.WORD),
         ("lpstrDefExt", w.LPWSTR),
         ("lCustData", w.LPARAM),
         ("lpfnHook", w.LPVOID),
-        ("lpTemplateName", w.LPWSTR),
+        ("lpTemplateName", w.LPCSTR),
         ("pvReserved", w.LPVOID),
         ("dwReserved", w.DWORD),
         ("FlagsEx", w.DWORD),
     )
 
+
 comdlg32 = WinDLL("comdlg32", use_last_error=True)
 comdlg32.GetOpenFileNameW.argtypes = (POINTER(OPENFILENAME),)
 comdlg32.GetOpenFileNameW.restype = w.BOOL
+comdlg32.CommDlgExtendedError.argtypes = ()
+comdlg32.CommDlgExtendedError.restype = w.DWORD
 
 kernel32 = WinDLL("kernel32", use_last_error=True)
 kernel32.GetModuleHandleW.argtypes = (w.LPCWSTR,)
@@ -329,7 +332,7 @@ class Win32(GUI):
     def choose_folder(self) -> None:
         if self._closed:
             return
-        
+
         if self.folder:
             self.folder = None
             user32.SetWindowTextA(self.label, b"No path selected...")
@@ -363,7 +366,7 @@ class Win32(GUI):
     def choose_files(self) -> None:
         if self._closed:
             return
-        
+
         if self.files:
             self.files = None
             user32.SetWindowTextA(self.file_label, b"No file(s) selected...")
@@ -379,15 +382,15 @@ class Win32(GUI):
         ofn.lStructSize = sizeof(OPENFILENAME)
         ofn.hwndOwner = self.hwnd
         ofn.lpstrFile = cast(buffer, w.LPWSTR)
-        ofn.nMaxFile = sizeof(buffer)
+        ofn.nMaxFile = buffer_size
         ofn.lpstrFilter = "All Files\0*.*\0Text Files\0*.txt\0\0"
         ofn.nFilterIndex = 1
         ofn.Flags = 0x00002000 | 0x00080000 | 0x00000200
- 
+
         if comdlg32.GetOpenFileNameW(byref(ofn)):
             raw_data = string_at(buffer, buffer_size * 2).decode("utf-16le").strip("\0")
             parts = raw_data.split("\0")
-            
+
             if len(parts) > 1:
                 dir_path, *file_list = parts
                 selected_paths = [f"{dir_path}\\{file}" for file in file_list]
@@ -396,11 +399,22 @@ class Win32(GUI):
 
             if selected_paths:
                 self.files = [path for path in selected_paths if path]
-                user32.SetWindowTextA(self.file_label, f"{len(self.files)} file(s) selected".encode("utf-8"))
-                user32.SetWindowTextA(self.choose_files_button, b"Clear file(s)") 
+                user32.SetWindowTextA(self.file_label, f"{len(self.files)} file(s) selected".encode())
+                user32.SetWindowTextA(self.choose_files_button, b"Clear file(s)")
                 user32.EnableWindow(self.start_button, True)
         else:
-            print("User cancelled file selection")
+            error_code = comdlg32.CommDlgExtendedError()
+            if error_code == FNERR_BUFFERTOOSMALL:
+                user32.MessageBoxA(
+                    self.hwnd, b"Too many or too long file names selected. Please select fewer files.", b"Acquire", 0
+                )
+            elif error_code != 0:
+                user32.MessageBoxA(
+                    self.hwnd,
+                    f"Error selecting files (code: {error_code:#06x})".encode(),
+                    b"Acquire",
+                    0,
+                )
 
     def show(self) -> None:
         if self._closed:
@@ -517,7 +531,7 @@ class Win32(GUI):
             SendMessage(self.choose_files_button, WM_SETFONT, hFont, 1)
             SendMessage(self.label, WM_SETFONT, hFont, 1)
             SendMessage(self.file_label, WM_SETFONT, hFont, 1)
-           
+
         msg = w.MSG()
         while user32.GetMessageW(byref(msg), None, 0, 0) != 0:
             user32.TranslateMessage(byref(msg))
@@ -538,6 +552,7 @@ class Win32(GUI):
             elif lParam == self.start_button:
                 user32.EnableWindow(self.start_button, False)
                 user32.EnableWindow(self.choose_folder_button, False)
+                user32.EnableWindow(self.choose_files_button, False)
                 if self.checkbox:
                     user32.EnableWindow(self.checkbox, False)
                 self.ready = True
