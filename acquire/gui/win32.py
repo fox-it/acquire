@@ -337,6 +337,7 @@ class Win32(GUI):
             self.folder = None
             user32.SetWindowTextA(self.label, b"No path selected...")
             user32.SetWindowTextA(self.choose_folder_button, b"Choose folder")
+            user32.EnableWindow(self.choose_files_button, True)
             if not self.files:
                 user32.EnableWindow(self.start_button, False)
             return
@@ -358,6 +359,7 @@ class Win32(GUI):
             self.folder = Path(pathstr)
             user32.SetWindowTextA(self.label, string_at(path))
             user32.SetWindowTextA(self.choose_folder_button, b"Clear folder")
+            user32.EnableWindow(self.choose_files_button, False)
             user32.EnableWindow(self.start_button, True)
 
         # Caller is responsible for freeing this memory.
@@ -371,6 +373,7 @@ class Win32(GUI):
             self.files = None
             user32.SetWindowTextA(self.file_label, b"No file(s) selected...")
             user32.SetWindowTextA(self.choose_files_button, b"Choose files")
+            user32.EnableWindow(self.choose_folder_button, True)
             if not self.folder:
                 user32.EnableWindow(self.start_button, False)
             return
@@ -401,12 +404,16 @@ class Win32(GUI):
                 self.files = [path for path in selected_paths if path]
                 user32.SetWindowTextA(self.file_label, f"{len(self.files)} file(s) selected".encode())
                 user32.SetWindowTextA(self.choose_files_button, b"Clear file(s)")
+                user32.EnableWindow(self.choose_folder_button, False)
                 user32.EnableWindow(self.start_button, True)
         else:
             error_code = comdlg32.CommDlgExtendedError()
             if error_code == FNERR_BUFFERTOOSMALL:
                 user32.MessageBoxA(
-                    self.hwnd, b"Too many or too long file names selected. Please select fewer files.", b"Acquire", 0
+                    self.hwnd,
+                    b"The combined filename length exceeded the expected size. Please select fewer files.",
+                    b"Acquire",
+                    0,
                 )
             elif error_code != 0:
                 user32.MessageBoxA(
