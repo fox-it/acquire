@@ -88,6 +88,11 @@ WM_CTLCOLORSTATIC = 312
 SS_LEFT = 0
 FNERR_BUFFERTOOSMALL = 0x3003
 
+OFN_ALLOWMULTISELECT = 0x00000200
+OFN_PATHMUSTEXIST = 0x00000800
+OFN_FILEMUSTEXIST = 0x00001000
+OFN_EXPLORER = 0x00080000
+
 
 class WNDCLASSW(Structure):
     _fields_ = (
@@ -388,7 +393,7 @@ class Win32(GUI):
         ofn.nMaxFile = buffer_size
         ofn.lpstrFilter = "All Files\0*.*\0Text Files\0*.txt\0\0"
         ofn.nFilterIndex = 1
-        ofn.Flags = 0x00002000 | 0x00080000 | 0x00000200
+        ofn.Flags = OFN_EXPLORER | OFN_ALLOWMULTISELECT | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST
 
         if comdlg32.GetOpenFileNameW(byref(ofn)):
             raw_data = string_at(buffer, buffer_size * 2).decode("utf-16le").strip("\0")
