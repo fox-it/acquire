@@ -151,7 +151,7 @@ class ITEMIDLIST(Structure):
     _fields_ = (("mkid", SHITEMID),)
 
 
-class OPENFILENAME(Structure):
+class OPENFILENAMEW(Structure):
     _fields_ = (
         ("lStructSize", w.DWORD),
         ("hwndOwner", w.HWND),
