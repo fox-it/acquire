@@ -189,6 +189,7 @@ kernel32 = WinDLL("kernel32", use_last_error=True)
 kernel32.GetModuleHandleW.argtypes = (w.LPCWSTR,)
 kernel32.GetModuleHandleW.restype = w.HMODULE
 kernel32.GetModuleHandleW._winerror = _winerror
+
 user32 = WinDLL("user32", use_last_error=True)
 user32.CreateWindowExW.argtypes = (
     w.DWORD,
@@ -206,25 +207,41 @@ user32.CreateWindowExW.argtypes = (
 )
 user32.CreateWindowExW.restype = w.HWND
 user32.CreateWindowExW._winerror = _winerror
-user32.SetWindowTextA.argtypes = (
+user32.DefWindowProcW.argtypes = (
     w.HWND,
-    w.LPCSTR,
+    w.UINT,
+    w.WPARAM,
+    w.LPARAM,
 )
-user32.SetWindowTextA.restype = w.BOOL
-user32.SetWindowTextA._winerror = _winerror
+user32.DefWindowProcW.restype = LRESULT
+user32.DestroyWindow.argtypes = (w.HWND,)
+user32.DestroyWindow.restype = w.BOOL
+user32.DestroyWindow._winerror = _winerror
 user32.EnableWindow.argtypes = (
     w.HWND,
     w.BOOL,
 )
 user32.EnableWindow.restype = w.BOOL
 user32.EnableWindow._winerror = _winerror
-user32.DestroyWindow.argtypes = (w.HWND,)
-user32.DestroyWindow.restype = w.BOOL
-user32.DestroyWindow._winerror = _winerror
-gdi32 = WinDLL("gdi32", use_last_error=True)
-gdi32.GetStockObject.argtypes = (c_int,)
-gdi32.GetStockObject.restype = w.HGDIOBJ
+user32.MessageBoxA.argtypes = (
+    w.HWND,
+    w.LPCSTR,
+    w.LPCSTR,
+    c_uint,
+)
+user32.MessageBoxA.restype = c_int
+user32.MessageBoxA._winerror = _winerror
+user32.SetWindowTextA.argtypes = (
+    w.HWND,
+    w.LPCSTR,
+)
+user32.SetWindowTextA.restype = w.BOOL
+user32.SetWindowTextA._winerror = _winerror
+SendMessage = user32.SendMessageA
+SendMessage.argtypes = (w.HWND, w.UINT, w.WPARAM, w.LPARAM)
+SendMessage.restype = c_void_p
 
+gdi32 = WinDLL("gdi32", use_last_error=True)
 gdi32.CreateFontA.argtypes = (
     c_int,
     c_int,
@@ -242,40 +259,26 @@ gdi32.CreateFontA.argtypes = (
     w.LPCSTR,
 )
 gdi32.CreateFontA.restype = w.HFONT
+gdi32.GetStockObject.argtypes = (c_int,)
+gdi32.GetStockObject.restype = w.HGDIOBJ
 
 ole32 = WinDLL("ole32", use_last_error=True)
-shell32 = WinDLL("shell32", use_last_error=True)
-comctl32 = WinDLL("comctl32", use_last_error=True)
-comctl32.InitCommonControlsEx.argtypes = (POINTER(INITCOMMONCONTROLSEX),)
-comctl32.InitCommonControlsEx.restype = w.BOOL
-user32.DefWindowProcW.argtypes = (
-    w.HWND,
-    w.UINT,
-    w.WPARAM,
-    w.LPARAM,
-)
-user32.DefWindowProcW.restype = LRESULT
 ole32.CoInitialize.argtypes = (w.LPVOID,)
 ole32.CoInitialize.restype = HRESULT
 ole32.CoTaskMemFree.argtypes = (w.LPVOID,)
 ole32.CoTaskMemFree.restype = None
+
+comctl32 = WinDLL("comctl32", use_last_error=True)
+comctl32.InitCommonControlsEx.argtypes = (POINTER(INITCOMMONCONTROLSEX),)
+comctl32.InitCommonControlsEx.restype = w.BOOL
+
+shell32 = WinDLL("shell32", use_last_error=True)
 shell32.SHBrowseForFolderA.argtypes = (POINTER(BROWSEINFOA),)
 shell32.SHBrowseForFolderA.restype = POINTER(ITEMIDLIST)
 shell32.SHBrowseForFolderA._winerror = _winerror
 shell32.SHGetPathFromIDList.argtypes = (POINTER(ITEMIDLIST), w.LPCSTR)
 shell32.SHGetPathFromIDList.restype = w.BOOL
 shell32.SHGetPathFromIDList._winerror = _winerror
-SendMessage = user32.SendMessageA
-SendMessage.argtypes = (w.HWND, w.UINT, w.WPARAM, w.LPARAM)
-SendMessage.restype = c_void_p
-user32.MessageBoxA.argtypes = (
-    w.HWND,
-    w.LPCSTR,
-    w.LPCSTR,
-    c_uint,
-)
-user32.MessageBoxA.restype = c_int
-user32.MessageBoxA._winerror = _winerror
 
 
 class Win32(GUI):
