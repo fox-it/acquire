@@ -55,7 +55,7 @@ def get_paths_from_dir(
         yield path
 
 
-def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> tuple:
+def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> dict:
     """Calculate and return the details for specified path.
 
     The details include file size and hashes, calculated for
@@ -244,3 +244,17 @@ def serialize_into_csv(rows: Iterator[list], compress: bool = True) -> tuple[int
                 )
 
     return (counter, raw_buffer.getvalue())
+
+
+def md5sum(path: Path) -> str:
+    with path.open(mode="rb") as f:
+        digest = hashlib.file_digest(f, "md5")
+
+    return digest.hexdigest()
+
+
+def sha256sum(path: Path) -> str:
+    with path.open(mode="rb") as f:
+        digest = hashlib.file_digest(f, "sha256")
+
+    return digest.hexdigest()
