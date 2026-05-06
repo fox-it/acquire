@@ -2130,10 +2130,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
             report_file_name = f"{output_path.name}.report.json"
 
         if args.hash_collection:
-            hashes = {
-                "md5": md5sum(output.path),
-                "sha256": sha256sum(output.path)
-            }
+            hashes = {"md5": md5sum(output.path), "sha256": sha256sum(output.path)}
 
             execution_report["hashes"] = hashes
 
