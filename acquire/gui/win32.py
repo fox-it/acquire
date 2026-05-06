@@ -180,7 +180,7 @@ class OPENFILENAMEW(Structure):
 
 
 comdlg32 = WinDLL("comdlg32", use_last_error=True)
-comdlg32.GetOpenFileNameW.argtypes = (POINTER(OPENFILENAME),)
+comdlg32.GetOpenFileNameW.argtypes = (POINTER(OPENFILENAMEW),)
 comdlg32.GetOpenFileNameW.restype = w.BOOL
 comdlg32.CommDlgExtendedError.argtypes = ()
 comdlg32.CommDlgExtendedError.restype = w.DWORD
@@ -386,8 +386,8 @@ class Win32(GUI):
         buffer_size = 4096
         buffer = create_unicode_buffer(buffer_size)
 
-        ofn = OPENFILENAME()
-        ofn.lStructSize = sizeof(OPENFILENAME)
+        ofn = OPENFILENAMEW()
+        ofn.lStructSize = sizeof(OPENFILENAMEW)
         ofn.hwndOwner = self.hwnd
         ofn.lpstrFile = cast(buffer, w.LPWSTR)
         ofn.nMaxFile = buffer_size
