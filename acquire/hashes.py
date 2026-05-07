@@ -55,7 +55,7 @@ def get_paths_from_dir(
         yield path
 
 
-def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> dict:
+def get_path_details(path: TargetPath, hash_funcs: Iterator[HashFunc] | None = None) -> tuple:
     """Calculate and return the details for specified path.
 
     The details include file size and hashes, calculated for

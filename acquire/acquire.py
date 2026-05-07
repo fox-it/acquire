@@ -2131,7 +2131,6 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
 
         if args.hash_collection:
             hashes = {"md5": md5sum(output.path), "sha256": sha256sum(output.path)}
-
             execution_report["hashes"] = hashes
 
         report_file_path = output_path.parent / report_file_name
