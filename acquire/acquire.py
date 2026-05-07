@@ -2119,6 +2119,7 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
             "timestamp": get_utc_now().isoformat(),
             "modules-successful": modules_successful,
             "modules-failed": modules_failed,
+            "acquire-version": VERSION,
             **collection_report_serialized,
         }
 
