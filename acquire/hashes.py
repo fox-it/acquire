@@ -244,3 +244,17 @@ def serialize_into_csv(rows: Iterator[list], compress: bool = True) -> tuple[int
                 )
 
     return (counter, raw_buffer.getvalue())
+
+
+def md5sum(path: Path) -> str:
+    with path.open(mode="rb") as f:
+        digest = hashlib.file_digest(f, "md5")
+
+    return digest.hexdigest()
+
+
+def sha256sum(path: Path) -> str:
+    with path.open(mode="rb") as f:
+        digest = hashlib.file_digest(f, "sha256")
+
+    return digest.hexdigest()
