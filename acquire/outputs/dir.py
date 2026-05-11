@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 class DirectoryOutput(Output):
     def __init__(self, path: Path, **kwargs):
-        self.path = path
+        self.path = path.with_suffix(".running")
 
     def write(
         self,
@@ -50,4 +50,4 @@ class DirectoryOutput(Output):
                 shutil.copyfileobj(fh, fhout)
 
     def close(self) -> None:
-        pass
+        self.path.rename(self.path.parent.joinpath(self.path.stem))
