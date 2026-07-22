@@ -28,9 +28,11 @@ def copyfileobj(
     name: str = "",
 ) -> None:
     """Copy length bytes from fileobj src to fileobj dst.
-       If length is None, copy the entire content.
-       Inlined from the Python 3.13 function `tarfile.copyfileobj`, 
-       patched to pad a short read with NUL bytes instead of raising.
+
+    If length is None, copy the entire content.
+
+    Inlined from the Python 3.13 function ``tarfile.copyfileobj``, patched to pad a short read with
+    NUL bytes instead of raising.
     """
     bufsize = bufsize or 16 * 1024
     if length == 0:
