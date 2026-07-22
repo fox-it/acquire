@@ -16,7 +16,52 @@ if TYPE_CHECKING:
     from dissect.target.filesystem import FilesystemEntry
 
 TAR_COMPRESSION_METHODS = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
+
 log = getLogger(__name__)
+
+
+def copyfileobj(
+    src: BinaryIO,
+    dst: BinaryIO,
+    length: int | None = None,
+    bufsize: int | None = None,
+    name: str = "",
+) -> None:
+    """Copy length bytes from fileobj src to fileobj dst.
+       If length is None, copy the entire content.
+       Inlined from the Python 3.13 function `tarfile.copyfileobj`, 
+       patched to pad a short read with NUL bytes instead of raising.
+    """
+    bufsize = bufsize or 16 * 1024
+    if length == 0:
+        return
+    if length is None:
+        shutil.copyfileobj(src, dst, bufsize)
+        return
+
+    padded = 0
+
+    blocks, remainder = divmod(length, bufsize)
+    for b in range(blocks):  # noqa: B007
+        buf = src.read(bufsize)
+        if len(buf) < bufsize:
+            # PATCH: pad the data instead of raising an exception
+            padded += bufsize - len(buf)
+            buf += tarfile.NUL * (bufsize - len(buf))
+        dst.write(buf)
+
+    if remainder != 0:
+        buf = src.read(remainder)
+        if len(buf) < remainder:
+            # PATCH: pad the data instead of raising an exception
+            padded += remainder - len(buf)
+            buf += tarfile.NUL * (remainder - len(buf))
+        dst.write(buf)
+
+    if padded:
+        log.warning("File %s shrank while reading, padded %d of %d byte(s) with NUL", name, padded, length)
+
+    return
 
 
 class TarOutput(Output):
@@ -104,65 +149,29 @@ class TarOutput(Output):
             if stat:
                 info.mtime = stat.st_mtime
 
-        # Inline version of Python stdlib's tarfile.addfile & tarfile.copyfileobj,
-        # to allow for padding and more control over the tar file writing.
+        # Inlined from the Python 3.13 tarfile.TarFile.addfile, so that the patched copyfileobj
+        # above is used instead of the one from the stdlib
         self.tar._check("awx")
 
         if fh is None and info.isreg() and info.size != 0:
-            return
+            raise ValueError("fileobj not provided for non zero-size regular file")
 
         tarinfo = copy.copy(info)
 
-        saved_offset = self.tar.offset
-        saved_filepos = self.tar.fileobj.tell()
+        buf = tarinfo.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
+        self.tar.fileobj.write(buf)
+        self.tar.offset += len(buf)
+        bufsize = self.tar.copybufsize
+        # If there's data to follow, append it.
+        if fh is not None:
+            copyfileobj(fh, self.tar.fileobj, tarinfo.size, bufsize=bufsize, name=tarinfo.name)
+            blocks, remainder = divmod(tarinfo.size, tarfile.BLOCKSIZE)
+            if remainder > 0:
+                self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
+                blocks += 1
+            self.tar.offset += blocks * tarfile.BLOCKSIZE
 
-        try:
-            buf = tarinfo.tobuf(self.tar.format, self.tar.encoding, self.tar.errors)
-            self.tar.fileobj.write(buf)
-            self.tar.offset += len(buf)
-
-            if fh is not None:
-                # Start of tarfile.copyfileobj
-                bufsize = self.tar.copybufsize or 16 * 1024
-                if tarinfo.size == 0:
-                    return
-                if tarinfo.size is None:
-                    shutil.copyfileobj(fh, self.tar.fileobj, bufsize)
-                    return
-
-                blocks, remainder = divmod(tarinfo.size, bufsize)
-                for _ in range(blocks):
-                    buf = fh.read(bufsize)
-                    if len(buf) < bufsize:
-                        # PATCH; instead of raising an exception, pad the data to the desired length
-                        buf += tarfile.NUL * (bufsize - len(buf))
-                    self.tar.fileobj.write(buf)
-
-                if remainder > 0:
-                    buf = fh.read(remainder)
-                    if len(buf) < remainder:
-                        # PATCH; instead of raising an exception, pad the data to the desired length
-                        buf += tarfile.NUL * (remainder - len(buf))
-                    self.tar.fileobj.write(buf)
-                # End of tarfile.copyfileobj
-
-                blocks, remainder = divmod(tarinfo.size, tarfile.BLOCKSIZE)
-                if remainder > 0:
-                    self.tar.fileobj.write(tarfile.NUL * (tarfile.BLOCKSIZE - remainder))
-                    blocks += 1
-                self.tar.offset += blocks * tarfile.BLOCKSIZE
-
-            self.tar.members.append(tarinfo)
-        except Exception:
-            log.warning(
-                "An error occurred while writing to the tar file. "
-                "Truncating to the last known good state (offset: %d).",
-                saved_filepos,
-            )
-            self.tar.fileobj.seek(saved_filepos)
-            self.tar.fileobj.truncate()
-            self.tar.offset = saved_offset
-            raise
+        self.tar.members.append(tarinfo)
 
     def close(self) -> None:
         """Closes the tar file."""
