@@ -182,6 +182,54 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     )
     parser.add_argument("--no-proxy", action="store_true", help="don't autodetect proxies")
 
+    upload_group = parser.add_argument_group(
+        "upload options",
+        "Upload configuration — used together with --upload or --auto-upload. "
+        "Command-line values take precedence over values embedded in the config.",
+    )
+    upload_group.add_argument(
+        "--upload-mode",
+        dest="upload_mode",
+        metavar="MODE",
+        help="upload plugin to use (e.g. azure, cloud)",
+    )
+    upload_group.add_argument(
+        "--upload-sas-url",
+        dest="upload_sas_url",
+        metavar="URL",
+        help="Azure Storage container-level SAS URL",
+    )
+    upload_group.add_argument(
+        "--upload-folder",
+        dest="upload_folder",
+        metavar="FOLDER",
+        help="optional sub-folder / prefix inside the upload destination (Azure and MinIO)",
+    )
+    upload_group.add_argument(
+        "--upload-endpoint",
+        dest="upload_endpoint",
+        metavar="ENDPOINT",
+        help="MinIO endpoint (host:port)",
+    )
+    upload_group.add_argument(
+        "--upload-access-id",
+        dest="upload_access_id",
+        metavar="ACCESS_ID",
+        help="MinIO access ID",
+    )
+    upload_group.add_argument(
+        "--upload-access-key",
+        dest="upload_access_key",
+        metavar="ACCESS_KEY",
+        help="MinIO secret access key",
+    )
+    upload_group.add_argument(
+        "--upload-bucket",
+        dest="upload_bucket",
+        metavar="BUCKET",
+        help="MinIO bucket name",
+    )
+
     parser.add_argument("-K", "--keychain-file", type=Path, help="keychain file in CSV format")
     parser.add_argument("-Kv", "--keychain-value", help="passphrase, recovery key or key file path value")
 
@@ -324,6 +372,24 @@ def check_and_set_acquire_args(
         raise ValueError("only one of --upload or --auto-upload can be specified")
 
     if args.upload or args.auto_upload:
+        # Merge CLI-supplied upload args into the config dict.
+        # CLI values take precedence over anything embedded in config.py.
+        upload_config = dict(args.config.get("upload") or {})
+        cli_upload_fields = {
+            "mode": args.upload_mode,
+            "sas_url": args.upload_sas_url,
+            "folder": args.upload_folder,
+            "endpoint": args.upload_endpoint,
+            "access_id": args.upload_access_id,
+            "access_key": args.upload_access_key,
+            "bucket": args.upload_bucket,
+        }
+
+        for key, value in cli_upload_fields.items():
+            if value is not None:
+                upload_config[key] = value  # noqa: PERF403
+        args.config["upload"] = upload_config
+
         upload_mode = args.config.get("upload", {}).get("mode")
         if not upload_mode:
             raise ValueError("Uploading is not configured")

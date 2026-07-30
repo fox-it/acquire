@@ -28,6 +28,7 @@ dependencies = [
     "dissect.cstruct>=4,<5",
     "dissect.target>=3.25,<4",
 ]
+
 dynamic = ["version"]
 
 [project.urls]
@@ -37,6 +38,7 @@ repository = "https://github.com/fox-it/acquire"
 
 [project.optional-dependencies]
 full = [
+    "azure-storage-blob",
     "minio",
     "pycryptodome",
     "requests",

@@ -194,6 +194,128 @@ def test_check_and_set_acquire_args_upload_auto_upload_fail(
 
 
 @pytest.mark.parametrize(
+    "arg_name",
+    [
+        "upload",
+        "auto_upload",
+    ],
+)
+def test_check_and_set_acquire_args_cli_upload_mode(arg_name: str) -> None:
+    """--upload-mode on the CLI overrides the mode in config."""
+    config = {}  # no upload config embedded
+    mock_upload_plugin = MagicMock()
+    upload_plugins = {"azure": mock_upload_plugin}
+
+    args = get_args(**{arg_name: True, "config": config, "upload_mode": "azure"})
+    check_and_set_acquire_args(args, upload_plugins)
+
+    mock_upload_plugin.assert_called_once()
+    assert args.config["upload"]["mode"] == "azure"
+
+
+@pytest.mark.parametrize(
+    "arg_name",
+    [
+        "upload",
+        "auto_upload",
+    ],
+)
+def test_check_and_set_acquire_args_cli_overrides_config_mode(arg_name: str) -> None:
+    """--upload-mode on the CLI takes precedence over an embedded config value."""
+    config = {"upload": {"mode": "cloud"}}
+    mock_upload_plugin = MagicMock()
+    upload_plugins = {"azure": mock_upload_plugin}
+
+    args = get_args(**{arg_name: True, "config": config, "upload_mode": "azure"})
+    check_and_set_acquire_args(args, upload_plugins)
+
+    assert args.config["upload"]["mode"] == "azure"
+
+
+@pytest.mark.parametrize(
+    "arg_name",
+    [
+        "upload",
+        "auto_upload",
+    ],
+)
+def test_check_and_set_acquire_args_cli_azure_fields(arg_name: str) -> None:
+    """Azure-specific CLI args are merged into the upload config."""
+    config = {"upload": {"mode": "azure"}}
+    mock_upload_plugin = MagicMock()
+    upload_plugins = {"azure": mock_upload_plugin}
+
+    sas_url = "https://account.blob.core.windows.net/container?sv=2021&sig=abc"
+    args = get_args(
+        **{
+            arg_name: True,
+            "config": config,
+            "upload_sas_url": sas_url,
+            "upload_folder": "foo",
+        }
+    )
+    check_and_set_acquire_args(args, upload_plugins)
+
+    assert args.config["upload"]["sas_url"] == sas_url
+    assert args.config["upload"]["folder"] == "foo"
+
+
+@pytest.mark.parametrize(
+    "arg_name",
+    [
+        "upload",
+        "auto_upload",
+    ],
+)
+def test_check_and_set_acquire_args_cli_minio_fields(arg_name: str) -> None:
+    """MinIO-specific CLI args are merged into the upload config."""
+    config = {"upload": {"mode": "cloud"}}
+    mock_upload_plugin = MagicMock()
+    upload_plugins = {"cloud": mock_upload_plugin}
+
+    args = get_args(
+        **{
+            arg_name: True,
+            "config": config,
+            "upload_endpoint": "minio.example.com:9000",
+            "upload_access_id": "myid",
+            "upload_access_key": "mykey",
+            "upload_bucket": "mybucket",
+            "upload_folder": "uploads",
+        }
+    )
+    check_and_set_acquire_args(args, upload_plugins)
+
+    upload_cfg = args.config["upload"]
+    assert upload_cfg["endpoint"] == "minio.example.com:9000"
+    assert upload_cfg["access_id"] == "myid"
+    assert upload_cfg["access_key"] == "mykey"
+    assert upload_cfg["bucket"] == "mybucket"
+    assert upload_cfg["folder"] == "uploads"
+
+
+@pytest.mark.parametrize(
+    "arg_name",
+    [
+        "upload",
+        "auto_upload",
+    ],
+)
+def test_check_and_set_acquire_args_config_not_overridden_when_cli_not_set(arg_name: str) -> None:
+    """Config values are preserved when the matching CLI args are not provided."""
+    config = {"upload": {"mode": "azure", "sas_url": "https://original-url", "folder": "original-folder"}}
+    mock_upload_plugin = MagicMock()
+    upload_plugins = {"azure": mock_upload_plugin}
+
+    # No upload_sas_url or upload_folder passed — defaults are None
+    args = get_args(**{arg_name: True, "config": config})
+    check_and_set_acquire_args(args, upload_plugins)
+
+    assert args.config["upload"]["sas_url"] == "https://original-url"
+    assert args.config["upload"]["folder"] == "original-folder"
+
+
+@pytest.mark.parametrize(
     ("children", "arg_name", "output"),
     [
         # Output without children to a directory
