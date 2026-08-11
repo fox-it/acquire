@@ -2558,10 +2558,11 @@ if __name__ == "__main__":
     try:
         # Use esxi_memory_context_manager only if running on ESXi host
         if platform.system().lower() == "vmkernel":
-            context_mgr = esxi_memory_context_manager()
+            ctx = esxi_memory_context_manager()
         else:
-            context_mgr = contextlib.nullcontext()
-        with context_mgr:
+            ctx = contextlib.nullcontext()
+
+        with ctx:
             main()
     except KeyboardInterrupt:
         sys.exit(1)
