@@ -167,7 +167,7 @@ class TOKEN_PRIVILEGES(ctypes.Structure):
 
 
 class Handle:
-    """Handle object"""
+    """Handle object."""
 
     def __init__(self, handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX, handle_type: str, handle_name: str) -> None:
         self.name = handle_name

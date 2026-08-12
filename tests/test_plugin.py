@@ -23,7 +23,7 @@ def test_registry_functionality_iterator() -> None:
 
 def test_registry_entrypoint() -> None:
     mocked_output = Mock()
-    with patch.object(PluginRegistry, "_find_entrypoint_data", return_value=[mocked_output]):
+    with patch(f"{PluginRegistry.__module__}.metadata.entry_points", return_value=[mocked_output]):
         data = PluginRegistry("<undefined>")
         assert data.get(mocked_output.name) == mocked_output.load.return_value
 
@@ -33,6 +33,5 @@ def test_registry_entrypoint_failed() -> None:
     mocked_output.load.side_effect = [ModuleNotFoundError]
     data = PluginRegistry("-")
 
-    with patch.object(PluginRegistry, "_find_entrypoint_data", return_value=[mocked_output]):
-        data.load_entrypoint_plugins("test")
-        assert len(data.items()) == 0
+    data.load_entrypoint_plugins("test")
+    assert len(data.items()) == 0

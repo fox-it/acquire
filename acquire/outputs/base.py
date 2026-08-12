@@ -70,7 +70,6 @@ class Output:
             entry: The optional filesystem entry to write.
             size: The optional file size in bytes of the entry to write.
         """
-
         stream = io.BytesIO(data)
         self.write(output_path, stream, entry=entry, size=size)
 

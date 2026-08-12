@@ -4,8 +4,8 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 from acquire.dynamic.windows.exceptions import AccessDeniedError
-from acquire.dynamic.windows.handles import Handle, get_handles
-from acquire.dynamic.windows.named_objects import NamedObject, NamedObjectType
+from acquire.dynamic.windows.handles import get_handles
+from acquire.dynamic.windows.named_objects import NamedObjectType
 from acquire.dynamic.windows.ntdll import (
     close_handle,
     open_directory_object,
@@ -14,6 +14,9 @@ from acquire.dynamic.windows.ntdll import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from acquire.dynamic.windows.handles import Handle
+    from acquire.dynamic.windows.named_objects import NamedObject
 
 log = getLogger(__name__)
 
@@ -24,7 +27,6 @@ def collect_named_objects(path: str = "\\") -> list[NamedObject]:
     Parameters:
         path: point to start searching from
     """
-
     try:
         dir_handle = open_directory_object(dir_name=path, root_handle=None)
     except AccessDeniedError:
@@ -45,7 +47,7 @@ def collect_named_objects(path: str = "\\") -> list[NamedObject]:
 
 
 def collect_open_handles(handle_types: list[NamedObject] | None = None) -> Iterator[Handle]:
-    """Collect open handles
+    """Collect open handles.
 
     Collect open handles and optionally provide a list to explicitly collect specific types of handles.
 

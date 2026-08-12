@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dissect.target.helpers import keychain
-from dissect.target.tools.utils import _OverrideRequiredAction, list_children
+from dissect.target.tools.utils.cli import _OverrideRequiredAction, list_children
 
 from acquire.outputs import (
     COMPRESSION_METHODS,
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 class StrEnum(str, Enum):
-    """Sortable and serializible string-based enum"""
+    """Sortable and serializible string-based enum."""
 
 
 def _create_profile_information(profiles: dict) -> str:
@@ -125,12 +125,7 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
     parser.add_argument("-p", "--profile", choices=profiles.keys(), help="collection profile")
     parser.add_argument("--volatile-profile", choices=volatile.keys(), help="volatile profile")
 
-    # Keep `--file` and `--dir` (-f, and -d) temporarily
     parser.add_argument(
-        "-f",
-        "-d",
-        "--file",
-        "--dir",
         "--path",
         dest="path",
         action="append",

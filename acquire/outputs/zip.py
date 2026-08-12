@@ -111,7 +111,6 @@ class ZipOutput(Output):
 
     def _get_external_attr(self, entry: FilesystemEntry) -> int:
         """Return the appropriate external attributes of the entry."""
-
         # The Python zipfile module accepts the 16-bit "Mode" field (that stores st_mode field from
         # struct stat, containing user/group/other permissions, setuid/setgid and symlink info, etc) of the
         # ASi extra block for Unix as bits 16-31 of the external_attr
