@@ -2449,21 +2449,14 @@ def main() -> None:
                 target_path = f"{target_path}?{target_query}"
             target_paths.append(target_path)
 
-        # Use esxi_memory_context_manager only if running on ESXi host
-        if platform.system().lower() == "vmkernel":
-            context_mgr = esxi_memory_context_manager()
-        else:
-            context_mgr = contextlib.nullcontext()
-
         try:
             target_name = "Unknown"  # just in case open_all already fails
-            with context_mgr:
-                for target in Target.open_all(target_paths):
-                    target_name = "Unknown"  # overwrite previous target name
-                    target_name = target.name
-                    log.info("Loading target %s", target_name)
-                    log.info(target)
-                    files_to_upload = acquire_children_and_targets(target, args)
+            for target in Target.open_all(target_paths):
+                target_name = "Unknown"  # overwrite previous target name
+                target_name = target.name
+                log.info("Loading target %s", target_name)
+                log.info(target)
+                files_to_upload = acquire_children_and_targets(target, args)
         except Exception:
             log.error("Failed to acquire target: %s", target_name)  # noqa: TRY400
             if not is_user_admin():
@@ -2595,7 +2588,11 @@ def sort_files(files: list[str | Path]) -> list[Path]:
 
 if __name__ == "__main__":
     try:
-        main()
+        # Use esxi_memory_context_manager only if running on ESXi host
+        ctx = esxi_memory_context_manager() if platform.system().lower() == "vmkernel" else contextlib.nullcontext()
+
+        with ctx:
+            main()
     except KeyboardInterrupt:
         sys.exit(1)
     except Exception:
