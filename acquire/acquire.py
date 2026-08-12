@@ -48,6 +48,7 @@ from acquire.hashes import (
 )
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
+from acquire.uploaders.azure import AzureStorage
 from acquire.uploaders.minio import MinIO
 from acquire.uploaders.plugin import upload_files_using_uploader
 from acquire.uploaders.plugin_registry import UploaderRegistry
@@ -2406,14 +2407,7 @@ def main() -> None:
             exit_success(args.config.get("arguments"))
         # From here onwards, the GUI will be locked and cannot be closed because we're acquiring
 
-        if files:
-            if args.output:
-                args.file = files
-            else:
-                args.upload = files
-                args.auto_upload = False
-
-        plugins_to_load = [("cloud", MinIO)]
+        plugins_to_load = [("cloud", MinIO), ("azure", AzureStorage)]
         upload_plugins = UploaderRegistry("acquire.plugins", plugins_to_load)
 
         check_and_set_acquire_args(args, upload_plugins)
