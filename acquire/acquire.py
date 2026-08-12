@@ -2589,10 +2589,7 @@ def sort_files(files: list[str | Path]) -> list[Path]:
 if __name__ == "__main__":
     try:
         # Use esxi_memory_context_manager only if running on ESXi host
-        if platform.system().lower() == "vmkernel":
-            ctx = esxi_memory_context_manager()
-        else:
-            ctx = contextlib.nullcontext()
+        ctx = esxi_memory_context_manager() if platform.system().lower() == "vmkernel" else contextlib.nullcontext()
 
         with ctx:
             main()
