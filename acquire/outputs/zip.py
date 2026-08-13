@@ -43,7 +43,7 @@ class ZipOutput(Output):
             ext += ".enc"
 
         self._fh = None
-        self.path = path.with_suffix(path.suffix + ext)
+        self.path = path.with_suffix(path.suffix + ext + ".running")
 
         if compress:
             self.compression = ZIP_COMPRESSION_METHODS.get(compression_method, zipfile.ZIP_DEFLATED)
@@ -108,6 +108,8 @@ class ZipOutput(Output):
         self.archive.close()
         if self._fh:
             self._fh.close()
+
+        self.path.rename(self.path.parent.joinpath(self.path.stem))
 
     def _get_external_attr(self, entry: FilesystemEntry) -> int:
         """Return the appropriate external attributes of the entry."""
