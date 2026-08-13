@@ -44,7 +44,9 @@ from acquire.hashes import (
     filter_out_by_path_match,
     filter_out_by_value_match,
     filter_out_huge_files,
+    md5sum,
     serialize_into_csv,
+    sha256sum,
 )
 from acquire.log import get_file_handler, reconfigure_log_file, setup_logging
 from acquire.outputs import OUTPUTS
@@ -2128,6 +2130,10 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         else:
             report_file_name = f"{output_path.name}.report.json"
 
+        if args.hash_collection:
+            hashes = {"md5": md5sum(output.path), "sha256": sha256sum(output.path)}
+            execution_report["hashes"] = hashes
+
         report_file_path = output_path.parent / report_file_name
         persist_execution_report(report_file_path, execution_report)
 
@@ -2135,6 +2141,10 @@ def acquire_target(target: Target, args: argparse.Namespace, output_ts: str | No
         log.info("Acquisition report for %s is written to %s", target, report_file_path)
 
     log.info("Output: %s", output.path)
+
+    if args.hash_collection:
+        log.info("Output MD5: %s", hashes["md5"])
+        log.info("Output SHA-256: %s", hashes["sha256"])
     return files
 
 

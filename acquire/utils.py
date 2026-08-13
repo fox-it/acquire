@@ -180,6 +180,11 @@ def create_argument_parser(profiles: dict, volatile: dict, modules: dict) -> arg
         nargs="+",
         help="upload specified files (all other acquire actions are ignored)",
     )
+    parser.add_argument(
+        "--hash-collection",
+        action=argparse.BooleanOptionalAction,
+        help="Calculate hashes of the collection",
+    )
     parser.add_argument("--no-proxy", action="store_true", help="don't autodetect proxies")
 
     parser.add_argument("-K", "--keychain-file", type=Path, help="keychain file in CSV format")
