@@ -1284,6 +1284,8 @@ class History(Module):
                 # Brave - Windows
                 "AppData/Local/BraveSoftware/Brave-Browser/User Data",
                 "AppData/Roaming/BraveSoftware/Brave-Browser/User Data",
+                # CyberArk Secure Browser - Windows
+                "AppData/Local/CyberArk/Secure Browser/User Data",
                 # Brave - Linux
                 ".config/BraveSoftware",
                 # Brave - MacOS
